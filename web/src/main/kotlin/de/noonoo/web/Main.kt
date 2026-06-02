@@ -29,6 +29,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @Serializable
 private data class WebAppConfig(val modules: List<WebModuleConfig>)
@@ -111,6 +112,10 @@ fun Application.module(dataSource: HikariDataSource) {
 
         sse("/ambient") {
             log.info("SSE client verbunden")
+            heartbeat {
+                period = 20.seconds
+                event = ServerSentEvent(event = "ping", data = "")
+            }
             try {
                 tickFlow.collect { slide ->
                     send(ServerSentEvent(
