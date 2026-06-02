@@ -18,6 +18,7 @@ dependencies {
     implementation(libs.postgresql)
     implementation(libs.hikari)
     implementation(libs.dotenv)
+    implementation(libs.kaml)
     implementation(libs.logback)
 }
 

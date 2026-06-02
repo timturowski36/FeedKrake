@@ -45,7 +45,7 @@ data class F1StandingRow(
     val wins: Int
 )
 
-class WebRepository(private val dataSource: DataSource) {
+class WebRepository(private val dataSource: DataSource, private val pubgPlayers: List<String> = emptyList()) {
 
     suspend fun pubgDailyStats(): List<PubgPlayerRow> = withContext(Dispatchers.IO) {
         val sql = """
@@ -60,10 +60,11 @@ class WebRepository(private val dataSource: DataSource) {
             JOIN pubg_matches m ON p.match_id = m.match_id
             WHERE m.created_at >= CURRENT_DATE
               AND m.match_type = 'official'
+              ${if (pubgPlayers.isNotEmpty()) "AND p.player_name = ANY(?)" else ""}
             GROUP BY p.player_name
             ORDER BY kills DESC
         """.trimIndent()
-        query(sql) {
+        queryPubg(sql) {
             PubgPlayerRow(
                 name = getString("player_name") ?: "",
                 matches = getInt("matches"),
@@ -89,10 +90,11 @@ class WebRepository(private val dataSource: DataSource) {
             JOIN pubg_matches m ON p.match_id = m.match_id
             WHERE m.created_at >= NOW() - INTERVAL '7 days'
               AND m.match_type = 'official'
+              ${if (pubgPlayers.isNotEmpty()) "AND p.player_name = ANY(?)" else ""}
             GROUP BY p.player_name
             ORDER BY kills DESC
         """.trimIndent()
-        query(sql) {
+        queryPubg(sql) {
             PubgPlayerRow(
                 name = getString("player_name") ?: "",
                 matches = getInt("matches"),
@@ -203,6 +205,21 @@ class WebRepository(private val dataSource: DataSource) {
                 points = getDouble("points"),
                 wins = getInt("wins")
             )
+        }
+    }
+
+    private fun <T> queryPubg(sql: String, mapper: java.sql.ResultSet.() -> T): List<T> {
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                if (pubgPlayers.isNotEmpty()) {
+                    stmt.setArray(1, conn.createArrayOf("text", pubgPlayers.toTypedArray()))
+                }
+                stmt.executeQuery().use { rs ->
+                    val result = mutableListOf<T>()
+                    while (rs.next()) result += rs.mapper()
+                    result
+                }
+            }
         }
     }
 
