@@ -1,8 +1,8 @@
-package de.noonoo.domain.service
+package de.noonoo.core.domain.service
 
-import de.noonoo.domain.port.input.FetchHandballStatisticsUseCase
-import de.noonoo.domain.port.output.HandballStatisticsApiPort
-import de.noonoo.domain.port.output.HandballStatisticsRepository
+import de.noonoo.core.domain.port.input.FetchHandballStatisticsUseCase
+import de.noonoo.core.domain.port.output.HandballStatisticsApiPort
+import de.noonoo.core.domain.port.output.HandballStatisticsRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 
 private val log = KotlinLogging.logger {}

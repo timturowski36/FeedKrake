@@ -13,7 +13,10 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.client.logging)
     implementation(libs.ktor.serialization.kotlinx.json)
-    implementation(libs.duckdb)
+    implementation(libs.postgresql)
+    implementation(libs.hikari)
+    implementation(libs.flyway.core)
+    implementation(libs.flyway.postgres)
     implementation(libs.koin.core)
     implementation(libs.discord.webhooks)
     implementation(libs.jda) { exclude(module = "opus-java") }
@@ -28,4 +31,8 @@ dependencies {
 
 application {
     mainClass.set("de.noonoo.aggregator.ApplicationKt")
+}
+
+tasks.named<JavaExec>("run") {
+    workingDir = rootProject.projectDir
 }

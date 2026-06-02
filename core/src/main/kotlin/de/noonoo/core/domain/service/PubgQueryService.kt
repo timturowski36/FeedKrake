@@ -1,14 +1,14 @@
-package de.noonoo.domain.service
+package de.noonoo.core.domain.service
 
-import de.noonoo.domain.model.PubgMapStat
-import de.noonoo.domain.model.PubgMatch
-import de.noonoo.domain.model.PubgMatchParticipant
-import de.noonoo.domain.model.PubgPeriodStats
-import de.noonoo.domain.model.PubgPersonalRecords
-import de.noonoo.domain.model.PubgPlayer
-import de.noonoo.domain.model.PubgSeasonStats
-import de.noonoo.domain.port.input.QueryPubgDataUseCase
-import de.noonoo.domain.port.output.PubgRepository
+import de.noonoo.core.domain.model.PubgMapStat
+import de.noonoo.core.domain.model.PubgMatch
+import de.noonoo.core.domain.model.PubgMatchParticipant
+import de.noonoo.core.domain.model.PubgPeriodStats
+import de.noonoo.core.domain.model.PubgPersonalRecords
+import de.noonoo.core.domain.model.PubgPlayer
+import de.noonoo.core.domain.model.PubgSeasonStats
+import de.noonoo.core.domain.port.input.QueryPubgDataUseCase
+import de.noonoo.core.domain.port.output.PubgRepository
 import java.time.LocalDateTime
 
 class PubgQueryService(

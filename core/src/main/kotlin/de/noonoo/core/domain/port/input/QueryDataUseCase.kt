@@ -1,9 +1,9 @@
-package de.noonoo.domain.port.input
+package de.noonoo.core.domain.port.input
 
-import de.noonoo.domain.model.GoalGetter
-import de.noonoo.domain.model.Match
-import de.noonoo.domain.model.Standing
-import de.noonoo.domain.model.Team
+import de.noonoo.core.domain.model.GoalGetter
+import de.noonoo.core.domain.model.Match
+import de.noonoo.core.domain.model.Standing
+import de.noonoo.core.domain.model.Team
 
 interface QueryDataUseCase {
     fun getStandings(league: String, season: Int): List<Standing>
@@ -16,4 +16,5 @@ interface QueryDataUseCase {
     fun getLastMatchesByTeam(league: String, season: Int, teamId: Int, limit: Int): List<Match>
     fun getNextMatchesByTeam(league: String, season: Int, teamId: Int, limit: Int): List<Match>
     suspend fun getGoalGetters(league: String, season: Int): List<GoalGetter>
+    fun getGoalGettersByTeam(league: String, season: Int, teamId: Int): List<GoalGetter>
 }

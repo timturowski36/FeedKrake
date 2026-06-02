@@ -1,33 +1,33 @@
-package de.noonoo.adapter.output.persistence
+package de.noonoo.aggregator.adapter.output.persistence
 
-import de.noonoo.adapter.config.DatabaseConfig
-import de.noonoo.domain.model.PubgMapStat
-import de.noonoo.domain.model.PubgMatch
-import de.noonoo.domain.model.PubgMatchParticipant
-import de.noonoo.domain.model.PubgPeriodStats
-import de.noonoo.domain.model.PubgPersonalRecords
-import de.noonoo.domain.model.PubgPlayer
-import de.noonoo.domain.model.PubgSeasonStats
-import de.noonoo.domain.port.output.PubgRepository
-import java.sql.Connection
+import de.noonoo.core.domain.model.PubgMapStat
+import de.noonoo.core.domain.model.PubgMatch
+import de.noonoo.core.domain.model.PubgMatchParticipant
+import de.noonoo.core.domain.model.PubgPeriodStats
+import de.noonoo.core.domain.model.PubgPersonalRecords
+import de.noonoo.core.domain.model.PubgPlayer
+import de.noonoo.core.domain.model.PubgSeasonStats
+import de.noonoo.core.domain.port.output.PubgRepository
 import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.LocalDateTime
+import javax.sql.DataSource
 
-class DuckDbPubgRepository(
-    private val connection: Connection
-) : PubgRepository {
-
-    // ── Ingestion ─────────────────────────────────────────────────────────────
+class PostgresPubgRepository(private val dataSource: DataSource) : PubgRepository {
 
     override fun savePlayers(players: List<PubgPlayer>) {
-        synchronized(DatabaseConfig.lock) {
+        dataSource.connection.use { conn ->
             val sql = """
-                INSERT OR REPLACE INTO pubg_players
-                    (account_id, name, platform, clan_id, ban_type, first_seen, last_updated)
-                VALUES (?, ?, ?, ?, ?, COALESCE((SELECT first_seen FROM pubg_players WHERE account_id = ?), ?), ?)
+                INSERT INTO pubg_players (account_id, name, platform, clan_id, ban_type, first_seen, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (account_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    platform = EXCLUDED.platform,
+                    clan_id = EXCLUDED.clan_id,
+                    ban_type = EXCLUDED.ban_type,
+                    last_updated = EXCLUDED.last_updated
             """.trimIndent()
-            connection.prepareStatement(sql).use { stmt ->
+            conn.prepareStatement(sql).use { stmt ->
                 players.forEach { p ->
                     val now = Timestamp.valueOf(p.lastUpdated)
                     stmt.setString(1, p.accountId)
@@ -35,9 +35,8 @@ class DuckDbPubgRepository(
                     stmt.setString(3, p.platform)
                     stmt.setString(4, p.clanId)
                     stmt.setString(5, p.banType)
-                    stmt.setString(6, p.accountId)
+                    stmt.setTimestamp(6, now)
                     stmt.setTimestamp(7, now)
-                    stmt.setTimestamp(8, now)
                     stmt.addBatch()
                 }
                 stmt.executeBatch()
@@ -46,13 +45,14 @@ class DuckDbPubgRepository(
     }
 
     override fun saveMatch(match: PubgMatch) {
-        synchronized(DatabaseConfig.lock) {
+        dataSource.connection.use { conn ->
             val sql = """
-                INSERT OR IGNORE INTO pubg_matches
+                INSERT INTO pubg_matches
                     (match_id, map_name, game_mode, duration, created_at, match_type, shard_id, fetched_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (match_id) DO NOTHING
             """.trimIndent()
-            connection.prepareStatement(sql).use { stmt ->
+            conn.prepareStatement(sql).use { stmt ->
                 stmt.setString(1, match.matchId)
                 stmt.setString(2, match.mapName)
                 stmt.setString(3, match.gameMode)
@@ -67,18 +67,19 @@ class DuckDbPubgRepository(
     }
 
     override fun saveParticipants(participants: List<PubgMatchParticipant>) {
-        synchronized(DatabaseConfig.lock) {
-            if (participants.isEmpty()) return@synchronized
+        if (participants.isEmpty()) return
+        dataSource.connection.use { conn ->
             val sql = """
-                INSERT OR IGNORE INTO pubg_match_participants
+                INSERT INTO pubg_match_participants
                     (match_id, account_id, player_name, kills, assists, dbnos, damage_dealt,
                      headshot_kills, win_place, death_type, time_survived,
                      walk_distance, ride_distance, swim_distance,
                      boosts, heals, revives, weapons_acquired,
                      kill_place, kill_streaks, longest_kill)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (match_id, account_id) DO NOTHING
             """.trimIndent()
-            connection.prepareStatement(sql).use { stmt ->
+            conn.prepareStatement(sql).use { stmt ->
                 participants.forEach { p ->
                     stmt.setString(1, p.matchId)
                     stmt.setString(2, p.accountId)
@@ -109,18 +110,37 @@ class DuckDbPubgRepository(
     }
 
     override fun saveSeasonStats(stats: List<PubgSeasonStats>) {
-        synchronized(DatabaseConfig.lock) {
-            if (stats.isEmpty()) return@synchronized
+        if (stats.isEmpty()) return
+        dataSource.connection.use { conn ->
             val sql = """
-                INSERT OR REPLACE INTO pubg_season_stats
+                INSERT INTO pubg_season_stats
                     (account_id, platform, season_id, game_mode,
                      kills, assists, dbnos, damage_dealt, wins, top10s,
                      rounds_played, losses, headshot_kills, longest_kill,
                      round_most_kills, walk_distance, ride_distance,
                      boosts, heals, revives, team_kills, fetched_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (account_id, platform, season_id, game_mode) DO UPDATE SET
+                    kills = EXCLUDED.kills,
+                    assists = EXCLUDED.assists,
+                    dbnos = EXCLUDED.dbnos,
+                    damage_dealt = EXCLUDED.damage_dealt,
+                    wins = EXCLUDED.wins,
+                    top10s = EXCLUDED.top10s,
+                    rounds_played = EXCLUDED.rounds_played,
+                    losses = EXCLUDED.losses,
+                    headshot_kills = EXCLUDED.headshot_kills,
+                    longest_kill = EXCLUDED.longest_kill,
+                    round_most_kills = EXCLUDED.round_most_kills,
+                    walk_distance = EXCLUDED.walk_distance,
+                    ride_distance = EXCLUDED.ride_distance,
+                    boosts = EXCLUDED.boosts,
+                    heals = EXCLUDED.heals,
+                    revives = EXCLUDED.revives,
+                    team_kills = EXCLUDED.team_kills,
+                    fetched_at = EXCLUDED.fetched_at
             """.trimIndent()
-            connection.prepareStatement(sql).use { stmt ->
+            conn.prepareStatement(sql).use { stmt ->
                 stats.forEach { s ->
                     stmt.setString(1, s.accountId)
                     stmt.setString(2, s.platform)
@@ -155,69 +175,70 @@ class DuckDbPubgRepository(
         if (matchIds.isEmpty()) return emptySet()
         val placeholders = matchIds.joinToString(",") { "?" }
         val sql = "SELECT match_id FROM pubg_matches WHERE match_id IN ($placeholders)"
-        return connection.prepareStatement(sql).use { stmt ->
-            matchIds.forEachIndexed { i, id -> stmt.setString(i + 1, id) }
-            stmt.executeQuery().use { rs ->
-                val result = mutableSetOf<String>()
-                while (rs.next()) result.add(rs.getString("match_id"))
-                result
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                matchIds.forEachIndexed { i, id -> stmt.setString(i + 1, id) }
+                stmt.executeQuery().use { rs ->
+                    val result = mutableSetOf<String>()
+                    while (rs.next()) result.add(rs.getString("match_id"))
+                    result
+                }
             }
         }
     }
-
-    // ── Query ─────────────────────────────────────────────────────────────────
 
     override fun findPlayerByName(name: String): PubgPlayer? {
         val sql = "SELECT * FROM pubg_players WHERE LOWER(name) = LOWER(?)"
-        return connection.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, name)
-            stmt.executeQuery().use { rs ->
-                if (rs.next()) rs.toPlayer() else null
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, name)
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) rs.toPlayer() else null
+                }
             }
         }
     }
 
-    override fun findPeriodStats(
-        accountId: String,
-        from: LocalDateTime,
-        to: LocalDateTime
-    ): PubgPeriodStats {
+    override fun findPeriodStats(accountId: String, from: LocalDateTime, to: LocalDateTime): PubgPeriodStats {
         val sql = """
             SELECT
-                COUNT(*)                          AS matches,
+                COUNT(*)                                          AS matches,
                 SUM(CASE WHEN p.win_place = 1 THEN 1 ELSE 0 END) AS wins,
-                COALESCE(SUM(p.kills), 0)         AS kills,
-                COALESCE(SUM(p.assists), 0)       AS assists,
-                COALESCE(SUM(p.dbnos), 0)         AS dbnos,
-                COALESCE(SUM(p.damage_dealt), 0)  AS total_damage,
-                COALESCE(SUM(p.headshot_kills), 0) AS headshot_kills,
-                COALESCE(SUM(p.revives), 0)       AS revives,
-                COALESCE(MAX(p.longest_kill), 0)  AS longest_kill
+                COALESCE(SUM(p.kills), 0)                         AS kills,
+                COALESCE(SUM(p.assists), 0)                       AS assists,
+                COALESCE(SUM(p.dbnos), 0)                         AS dbnos,
+                COALESCE(SUM(p.damage_dealt), 0)                  AS total_damage,
+                COALESCE(SUM(p.headshot_kills), 0)                AS headshot_kills,
+                COALESCE(SUM(p.revives), 0)                       AS revives,
+                COALESCE(MAX(p.longest_kill), 0)                  AS longest_kill
             FROM pubg_match_participants p
             JOIN pubg_matches m ON p.match_id = m.match_id
             WHERE p.account_id = ?
               AND m.created_at >= ?
               AND m.created_at < ?
+              AND m.match_type = 'official'
         """.trimIndent()
-        return connection.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, accountId)
-            stmt.setTimestamp(2, Timestamp.valueOf(from))
-            stmt.setTimestamp(3, Timestamp.valueOf(to))
-            stmt.executeQuery().use { rs ->
-                if (rs.next()) {
-                    PubgPeriodStats(
-                        matches = rs.getInt("matches"),
-                        wins = rs.getInt("wins"),
-                        kills = rs.getInt("kills"),
-                        assists = rs.getInt("assists"),
-                        dbnos = rs.getInt("dbnos"),
-                        totalDamage = rs.getDouble("total_damage"),
-                        headshotKills = rs.getInt("headshot_kills"),
-                        revives = rs.getInt("revives"),
-                        longestKill = rs.getDouble("longest_kill")
-                    )
-                } else {
-                    PubgPeriodStats(0, 0, 0, 0, 0, 0.0, 0, 0, 0.0)
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, accountId)
+                stmt.setTimestamp(2, Timestamp.valueOf(from))
+                stmt.setTimestamp(3, Timestamp.valueOf(to))
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        PubgPeriodStats(
+                            matches = rs.getInt("matches"),
+                            wins = rs.getInt("wins"),
+                            kills = rs.getInt("kills"),
+                            assists = rs.getInt("assists"),
+                            dbnos = rs.getInt("dbnos"),
+                            totalDamage = rs.getDouble("total_damage"),
+                            headshotKills = rs.getInt("headshot_kills"),
+                            revives = rs.getInt("revives"),
+                            longestKill = rs.getDouble("longest_kill")
+                        )
+                    } else {
+                        PubgPeriodStats(0, 0, 0, 0, 0, 0.0, 0, 0, 0.0)
+                    }
                 }
             }
         }
@@ -251,53 +272,55 @@ class DuckDbPubgRepository(
             WHERE account_id = ? AND season_id = 'lifetime'
         """.trimIndent()
 
-        var maxKills = 0; var maxKillsMap: String? = null; var maxKillsDate: LocalDateTime? = null
-        var maxDamage = 0.0; var maxDamageMap: String? = null; var maxDamageDate: LocalDateTime? = null
-        var longestKill = 0.0; var longestKillDate: LocalDateTime? = null
-        var lifetimeWins = 0
+        return dataSource.connection.use { conn ->
+            var maxKills = 0; var maxKillsMap: String? = null; var maxKillsDate: LocalDateTime? = null
+            var maxDamage = 0.0; var maxDamageMap: String? = null; var maxDamageDate: LocalDateTime? = null
+            var longestKill = 0.0; var longestKillDate: LocalDateTime? = null
+            var lifetimeWins = 0
 
-        connection.prepareStatement(killsSql).use { stmt ->
-            stmt.setString(1, accountId)
-            stmt.executeQuery().use { rs ->
-                if (rs.next()) {
-                    maxKills = rs.getInt("kills")
-                    maxKillsMap = rs.getString("map_name")
-                    maxKillsDate = rs.getTimestamp("created_at")?.toLocalDateTime()
+            conn.prepareStatement(killsSql).use { stmt ->
+                stmt.setString(1, accountId)
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        maxKills = rs.getInt("kills")
+                        maxKillsMap = rs.getString("map_name")
+                        maxKillsDate = rs.getTimestamp("created_at")?.toLocalDateTime()
+                    }
                 }
             }
-        }
-        connection.prepareStatement(damageSql).use { stmt ->
-            stmt.setString(1, accountId)
-            stmt.executeQuery().use { rs ->
-                if (rs.next()) {
-                    maxDamage = rs.getDouble("damage_dealt")
-                    maxDamageMap = rs.getString("map_name")
-                    maxDamageDate = rs.getTimestamp("created_at")?.toLocalDateTime()
+            conn.prepareStatement(damageSql).use { stmt ->
+                stmt.setString(1, accountId)
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        maxDamage = rs.getDouble("damage_dealt")
+                        maxDamageMap = rs.getString("map_name")
+                        maxDamageDate = rs.getTimestamp("created_at")?.toLocalDateTime()
+                    }
                 }
             }
-        }
-        connection.prepareStatement(longestSql).use { stmt ->
-            stmt.setString(1, accountId)
-            stmt.executeQuery().use { rs ->
-                if (rs.next()) {
-                    longestKill = rs.getDouble("longest_kill")
-                    longestKillDate = rs.getTimestamp("created_at")?.toLocalDateTime()
+            conn.prepareStatement(longestSql).use { stmt ->
+                stmt.setString(1, accountId)
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        longestKill = rs.getDouble("longest_kill")
+                        longestKillDate = rs.getTimestamp("created_at")?.toLocalDateTime()
+                    }
                 }
             }
-        }
-        connection.prepareStatement(winsSql).use { stmt ->
-            stmt.setString(1, accountId)
-            stmt.executeQuery().use { rs ->
-                if (rs.next()) lifetimeWins = rs.getInt("total_wins")
+            conn.prepareStatement(winsSql).use { stmt ->
+                stmt.setString(1, accountId)
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) lifetimeWins = rs.getInt("total_wins")
+                }
             }
-        }
 
-        return PubgPersonalRecords(
-            maxKills = maxKills, maxKillsMap = maxKillsMap, maxKillsDate = maxKillsDate,
-            maxDamage = maxDamage, maxDamageMap = maxDamageMap, maxDamageDate = maxDamageDate,
-            longestKill = longestKill, longestKillDate = longestKillDate,
-            lifetimeWins = lifetimeWins
-        )
+            PubgPersonalRecords(
+                maxKills = maxKills, maxKillsMap = maxKillsMap, maxKillsDate = maxKillsDate,
+                maxDamage = maxDamage, maxDamageMap = maxDamageMap, maxDamageDate = maxDamageDate,
+                longestKill = longestKill, longestKillDate = longestKillDate,
+                lifetimeWins = lifetimeWins
+            )
+        }
     }
 
     override fun findRecentMatches(accountId: String, limit: Int): List<Pair<PubgMatch, PubgMatchParticipant>> {
@@ -315,13 +338,15 @@ class DuckDbPubgRepository(
             ORDER BY m.created_at DESC
             LIMIT ?
         """.trimIndent()
-        return connection.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, accountId)
-            stmt.setInt(2, limit)
-            stmt.executeQuery().use { rs ->
-                val results = mutableListOf<Pair<PubgMatch, PubgMatchParticipant>>()
-                while (rs.next()) results.add(rs.toMatchWithParticipant())
-                results
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, accountId)
+                stmt.setInt(2, limit)
+                stmt.executeQuery().use { rs ->
+                    val results = mutableListOf<Pair<PubgMatch, PubgMatchParticipant>>()
+                    while (rs.next()) results.add(rs.toMatchWithParticipant())
+                    results
+                }
             }
         }
     }
@@ -341,20 +366,22 @@ class DuckDbPubgRepository(
             GROUP BY m.map_name
             ORDER BY matches DESC
         """.trimIndent()
-        return connection.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, accountId)
-            stmt.executeQuery().use { rs ->
-                val results = mutableListOf<PubgMapStat>()
-                while (rs.next()) {
-                    results.add(PubgMapStat(
-                        mapName = rs.getString("map_name"),
-                        matches = rs.getInt("matches"),
-                        wins = rs.getInt("wins"),
-                        totalKills = rs.getInt("total_kills"),
-                        totalDamage = rs.getDouble("total_damage")
-                    ))
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, accountId)
+                stmt.executeQuery().use { rs ->
+                    val results = mutableListOf<PubgMapStat>()
+                    while (rs.next()) {
+                        results.add(PubgMapStat(
+                            mapName = rs.getString("map_name"),
+                            matches = rs.getInt("matches"),
+                            wins = rs.getInt("wins"),
+                            totalKills = rs.getInt("total_kills"),
+                            totalDamage = rs.getDouble("total_damage")
+                        ))
+                    }
+                    results
                 }
-                results
             }
         }
     }
@@ -365,17 +392,17 @@ class DuckDbPubgRepository(
             WHERE account_id = ? AND season_id = 'lifetime'
             ORDER BY rounds_played DESC
         """.trimIndent()
-        return connection.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, accountId)
-            stmt.executeQuery().use { rs ->
-                val results = mutableListOf<PubgSeasonStats>()
-                while (rs.next()) results.add(rs.toSeasonStats())
-                results
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, accountId)
+                stmt.executeQuery().use { rs ->
+                    val results = mutableListOf<PubgSeasonStats>()
+                    while (rs.next()) results.add(rs.toSeasonStats())
+                    results
+                }
             }
         }
     }
-
-    // ── ResultSet mappers ─────────────────────────────────────────────────────
 
     private fun ResultSet.toPlayer() = PubgPlayer(
         accountId = getString("account_id"),

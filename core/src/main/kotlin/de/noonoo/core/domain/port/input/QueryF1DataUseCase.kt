@@ -1,8 +1,8 @@
-package de.noonoo.domain.port.input
+package de.noonoo.core.domain.port.input
 
-import de.noonoo.domain.model.F1Race
-import de.noonoo.domain.model.F1RaceResult
-import de.noonoo.domain.model.F1Standing
+import de.noonoo.core.domain.model.F1Race
+import de.noonoo.core.domain.model.F1RaceResult
+import de.noonoo.core.domain.model.F1Standing
 
 interface QueryF1DataUseCase {
     fun getNextRace(): F1Race?

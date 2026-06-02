@@ -1,9 +1,9 @@
-package de.noonoo.domain.port.output
+package de.noonoo.core.domain.port.output
 
-import de.noonoo.domain.model.PubgMatch
-import de.noonoo.domain.model.PubgMatchParticipant
-import de.noonoo.domain.model.PubgPlayer
-import de.noonoo.domain.model.PubgSeasonStats
+import de.noonoo.core.domain.model.PubgMatch
+import de.noonoo.core.domain.model.PubgMatchParticipant
+import de.noonoo.core.domain.model.PubgPlayer
+import de.noonoo.core.domain.model.PubgSeasonStats
 
 interface PubgApiPort {
     suspend fun fetchPlayersByName(names: List<String>, platform: String): List<PubgPlayer>

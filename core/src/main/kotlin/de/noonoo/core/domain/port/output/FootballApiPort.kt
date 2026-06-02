@@ -1,9 +1,9 @@
-package de.noonoo.domain.port.output
+package de.noonoo.core.domain.port.output
 
-import de.noonoo.domain.model.GoalGetter
-import de.noonoo.domain.model.Match
-import de.noonoo.domain.model.Standing
-import de.noonoo.domain.model.Team
+import de.noonoo.core.domain.model.GoalGetter
+import de.noonoo.core.domain.model.Match
+import de.noonoo.core.domain.model.Standing
+import de.noonoo.core.domain.model.Team
 
 interface FootballApiPort {
     suspend fun fetchMatches(league: String, season: Int): List<Match>

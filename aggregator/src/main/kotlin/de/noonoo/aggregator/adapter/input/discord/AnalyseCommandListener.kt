@@ -1,8 +1,8 @@
-package de.noonoo.adapter.input.discord
+package de.noonoo.aggregator.adapter.input.discord
 
-import de.noonoo.adapter.ai.HandballAnalysisContextBuilder
-import de.noonoo.adapter.ai.HandballClaudeAnalyser
-import de.noonoo.adapter.ai.HandballLiveFetcher
+import de.noonoo.aggregator.adapter.ai.HandballAnalysisContextBuilder
+import de.noonoo.aggregator.adapter.ai.HandballClaudeAnalyser
+import de.noonoo.aggregator.adapter.ai.HandballLiveFetcher
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

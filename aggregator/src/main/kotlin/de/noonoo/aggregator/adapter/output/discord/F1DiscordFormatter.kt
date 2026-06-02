@@ -1,8 +1,8 @@
-package de.noonoo.adapter.output.discord
+package de.noonoo.aggregator.adapter.output.discord
 
-import de.noonoo.domain.model.F1Race
-import de.noonoo.domain.model.F1RaceResult
-import de.noonoo.domain.model.F1Standing
+import de.noonoo.core.domain.model.F1Race
+import de.noonoo.core.domain.model.F1RaceResult
+import de.noonoo.core.domain.model.F1Standing
 import java.time.DayOfWeek
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -29,15 +29,15 @@ object F1DiscordFormatter {
         appendLine("```")
         val raceTime = race.raceTime?.let { " – ${it.format(timeFmt)} Uhr" } ?: ""
         appendLine("📅 Rennen:     ${dow(race.raceDate.dayOfWeek)}, ${race.raceDate.format(dateFmt)}$raceTime")
-        if (race.qualiDate != null) {
+        race.qualiDate?.let { qualiDate ->
             val qualiTime = race.qualiTime?.let { " – ${it.format(timeFmt)} Uhr" } ?: ""
-            appendLine("⏱ Qualifying: ${dow(race.qualiDate.dayOfWeek)}, ${race.qualiDate.format(dateFmt)}$qualiTime")
+            appendLine("⏱ Qualifying: ${dow(qualiDate.dayOfWeek)}, ${qualiDate.format(dateFmt)}$qualiTime")
         }
-        if (race.sprintDate != null) {
-            appendLine("🏃 Sprint:     ${dow(race.sprintDate.dayOfWeek)}, ${race.sprintDate.format(dateFmt)}")
+        race.sprintDate?.let { sprintDate ->
+            appendLine("🏃 Sprint:     ${dow(sprintDate.dayOfWeek)}, ${sprintDate.format(dateFmt)}")
         }
-        if (race.fp1Date != null) {
-            appendLine("🔧 Training:   ${dow(race.fp1Date.dayOfWeek)}, ${race.fp1Date.format(dateFmt)}")
+        race.fp1Date?.let { fp1Date ->
+            appendLine("🔧 Training:   ${dow(fp1Date.dayOfWeek)}, ${fp1Date.format(dateFmt)}")
         }
         appendLine("📍 ${race.circuitName}, ${race.locality}")
         append("```")
@@ -52,7 +52,7 @@ object F1DiscordFormatter {
         val fastestDriver = results.firstOrNull { it.fastestLap }
 
         return buildString {
-            appendLine("🏁 **${first.season} – Runde ${first.round}**")
+            appendLine("🏁 **${first.season} – Rennen ${first.round}**")
             appendLine("```")
             results.take(10).forEachIndexed { idx, r ->
                 val medal = when (r.position) {
@@ -63,7 +63,7 @@ object F1DiscordFormatter {
                 }
                 val name = r.driverName.take(18).padEnd(18)
                 val team = r.constructorName.take(10).padEnd(10)
-                val pts  = "${r.points.toInt()} Pkt"
+                val pts  = r.points.toInt().toString().padStart(3)
                 appendLine("$medal $name  $team  $pts")
             }
             if (fastestDriver != null) {
@@ -96,9 +96,9 @@ object F1DiscordFormatter {
                 appendLine("Fahrerwertung:")
                 driverStandings.take(10).forEach { s ->
                     val pos  = "${s.position}.".padStart(3)
-                    val name = s.entityName.take(20).padEnd(20)
-                    val team = (s.constructorName ?: "").take(12).padEnd(12)
-                    val pts  = "${formatPoints(s.points)} Pkt"
+                    val name = abbreviateDriverName(s.entityName).padEnd(15)
+                    val team = (s.constructorName ?: "").replace("F1 Team", "").trim().take(10).padEnd(10)
+                    val pts  = formatPoints(s.points).padStart(4)
                     appendLine("$pos $name  $team  $pts")
                 }
             }
@@ -107,8 +107,8 @@ object F1DiscordFormatter {
                 appendLine("Konstrukteurswertung:")
                 constructorStandings.take(5).forEach { s ->
                     val pos  = "${s.position}.".padStart(3)
-                    val name = s.entityName.take(20).padEnd(20)
-                    val pts  = "${formatPoints(s.points)} Pkt"
+                    val name = s.entityName.replace("F1 Team", "").trim().take(15).padEnd(15)
+                    val pts  = formatPoints(s.points).padStart(4)
                     appendLine("$pos $name  $pts")
                 }
             }
@@ -133,4 +133,11 @@ object F1DiscordFormatter {
 
     private fun formatPoints(pts: Double): String =
         if (pts == pts.toLong().toDouble()) pts.toLong().toString() else pts.toString()
+
+    private fun abbreviateDriverName(fullName: String): String {
+        val parts = fullName.trim().split(" ").filter { it.isNotBlank() }
+        if (parts.size <= 1) return fullName.take(15)
+        val initials = parts.dropLast(1).joinToString(" ") { "${it[0]}." }
+        return "$initials ${parts.last()}".take(15)
+    }
 }

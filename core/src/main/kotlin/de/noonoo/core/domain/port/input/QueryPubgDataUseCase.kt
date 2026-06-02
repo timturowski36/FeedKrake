@@ -1,12 +1,12 @@
-package de.noonoo.domain.port.input
+package de.noonoo.core.domain.port.input
 
-import de.noonoo.domain.model.PubgMapStat
-import de.noonoo.domain.model.PubgMatch
-import de.noonoo.domain.model.PubgMatchParticipant
-import de.noonoo.domain.model.PubgPeriodStats
-import de.noonoo.domain.model.PubgPersonalRecords
-import de.noonoo.domain.model.PubgPlayer
-import de.noonoo.domain.model.PubgSeasonStats
+import de.noonoo.core.domain.model.PubgMapStat
+import de.noonoo.core.domain.model.PubgMatch
+import de.noonoo.core.domain.model.PubgMatchParticipant
+import de.noonoo.core.domain.model.PubgPeriodStats
+import de.noonoo.core.domain.model.PubgPersonalRecords
+import de.noonoo.core.domain.model.PubgPlayer
+import de.noonoo.core.domain.model.PubgSeasonStats
 import java.time.LocalDateTime
 
 interface QueryPubgDataUseCase {

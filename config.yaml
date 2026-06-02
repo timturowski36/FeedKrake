@@ -1,145 +1,15 @@
 modules:
-  - id: bundesliga_1
-    type: football
-    enabled: true
-    source: openligadb
-    config:
-      league: bl1
-      season: 2025
-    schedule:
-      fetchIntervalMinutes: 15
-    outputs:
-      # Tabellenübersicht – täglich um 18:00
-      - type: discord
-        channel: sport
-        schedule: DAILY_18_00
-        format: table_summary
-        onStartup: true
-        params:
-          leagueName: "1. Bundesliga"
-
-      # Spieltagsergebnisse – montags um 09:00
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_00
-        format: weekend_summary
-        params:
-          leagueName: "1. Bundesliga"
-
-      # Letzte Spiele – mehrere Teams, täglich um 08:30
-      - type: discord
-        channel: sport
-        schedule: DAILY_08_30
-        format: team_last_matches
-        teams:
-          - "Borussia Dortmund"
-          - "FC Bayern München"
-        params:
-          limit: "5"
-          leagueName: "1. Bundesliga"
-
-      # Nächste Spiele – mehrere Teams, täglich um 07:30
-      - type: discord
-        channel: sport
-        schedule: DAILY_07_30
-        format: team_next_matches
-        teams:
-          - "Borussia Dortmund"
-          - "FC Bayern München"
-        params:
-          limit: "3"
-          leagueName: "1. Bundesliga"
-
-      # Team-Zusammenfassung – montags um 10:00
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_10_00
-        format: team_summary
-        teams:
-          - "Borussia Dortmund"
-        params:
-          leagueName: "1. Bundesliga"
-
-      # Torjäger eines Teams – montags um 10:30
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_10_30
-        format: team_top_scorers
-        teams:
-          - "Borussia Dortmund"
-        params:
-          limit: "5"
-          leagueName: "1. Bundesliga"
-
-      # Liga-Torjägerliste – montags um 11:00
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_11_00
-        format: league_top_scorers
-        params:
-          limit: "10"
-          leagueName: "1. Bundesliga"
-
-      # Nächster Spieltag – freitags um 12:00
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_FRIDAY_12_00
-        format: next_matchday
-        params:
-          leagueName: "1. Bundesliga"
-
-      # Spieltag-Vorschau – freitags um 12:30
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_FRIDAY_12_30
-        format: matchday_preview
-        params:
-          leagueName: "1. Bundesliga"
-
-  - id: heise_tech
-    type: news
-    enabled: true
-    source: rss
-    config:
-      url: "https://www.heise.de/rss/heise-atom.xml"
-      sourceName: "Heise Online"
-    schedule:
-      fetchIntervalMinutes: 60
-    outputs:
-      - type: discord
-        channel: news
-        schedule: DAILY_08_00
-        format: news_compact
-        params:
-          limit: "5"
-          keywords: "KI,GPU,Linux,Windows,Sicherheit"
-
-  - id: tagesschau
-    type: news
-    enabled: true
-    source: rss
-    config:
-      url: "https://www.tagesschau.de/xml/rss2/"
-      sourceName: "Tagesschau"
-    schedule:
-      fetchIntervalMinutes: 30
-    outputs:
-      - type: discord
-        channel: news
-        schedule: DAILY_07_00
-        format: news_compact
-        params:
-          limit: "5"
-
   - id: pubg_friends
     type: pubg
     enabled: true
     source: pubg_api
     config:
-      platform: steam  # steam | xbox | psn
+      platform: steam
     players:
       - "brotrustgaming"
       - "philipnc"
+      - "chrissi1970"
+      - "Alxndr_D"
     accountIds:
       - "account.af4b877b95df46a3804d38d8be1d3225"
     schedule:
@@ -147,302 +17,55 @@ modules:
     outputs:
       # Tagesstatistik – täglich um 09:00
       - type: discord
-        channel: gaming
-        schedule: DAILY_09_00
-        format: pubg_daily_stats
-
-      # Tagesstatistik – allgemein-Kanal
-      - type: discord
-        channel: allgemein
+        channel: pubg
         schedule: DAILY_09_00
         format: pubg_daily_stats
 
       # Wochenstatistik – montags um 09:00
       - type: discord
-        channel: gaming
+        channel: pubg
         schedule: WEEKLY_MONDAY_09_00
         format: pubg_weekly_stats
 
       # Wochenranking – montags um 09:15
       - type: discord
-        channel: gaming
+        channel: pubg
         schedule: WEEKLY_MONDAY_09_15
         format: pubg_weekly_ranking
 
-      # Wochenvergleich – montags um 09:30
+      # Wochenvergleich – sonntags um 23:45
       - type: discord
-        channel: gaming
-        schedule: WEEKLY_MONDAY_09_30
+        channel: pubg
+        schedule: WEEKLY_SUNDAY_23_45
         format: pubg_weekly_progress
 
-      # Persönliche Rekorde – montags um 10:00
+      # Persönliche Rekorde – mittwochs um 20:00
       - type: discord
-        channel: gaming
-        schedule: WEEKLY_MONDAY_10_00
+        channel: pubg
+        schedule: WEEKLY_WEDNESDAY_20_00
+        format: pubg_records
+
+      # Persönliche Rekorde – samstags um 20:00
+      - type: discord
+        channel: pubg
+        schedule: WEEKLY_SATURDAY_20_00
         format: pubg_records
 
       # Letzte Matches – montags um 10:15
       - type: discord
-        channel: gaming
+        channel: pubg
         schedule: WEEKLY_MONDAY_10_15
         format: pubg_recent_matches
         params:
           limit: "5"
 
-      # Map-Statistiken – montags um 10:30
+      # Map-Statistiken – sonntags um 23:50
       - type: discord
-        channel: gaming
-        schedule: WEEKLY_MONDAY_10_30
+        channel: pubg
+        schedule: WEEKLY_SUNDAY_23_50
         format: pubg_map_stats
-
-
-  - id: bundesliga_2
-    type: football
-    enabled: true
-    source: openligadb
-    config:
-      league: bl2
-      season: 2025
-    schedule:
-      fetchIntervalMinutes: 60
-    outputs:
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_00
-        format: weekend_summary
-        params:
-          leagueName: "2. Bundesliga"
-
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_05
-        format: table_summary
-        params:
-          leagueName: "2. Bundesliga"
-
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_FRIDAY_12_00
-        format: team_next_matches
-        teams:
-          - "FC Schalke 04"
-        params:
-          limit: "3"
-          leagueName: "2. Bundesliga"
-
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_10
-        format: team_last_matches
-        teams:
-          - "FC Schalke 04"
-        params:
-          limit: "5"
-          leagueName: "2. Bundesliga"
-
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_15
-        format: team_summary
-        teams:
-          - "FC Schalke 04"
-        params:
-          leagueName: "2. Bundesliga"
-
-  # Handball — beliebig viele Teams möglich, jedes als eigenes Modul
-  # teamId aus der handball.net-URL ablesen: handball4all.{verband}.{numericId}
-  - id: handball_mein_team
-    type: handball
-    enabled: false    # teamId + Teamnamen eintragen und auf true setzen
-    source: handball_api
-    config:
-      teamId: "handball4all.westfalen.1309001"
-    schedule:
-      fetchIntervalMinutes: 60
-    outputs:
-      # Ligatabelle — montags um 09:00
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_00
-        format: handball_table
-        teams:
-          - "HSG RE/OE"
-        params:
-          leagueName: "Bezirksliga Ruhrgebiet"
-
-      # Letzte Spiele — montags um 09:05
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_05
-        format: handball_last_matches
-        teams:
-          - "HSG RE/OE"
-        params:
-          limit: "5"
-
-      # Nächste Spiele — freitags um 12:00
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_FRIDAY_12_00
-        format: handball_next_matches
-        teams:
-          - "HSG RE/OE"
-        params:
-          limit: "5"
-
-      # Wochenendergebnisse der Liga — montags um 09:10
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_10
-        format: handball_weekend_results
-        teams:
-          - "HSG RE/OE"
-        params:
-          leagueName: "Bezirksliga Ruhrgebiet"
-
-      # Spielbericht (Liveticker) — samstags um 21:30
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_SATURDAY_21_30
-        format: handball_match_report
-        teams:
-          - "HSG RE/OE"
-
-      # Formtabelle — montags um 09:15
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_15
-        format: handball_form_table
-        teams:
-          - "HSG RE/OE"
-        params:
-          leagueName: "Bezirksliga Ruhrgebiet"
-
-      # Nächster Spieltag — freitags um 12:05
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_FRIDAY_12_05
-        format: handball_next_matchday
-        teams:
-          - "HSG RE/OE"
-        params:
-          leagueName: "Bezirksliga Ruhrgebiet"
-
-  - id: formula1_2025
-    type: formula1
-    enabled: true
-    source: jolpica_f1
-    config:
-      season: "2025"
-    schedule:
-      fetchIntervalMinutes: 60
-    outputs:
-      # Letztes Rennen + Fahrerwertung – montags um 09:00
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_00
-        format: f1_last_race
-
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_05
-        format: f1_standings
-
-      # Nächstes Rennen + Streckenwinner – donnerstags um 18:00
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_THURSDAY_18_00
-        format: f1_next_race
-
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_THURSDAY_18_05
-        format: f1_circuit_history
-
-  - id: handball_zweites_team
-    type: handball
-    enabled: false
-    source: handball_api
-    config:
-      teamId: "handball4all.westfalen.9999999"  # Eigene ID eintragen
-    schedule:
-      fetchIntervalMinutes: 60
-    outputs: []
-
-  - id: handball_stats_nrw_300268
-    type: handball_statistics
-    enabled: true
-    source: handball_statistics_api
-    config:
-      leagueId: "300268"
-      season: "2526"
-    schedule:
-      fetchIntervalMinutes: 60
-    outputs:
-      # Ligatabelle (aus handball_matches/standings) — montags um 09:19
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_19
-        format: handball_table
-        params:
-          leagueName: "Männer Bezirksliga Ruhrgebiet"
-
-      # Letzte Spiele eines Teams — montags um 09:20
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_20
-        format: handball_last_matches
-        teams:
-          - "HSG RE/OE"
-        params:
-          limit: "5"
-
-      # Nächste Spiele eines Teams — montags um 09:20 (verzögert)
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_20
-        format: handball_next_matches
-        teams:
-          - "HSG RE/OE"
-        params:
-          limit: "5"
-
-      # Torschützen-Liste des Teams (Rang Liga + Rang Team) — montags um 09:21
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_21
-        format: handball_scorer_team_goals
-        teams:
-          - "HSG RE/OE"
-
-      # 2-Minuten-Strafen des Teams — montags um 09:21 (verzögert)
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_21
-        format: handball_scorer_team_penalties
-        teams:
-          - "HSG RE/OE"
-
-      # Komplette Torschützenliste der Liga — montags um 09:22
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_22
-        format: handball_scorer_table
-        params:
-          limit: "30"
-
-      # Detailansicht Torschützen (Feld/7m/Quote) — montags um 09:22 (verzögert)
-      - type: discord
-        channel: sport
-        schedule: WEEKLY_MONDAY_09_22
-        format: handball_scorer_team
-        teams:
-          - "HSG RE/OE"
 
 outputs:
   discord:
     channels:
-      sport: ${DISCORD_SPORT_WEBHOOK}
-      news: ${DISCORD_NEWS_WEBHOOK}
-      gaming: ${DISCORD_GAMING_WEBHOOK}
-      allgemein: ${DISCORD_ALLGEMEIN_WEBHOOK}
+      pubg: ${DISCORD_CHANNEL_PUBG}

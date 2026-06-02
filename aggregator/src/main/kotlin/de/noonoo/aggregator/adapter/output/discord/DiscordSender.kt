@@ -1,12 +1,12 @@
-package de.noonoo.adapter.output.discord
+package de.noonoo.aggregator.adapter.output.discord
 
 import club.minnced.discord.webhook.WebhookClient
-import de.noonoo.domain.model.GoalGetter
-import de.noonoo.domain.model.Match
-import de.noonoo.domain.model.NewsArticle
-import de.noonoo.domain.model.Standing
-import de.noonoo.domain.model.Team
-import de.noonoo.domain.port.output.NotificationPort
+import de.noonoo.core.domain.model.GoalGetter
+import de.noonoo.core.domain.model.Match
+import de.noonoo.core.domain.model.NewsArticle
+import de.noonoo.core.domain.model.Standing
+import de.noonoo.core.domain.model.Team
+import de.noonoo.core.domain.port.output.NotificationPort
 import java.time.DayOfWeek
 import java.time.format.DateTimeFormatter
 
@@ -123,16 +123,20 @@ class DiscordSender(
                 .sortedByDescending { it.goals }
             appendLine("⚽ **Torjäger $teamName** ($leagueName) | Stand: $date")
             appendLine("```")
-            appendLine("${"Name".padEnd(22)}  Tore")
-            appendLine(SEP)
-            filtered.forEach { g ->
-                appendLine("${g.name.take(22).padEnd(22)}  ${g.goals.toString().padStart(3)}")
+            if (filtered.isEmpty()) {
+                appendLine("Keine Daten verfügbar.")
+            } else {
+                appendLine("${"Name".padEnd(22)}  Tore")
+                appendLine(SEP)
+                filtered.forEach { g ->
+                    appendLine("${g.name.take(22).padEnd(22)}  ${g.goals.toString().padStart(3)}")
+                }
             }
             appendLine("```")
         }
 
         // ── 5. Torjägerliste gesamte Liga ─────────────────────────────────────
-        // Name(16) Kurz(8) Tore(4) ≈ 38
+        // Name(22) Tore(3) ≈ 28
         fun formatLeagueTopScorers(
             goalGetters: List<GoalGetter>,
             teams: Map<Int, Team>,
@@ -143,12 +147,11 @@ class DiscordSender(
             val top = goalGetters.filter { it.goals > 0 }.sortedByDescending { it.goals }.take(limit)
             appendLine("🥇 **Torjägerliste $leagueName** | Stand: $date")
             appendLine("```")
-            appendLine("${"Name".padEnd(16)}  ${"Kurz".padEnd(8)}  Tore")
+            appendLine("${"Name".padEnd(22)}  Tore")
             appendLine(SEP)
             top.forEach { g ->
-                val name = g.name.take(16).padEnd(16)
-                val team = (teams[g.teamId]?.shortName ?: "?").take(8).padEnd(8)
-                appendLine("$name  $team  ${g.goals.toString().padStart(3)}")
+                val name = g.name.take(22).padEnd(22)
+                appendLine("$name  ${g.goals.toString().padStart(3)}")
             }
             appendLine("```")
         }
@@ -186,7 +189,8 @@ class DiscordSender(
             leagueName: String,
             date: String
         ): String = buildString {
-            appendLine("📊 **$teamName** ($leagueName) | Stand: $date")
+            appendLine("📊 **$teamName** ($leagueName)")
+            appendLine("Stand: $date")
             appendLine("```")
             if (standing != null) {
                 val diff = standing.goalsFor - standing.goalsAgainst
@@ -210,7 +214,9 @@ class DiscordSender(
                 val home = (teams[nextMatch.homeTeamId]?.shortName ?: "?").take(9)
                 val away = (teams[nextMatch.awayTeamId]?.shortName ?: "?").take(9)
                 val kickoff = "${dow(nextMatch.kickoffAt.dayOfWeek)} ${nextMatch.kickoffAt.format(dateFmt)} ${nextMatch.kickoffAt.format(timeFmt)}"
-                appendLine("Nächstes: $kickoff  $home - $away")
+                appendLine("Nächstes:")
+                appendLine(kickoff)
+                appendLine("$home - $away")
             }
             appendLine("```")
         }
@@ -224,7 +230,8 @@ class DiscordSender(
             leagueName: String,
             date: String
         ): String = buildString {
-            appendLine("🏁 **$leagueName – $matchday. Spieltag** | Stand: $date")
+            appendLine("🏁 **$leagueName – $matchday. Spieltag**")
+            appendLine("Stand: $date")
             appendLine("```")
             matches.sortedBy { it.kickoffAt }.forEach { m ->
                 val home  = (teams[m.homeTeamId]?.shortName ?: "?").take(9).padEnd(9)
@@ -236,7 +243,7 @@ class DiscordSender(
         }
 
         // ── 9. Spieltag-Vorschau ──────────────────────────────────────────────
-        // Anstoß(14) Heim+Pl(11) Gast+Pl(11) ≈ 38
+        // Anstoß(10) Heim+Pl(11) Gast+Pl(11) ≈ 36
         fun formatMatchdayPreview(
             matches: List<Match>,
             teams: Map<Int, Team>,
@@ -247,37 +254,29 @@ class DiscordSender(
         ): String = buildString {
             appendLine("🔭 **Vorschau $matchday. Spieltag** ($leagueName) | Stand: $date")
             appendLine("```")
-            appendLine("${"Anstoß".padEnd(14)}  ${"Heim (Pl)".padEnd(11)}  Gast (Pl)")
+            appendLine("${"Anstoß".padEnd(10)}  ${"Heim (Pl)".padEnd(11)}  Gast (Pl)")
             appendLine(SEP)
             matches.sortedBy { it.kickoffAt }.forEach { m ->
-                val kickoff  = "${dow(m.kickoffAt.dayOfWeek)} ${m.kickoffAt.format(dateFmt)} ${m.kickoffAt.format(timeFmt)}"
-                    .take(14).padEnd(14)
+                val kickoff  = "${dow(m.kickoffAt.dayOfWeek)} ${m.kickoffAt.format(dateFmt)}"
+                    .take(10).padEnd(10)
                 val homePl   = standings[m.homeTeamId]?.position?.let { "($it)" } ?: ""
                 val awayPl   = standings[m.awayTeamId]?.position?.let { "($it)" } ?: ""
-                val home     = "${(teams[m.homeTeamId]?.shortName ?: "?").take(7)} $homePl".take(11).padEnd(11)
-                val away     = "${(teams[m.awayTeamId]?.shortName ?: "?").take(7)} $awayPl".take(11)
+                val home     = "${(teams[m.homeTeamId]?.shortName ?: "?").take(6)} $homePl".take(11).padEnd(11)
+                val away     = "${(teams[m.awayTeamId]?.shortName ?: "?").take(6)} $awayPl".take(11)
                 appendLine("$kickoff  $home  $away")
             }
             appendLine("```")
         }
 
         // ── 10. News kompakt ──────────────────────────────────────────────────
-        // "dd.MM. HH:mm  " = 14 Zeichen Prefix → 24 Zeichen Titel = 38 gesamt
+        // Nur nackte URLs, eine pro Zeile, neueste zuerst
         fun formatNewsCompact(
             articles: List<NewsArticle>,
             sourceName: String,
             date: String
         ): String = buildString {
-            appendLine("📰 **$sourceName** | Stand: $date")
-            appendLine("```")
             articles.forEach { a ->
-                val dateStr = a.publishedAt?.format(DateTimeFormatter.ofPattern("dd.MM. HH:mm")) ?: "??:??. ??:??"
-                val title = a.title.take(24)
-                appendLine("$dateStr  $title")
-            }
-            appendLine("```")
-            articles.forEach { a ->
-                appendLine("↳ ${a.url}")
+                appendLine(a.url)
             }
         }
     }

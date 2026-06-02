@@ -1,11 +1,11 @@
-package de.noonoo.adapter.output.api
+package de.noonoo.aggregator.adapter.output.api
 
 import com.microsoft.playwright.BrowserType
 import com.microsoft.playwright.Page
 import com.microsoft.playwright.Playwright
-import de.noonoo.domain.model.HandballScorer
-import de.noonoo.domain.model.HandballScorerList
-import de.noonoo.domain.port.output.HandballStatisticsApiPort
+import de.noonoo.core.domain.model.HandballScorer
+import de.noonoo.core.domain.model.HandballScorerList
+import de.noonoo.core.domain.port.output.HandballStatisticsApiPort
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

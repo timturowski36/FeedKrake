@@ -1,4 +1,4 @@
-package de.noonoo.adapter.ai
+package de.noonoo.aggregator.adapter.ai
 
 /**
  * Handball-spezifischer Wrapper um den generischen [ClaudeService].

@@ -1,4 +1,4 @@
-package de.noonoo.adapter.input.discord
+package de.noonoo.aggregator.adapter.input.discord
 
 import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.requests.GatewayIntent
@@ -21,15 +21,8 @@ object DiscordBotStarter {
     /**
      * Startet den JDA-Bot und blockiert bis zur erfolgreichen Verbindung.
      * Danach läuft der Bot im Hintergrund bis zur JVM-Beendigung.
-     *
-     * @param listener  AnalyseCommandListener für den !analyse-Command
      */
-    fun starten(listener: AnalyseCommandListener) {
-        val token = System.getenv("DISCORD_BOT_TOKEN")
-            ?: error(
-                "DISCORD_BOT_TOKEN fehlt in .env. " +
-                "Bitte Bot im Discord Developer Portal anlegen und Token setzen."
-            )
+    fun starten(token: String, analyseListener: AnalyseCommandListener, pubgListener: PubgCommandListener) {
 
         log.info("[Discord] Starte JDA-Bot...")
 
@@ -40,10 +33,10 @@ object DiscordBotStarter {
                 GatewayIntent.MESSAGE_CONTENT  // Privileged Intent – im Dev-Portal aktivieren!
             )
         )
-            .addEventListeners(listener)
+            .addEventListeners(analyseListener, pubgListener)
             .build()
 
         jda.awaitReady()
-        log.info("[Discord] JDA-Bot verbunden. Ping: {}ms. Warte auf !analyse-Commands.", jda.gatewayPing)
+        log.info("[Discord] JDA-Bot verbunden. Ping: {}ms. Warte auf Commands.", jda.gatewayPing)
     }
 }

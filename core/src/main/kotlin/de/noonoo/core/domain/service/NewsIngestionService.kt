@@ -1,8 +1,8 @@
-package de.noonoo.domain.service
+package de.noonoo.core.domain.service
 
-import de.noonoo.domain.port.input.FetchNewsUseCase
-import de.noonoo.domain.port.output.NewsApiPort
-import de.noonoo.domain.port.output.NewsRepository
+import de.noonoo.core.domain.port.input.FetchNewsUseCase
+import de.noonoo.core.domain.port.output.NewsApiPort
+import de.noonoo.core.domain.port.output.NewsRepository
 
 class NewsIngestionService(
     private val apiPort: NewsApiPort,

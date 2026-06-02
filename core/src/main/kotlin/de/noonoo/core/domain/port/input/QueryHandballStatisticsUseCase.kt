@@ -1,6 +1,6 @@
-package de.noonoo.domain.port.input
+package de.noonoo.core.domain.port.input
 
-import de.noonoo.domain.model.HandballScorerList
+import de.noonoo.core.domain.model.HandballScorerList
 
 interface QueryHandballStatisticsUseCase {
     /** Neueste gespeicherte Torschützenliste für eine Liga */

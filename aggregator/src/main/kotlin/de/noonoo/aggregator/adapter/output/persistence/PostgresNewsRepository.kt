@@ -1,23 +1,21 @@
-package de.noonoo.adapter.output.persistence
+package de.noonoo.aggregator.adapter.output.persistence
 
-import de.noonoo.adapter.config.DatabaseConfig
-import de.noonoo.domain.model.NewsArticle
-import de.noonoo.domain.port.output.NewsRepository
-import java.sql.Connection
+import de.noonoo.core.domain.model.NewsArticle
+import de.noonoo.core.domain.port.output.NewsRepository
 import java.sql.Timestamp
+import javax.sql.DataSource
 
-class DuckDbNewsRepository(
-    private val connection: Connection
-) : NewsRepository {
+class PostgresNewsRepository(private val dataSource: DataSource) : NewsRepository {
 
     override fun saveArticles(articles: List<NewsArticle>) {
-        synchronized(DatabaseConfig.lock) {
-            if (articles.isEmpty()) return@synchronized
+        if (articles.isEmpty()) return
+        dataSource.connection.use { conn ->
             val sql = """
-                INSERT OR IGNORE INTO articles (url, source, title, published_at, fetched_at)
+                INSERT INTO articles (url, source, title, published_at, fetched_at)
                 VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (url) DO NOTHING
             """.trimIndent()
-            connection.prepareStatement(sql).use { stmt ->
+            conn.prepareStatement(sql).use { stmt ->
                 articles.forEach { a ->
                     stmt.setString(1, a.url)
                     stmt.setString(2, a.source)
@@ -38,13 +36,15 @@ class DuckDbNewsRepository(
             ORDER BY COALESCE(published_at, fetched_at) DESC
             LIMIT ?
         """.trimIndent()
-        return connection.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, source)
-            stmt.setInt(2, limit)
-            stmt.executeQuery().use { rs ->
-                val results = mutableListOf<NewsArticle>()
-                while (rs.next()) results.add(rs.toNewsArticle())
-                results
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, source)
+                stmt.setInt(2, limit)
+                stmt.executeQuery().use { rs ->
+                    val results = mutableListOf<NewsArticle>()
+                    while (rs.next()) results.add(rs.toNewsArticle())
+                    results
+                }
             }
         }
     }
@@ -58,14 +58,16 @@ class DuckDbNewsRepository(
             ORDER BY COALESCE(published_at, fetched_at) DESC
             LIMIT ?
         """.trimIndent()
-        return connection.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, source)
-            keywords.forEachIndexed { i, kw -> stmt.setString(i + 2, "%${kw.lowercase()}%") }
-            stmt.setInt(keywords.size + 2, limit)
-            stmt.executeQuery().use { rs ->
-                val results = mutableListOf<NewsArticle>()
-                while (rs.next()) results.add(rs.toNewsArticle())
-                results
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, source)
+                keywords.forEachIndexed { i, kw -> stmt.setString(i + 2, "%${kw.lowercase()}%") }
+                stmt.setInt(keywords.size + 2, limit)
+                stmt.executeQuery().use { rs ->
+                    val results = mutableListOf<NewsArticle>()
+                    while (rs.next()) results.add(rs.toNewsArticle())
+                    results
+                }
             }
         }
     }

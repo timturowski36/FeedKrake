@@ -1,10 +1,10 @@
-package de.noonoo.adapter.output.api
+package de.noonoo.aggregator.adapter.output.api
 
-import de.noonoo.domain.model.PubgMatch
-import de.noonoo.domain.model.PubgMatchParticipant
-import de.noonoo.domain.model.PubgPlayer
-import de.noonoo.domain.model.PubgSeasonStats
-import de.noonoo.domain.port.output.PubgApiPort
+import de.noonoo.core.domain.model.PubgMatch
+import de.noonoo.core.domain.model.PubgMatchParticipant
+import de.noonoo.core.domain.model.PubgPlayer
+import de.noonoo.core.domain.model.PubgSeasonStats
+import de.noonoo.core.domain.port.output.PubgApiPort
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*

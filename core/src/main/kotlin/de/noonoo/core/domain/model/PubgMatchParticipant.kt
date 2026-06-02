@@ -1,4 +1,4 @@
-package de.noonoo.domain.model
+package de.noonoo.core.domain.model
 
 data class PubgMatchParticipant(
     val matchId: String,

@@ -1,9 +1,9 @@
-package de.noonoo.adapter.output.api
+package de.noonoo.aggregator.adapter.output.api
 
-import de.noonoo.domain.model.F1Race
-import de.noonoo.domain.model.F1RaceResult
-import de.noonoo.domain.model.F1Standing
-import de.noonoo.domain.port.output.F1ApiPort
+import de.noonoo.core.domain.model.F1Race
+import de.noonoo.core.domain.model.F1RaceResult
+import de.noonoo.core.domain.model.F1Standing
+import de.noonoo.core.domain.port.output.F1ApiPort
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.call.*

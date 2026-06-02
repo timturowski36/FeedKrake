@@ -1,8 +1,9 @@
-package de.noonoo.domain.port.output
+package de.noonoo.core.domain.port.output
 
-import de.noonoo.domain.model.Match
-import de.noonoo.domain.model.Standing
-import de.noonoo.domain.model.Team
+import de.noonoo.core.domain.model.GoalGetter
+import de.noonoo.core.domain.model.Match
+import de.noonoo.core.domain.model.Standing
+import de.noonoo.core.domain.model.Team
 
 interface MatchRepository {
     fun saveTeams(teams: List<Team>)
@@ -18,4 +19,5 @@ interface MatchRepository {
     fun findNextMatchday(league: String, season: Int): Int
     fun findLastMatchesByTeam(league: String, season: Int, teamId: Int, limit: Int): List<Match>
     fun findNextMatchesByTeam(league: String, season: Int, teamId: Int, limit: Int): List<Match>
+    fun findGoalGettersByTeam(league: String, season: Int, teamId: Int): List<GoalGetter>
 }

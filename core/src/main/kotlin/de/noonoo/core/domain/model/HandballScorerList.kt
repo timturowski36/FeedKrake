@@ -1,4 +1,4 @@
-package de.noonoo.domain.model
+package de.noonoo.core.domain.model
 
 import java.time.Instant
 

@@ -1,7 +1,7 @@
-package de.noonoo.adapter.output.api
+package de.noonoo.aggregator.adapter.output.api
 
-import de.noonoo.domain.model.NewsArticle
-import de.noonoo.domain.port.output.NewsApiPort
+import de.noonoo.core.domain.model.NewsArticle
+import de.noonoo.core.domain.port.output.NewsApiPort
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*

@@ -1,4 +1,4 @@
-package de.noonoo.domain.model
+package de.noonoo.core.domain.model
 
 data class Goal(
     val id: Int,
@@ -8,5 +8,6 @@ data class Goal(
     val isOwnGoal: Boolean,
     val isPenalty: Boolean,
     val scoreHome: Int,
-    val scoreAway: Int
+    val scoreAway: Int,
+    val goalGetterId: Int = 0
 )

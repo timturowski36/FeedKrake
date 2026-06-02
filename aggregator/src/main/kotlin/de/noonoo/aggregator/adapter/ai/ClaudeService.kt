@@ -1,4 +1,4 @@
-package de.noonoo.adapter.ai
+package de.noonoo.aggregator.adapter.ai
 
 import com.anthropic.client.AnthropicClient
 import com.anthropic.models.messages.MessageCreateParams

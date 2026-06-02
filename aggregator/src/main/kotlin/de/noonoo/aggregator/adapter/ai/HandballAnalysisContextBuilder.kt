@@ -1,11 +1,11 @@
-package de.noonoo.adapter.ai
+package de.noonoo.aggregator.adapter.ai
 
-import de.noonoo.domain.model.HandballMatch
-import de.noonoo.domain.model.HandballScorer
-import de.noonoo.domain.model.HandballStanding
-import de.noonoo.domain.model.HandballTickerEvent
-import de.noonoo.domain.port.output.HandballRepository
-import de.noonoo.domain.port.output.HandballStatisticsRepository
+import de.noonoo.core.domain.model.HandballMatch
+import de.noonoo.core.domain.model.HandballScorer
+import de.noonoo.core.domain.model.HandballStanding
+import de.noonoo.core.domain.model.HandballTickerEvent
+import de.noonoo.core.domain.port.output.HandballRepository
+import de.noonoo.core.domain.port.output.HandballStatisticsRepository
 import org.slf4j.LoggerFactory
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter

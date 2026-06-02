@@ -1,10 +1,10 @@
-package de.noonoo.adapter.ai
+package de.noonoo.aggregator.adapter.ai
 
-import de.noonoo.adapter.config.AppConfig
-import de.noonoo.domain.port.output.HandballApiPort
-import de.noonoo.domain.port.output.HandballRepository
-import de.noonoo.domain.port.output.HandballStatisticsApiPort
-import de.noonoo.domain.port.output.HandballStatisticsRepository
+import de.noonoo.aggregator.adapter.config.AppConfig
+import de.noonoo.core.domain.port.output.HandballApiPort
+import de.noonoo.core.domain.port.output.HandballRepository
+import de.noonoo.core.domain.port.output.HandballStatisticsApiPort
+import de.noonoo.core.domain.port.output.HandballStatisticsRepository
 import org.slf4j.LoggerFactory
 
 /**

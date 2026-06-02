@@ -1,30 +1,42 @@
-package de.noonoo.adapter.output.persistence
+package de.noonoo.aggregator.adapter.output.persistence
 
-import de.noonoo.adapter.config.DatabaseConfig
-import de.noonoo.domain.model.F1Race
-import de.noonoo.domain.model.F1RaceResult
-import de.noonoo.domain.model.F1Standing
-import de.noonoo.domain.port.output.F1Repository
-import java.sql.Connection
+import de.noonoo.core.domain.model.F1Race
+import de.noonoo.core.domain.model.F1RaceResult
+import de.noonoo.core.domain.model.F1Standing
+import de.noonoo.core.domain.port.output.F1Repository
 import java.sql.Date
+import java.sql.ResultSet
 import java.sql.Time
 import java.sql.Timestamp
 import java.time.LocalDate
 import java.time.LocalDateTime
+import javax.sql.DataSource
 
-class DuckDbF1Repository(private val connection: Connection) : F1Repository {
+class PostgresF1Repository(private val dataSource: DataSource) : F1Repository {
 
     override fun saveRaces(races: List<F1Race>) {
-        synchronized(DatabaseConfig.lock) {
-            if (races.isEmpty()) return@synchronized
+        if (races.isEmpty()) return
+        dataSource.connection.use { conn ->
             val sql = """
-                INSERT OR REPLACE INTO f1_races (
+                INSERT INTO f1_races (
                     season, round, race_name, circuit_id, circuit_name,
                     country, locality, race_date, race_time,
                     quali_date, quali_time, sprint_date, fp1_date
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (season, round) DO UPDATE SET
+                    race_name = EXCLUDED.race_name,
+                    circuit_id = EXCLUDED.circuit_id,
+                    circuit_name = EXCLUDED.circuit_name,
+                    country = EXCLUDED.country,
+                    locality = EXCLUDED.locality,
+                    race_date = EXCLUDED.race_date,
+                    race_time = EXCLUDED.race_time,
+                    quali_date = EXCLUDED.quali_date,
+                    quali_time = EXCLUDED.quali_time,
+                    sprint_date = EXCLUDED.sprint_date,
+                    fp1_date = EXCLUDED.fp1_date
             """.trimIndent()
-            connection.prepareStatement(sql).use { stmt ->
+            conn.prepareStatement(sql).use { stmt ->
                 for (r in races) {
                     stmt.setInt(1, r.season)
                     stmt.setInt(2, r.round)
@@ -47,18 +59,32 @@ class DuckDbF1Repository(private val connection: Connection) : F1Repository {
     }
 
     override fun saveRaceResults(results: List<F1RaceResult>) {
-        synchronized(DatabaseConfig.lock) {
-            if (results.isEmpty()) return@synchronized
+        if (results.isEmpty()) return
+        dataSource.connection.use { conn ->
             val sql = """
-                INSERT OR REPLACE INTO f1_race_results (
+                INSERT INTO f1_race_results (
                     season, round, circuit_id, position, position_text,
                     driver_id, driver_code, driver_name,
                     constructor_id, constructor_name,
                     grid, laps, status, points, fastest_lap, result_type, fetched_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (season, round, driver_id, result_type) DO UPDATE SET
+                    circuit_id = EXCLUDED.circuit_id,
+                    position = EXCLUDED.position,
+                    position_text = EXCLUDED.position_text,
+                    driver_code = EXCLUDED.driver_code,
+                    driver_name = EXCLUDED.driver_name,
+                    constructor_id = EXCLUDED.constructor_id,
+                    constructor_name = EXCLUDED.constructor_name,
+                    grid = EXCLUDED.grid,
+                    laps = EXCLUDED.laps,
+                    status = EXCLUDED.status,
+                    points = EXCLUDED.points,
+                    fastest_lap = EXCLUDED.fastest_lap,
+                    fetched_at = EXCLUDED.fetched_at
             """.trimIndent()
             val now = Timestamp.valueOf(LocalDateTime.now())
-            connection.prepareStatement(sql).use { stmt ->
+            conn.prepareStatement(sql).use { stmt ->
                 for (r in results) {
                     stmt.setInt(1, r.season)
                     stmt.setInt(2, r.round)
@@ -85,17 +111,25 @@ class DuckDbF1Repository(private val connection: Connection) : F1Repository {
     }
 
     override fun saveStandings(standings: List<F1Standing>) {
-        synchronized(DatabaseConfig.lock) {
-            if (standings.isEmpty()) return@synchronized
+        if (standings.isEmpty()) return
+        dataSource.connection.use { conn ->
             val sql = """
-                INSERT OR REPLACE INTO f1_standings (
+                INSERT INTO f1_standings (
                     season, round, standings_type, position,
                     entity_id, entity_name, constructor_name,
                     points, wins, fetched_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (season, standings_type, entity_id) DO UPDATE SET
+                    round = EXCLUDED.round,
+                    position = EXCLUDED.position,
+                    entity_name = EXCLUDED.entity_name,
+                    constructor_name = EXCLUDED.constructor_name,
+                    points = EXCLUDED.points,
+                    wins = EXCLUDED.wins,
+                    fetched_at = EXCLUDED.fetched_at
             """.trimIndent()
             val now = Timestamp.valueOf(LocalDateTime.now())
-            connection.prepareStatement(sql).use { stmt ->
+            conn.prepareStatement(sql).use { stmt ->
                 for (s in standings) {
                     stmt.setInt(1, s.season)
                     stmt.setInt(2, s.round)
@@ -115,13 +149,13 @@ class DuckDbF1Repository(private val connection: Connection) : F1Repository {
     }
 
     override fun getNextRace(now: LocalDate): F1Race? {
-        val sql = """
-            SELECT * FROM f1_races WHERE race_date >= ? ORDER BY race_date ASC LIMIT 1
-        """.trimIndent()
-        connection.prepareStatement(sql).use { stmt ->
-            stmt.setDate(1, Date.valueOf(now))
-            stmt.executeQuery().use { rs ->
-                if (rs.next()) return rs.toF1Race() else return null
+        val sql = "SELECT * FROM f1_races WHERE race_date >= ? ORDER BY race_date ASC LIMIT 1"
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setDate(1, Date.valueOf(now))
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) rs.toF1Race() else null
+                }
             }
         }
     }
@@ -135,11 +169,13 @@ class DuckDbF1Repository(private val connection: Connection) : F1Repository {
               AND result_type = 'race'
             ORDER BY COALESCE(position, 99) ASC
         """.trimIndent()
-        connection.prepareStatement(sql).use { stmt ->
-            stmt.executeQuery().use { rs ->
-                val result = mutableListOf<F1RaceResult>()
-                while (rs.next()) result += rs.toF1RaceResult()
-                return result
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.executeQuery().use { rs ->
+                    val result = mutableListOf<F1RaceResult>()
+                    while (rs.next()) result += rs.toF1RaceResult()
+                    result
+                }
             }
         }
     }
@@ -170,11 +206,13 @@ class DuckDbF1Repository(private val connection: Connection) : F1Repository {
             WHERE circuit_id = ? AND season = ? AND position = 1 AND result_type = 'race'
             LIMIT 1
         """.trimIndent()
-        connection.prepareStatement(sql).use { stmt ->
-            stmt.setString(1, circuitId)
-            stmt.setInt(2, season)
-            stmt.executeQuery().use { rs ->
-                if (rs.next()) return rs.toF1RaceResult() else return null
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, circuitId)
+                stmt.setInt(2, season)
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) rs.toF1RaceResult() else null
+                }
             }
         }
     }
@@ -185,38 +223,42 @@ class DuckDbF1Repository(private val connection: Connection) : F1Repository {
             WHERE season = (SELECT MAX(season) FROM f1_races)
             ORDER BY round ASC
         """.trimIndent()
-        connection.prepareStatement(sql).use { stmt ->
-            stmt.executeQuery().use { rs ->
-                val result = mutableListOf<F1Race>()
-                while (rs.next()) result += rs.toF1Race()
-                return result
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.executeQuery().use { rs ->
+                    val result = mutableListOf<F1Race>()
+                    while (rs.next()) result += rs.toF1Race()
+                    result
+                }
             }
         }
     }
 
     override fun hasPreviousYearResults(season: Int): Boolean {
         val sql = "SELECT COUNT(*) FROM f1_race_results WHERE season = ?"
-        connection.prepareStatement(sql).use { stmt ->
-            stmt.setInt(1, season)
-            stmt.executeQuery().use { rs ->
-                return rs.next() && rs.getInt(1) > 0
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setInt(1, season)
+                stmt.executeQuery().use { rs ->
+                    rs.next() && rs.getInt(1) > 0
+                }
             }
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun queryStandings(sql: String): List<F1Standing> {
-        connection.prepareStatement(sql).use { stmt ->
-            stmt.executeQuery().use { rs ->
-                val result = mutableListOf<F1Standing>()
-                while (rs.next()) result += rs.toF1Standing()
-                return result
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.executeQuery().use { rs ->
+                    val result = mutableListOf<F1Standing>()
+                    while (rs.next()) result += rs.toF1Standing()
+                    result
+                }
             }
         }
     }
 
-    private fun java.sql.ResultSet.toF1Race(): F1Race = F1Race(
+    private fun ResultSet.toF1Race() = F1Race(
         season = getInt("season"),
         round = getInt("round"),
         raceName = getString("race_name"),
@@ -232,7 +274,7 @@ class DuckDbF1Repository(private val connection: Connection) : F1Repository {
         fp1Date = getDate("fp1_date")?.toLocalDate()
     )
 
-    private fun java.sql.ResultSet.toF1RaceResult(): F1RaceResult = F1RaceResult(
+    private fun ResultSet.toF1RaceResult() = F1RaceResult(
         season = getInt("season"),
         round = getInt("round"),
         circuitId = getString("circuit_id"),
@@ -251,7 +293,7 @@ class DuckDbF1Repository(private val connection: Connection) : F1Repository {
         resultType = getString("result_type")
     )
 
-    private fun java.sql.ResultSet.toF1Standing(): F1Standing = F1Standing(
+    private fun ResultSet.toF1Standing() = F1Standing(
         season = getInt("season"),
         round = getInt("round"),
         standingsType = getString("standings_type"),

@@ -1,12 +1,12 @@
-package de.noonoo.domain.service
+package de.noonoo.core.domain.service
 
-import de.noonoo.domain.model.GoalGetter
-import de.noonoo.domain.model.Match
-import de.noonoo.domain.model.Standing
-import de.noonoo.domain.model.Team
-import de.noonoo.domain.port.input.QueryDataUseCase
-import de.noonoo.domain.port.output.FootballApiPort
-import de.noonoo.domain.port.output.MatchRepository
+import de.noonoo.core.domain.model.GoalGetter
+import de.noonoo.core.domain.model.Match
+import de.noonoo.core.domain.model.Standing
+import de.noonoo.core.domain.model.Team
+import de.noonoo.core.domain.port.input.QueryDataUseCase
+import de.noonoo.core.domain.port.output.FootballApiPort
+import de.noonoo.core.domain.port.output.MatchRepository
 
 class QueryService(
     private val repository: MatchRepository,
@@ -42,4 +42,7 @@ class QueryService(
 
     override suspend fun getGoalGetters(league: String, season: Int): List<GoalGetter> =
         apiPort.fetchGoalGetters(league, season)
+
+    override fun getGoalGettersByTeam(league: String, season: Int, teamId: Int): List<GoalGetter> =
+        repository.findGoalGettersByTeam(league, season, teamId)
 }

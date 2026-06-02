@@ -1,27 +1,27 @@
-package de.noonoo.adapter.input.scheduler
+package de.noonoo.aggregator.adapter.input.scheduler
 
-import de.noonoo.adapter.config.ModuleConfig
-import de.noonoo.adapter.config.OutputConfig
-import de.noonoo.adapter.output.discord.DiscordSender
-import de.noonoo.adapter.output.discord.F1DiscordFormatter
-import de.noonoo.adapter.output.discord.HandballDiscordFormatter
-import de.noonoo.adapter.output.discord.HandballStatisticsDiscordFormatter
-import de.noonoo.adapter.output.discord.PubgDiscordFormatter
-import de.noonoo.domain.model.Team
-import de.noonoo.domain.port.input.FetchDataUseCase
-import de.noonoo.domain.port.input.FetchF1DataUseCase
-import de.noonoo.domain.port.input.FetchHandballDataUseCase
-import de.noonoo.domain.port.input.FetchHandballStatisticsUseCase
-import de.noonoo.domain.port.input.FetchNewsUseCase
-import de.noonoo.domain.port.input.FetchPubgDataUseCase
-import de.noonoo.domain.port.input.QueryDataUseCase
-import de.noonoo.domain.port.input.QueryF1DataUseCase
-import de.noonoo.domain.port.input.QueryHandballStatisticsUseCase
-import de.noonoo.domain.port.input.QueryPubgDataUseCase
-import de.noonoo.domain.port.output.F1Repository
-import de.noonoo.domain.port.output.HandballRepository
-import de.noonoo.domain.port.output.NewsRepository
-import de.noonoo.domain.port.output.NotificationPort
+import de.noonoo.aggregator.adapter.config.ModuleConfig
+import de.noonoo.aggregator.adapter.config.OutputConfig
+import de.noonoo.aggregator.adapter.output.discord.DiscordSender
+import de.noonoo.aggregator.adapter.output.discord.F1DiscordFormatter
+import de.noonoo.aggregator.adapter.output.discord.HandballDiscordFormatter
+import de.noonoo.aggregator.adapter.output.discord.HandballStatisticsDiscordFormatter
+import de.noonoo.aggregator.adapter.output.discord.PubgDiscordFormatter
+import de.noonoo.core.domain.model.Team
+import de.noonoo.core.domain.port.input.FetchDataUseCase
+import de.noonoo.core.domain.port.input.FetchF1DataUseCase
+import de.noonoo.core.domain.port.input.FetchHandballDataUseCase
+import de.noonoo.core.domain.port.input.FetchHandballStatisticsUseCase
+import de.noonoo.core.domain.port.input.FetchNewsUseCase
+import de.noonoo.core.domain.port.input.FetchPubgDataUseCase
+import de.noonoo.core.domain.port.input.QueryDataUseCase
+import de.noonoo.core.domain.port.input.QueryF1DataUseCase
+import de.noonoo.core.domain.port.input.QueryHandballStatisticsUseCase
+import de.noonoo.core.domain.port.input.QueryPubgDataUseCase
+import de.noonoo.core.domain.port.output.F1Repository
+import de.noonoo.core.domain.port.output.HandballRepository
+import de.noonoo.core.domain.port.output.NewsRepository
+import de.noonoo.core.domain.port.output.NotificationPort
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
 import java.time.DayOfWeek
@@ -372,8 +372,8 @@ class IngestionScheduler(
             "team_top_scorers" -> {
                 val id = teamId ?: return logMissingTeam(output.format)
                 val name = resolvedTeamName ?: queryUseCase.getTeam(id)?.shortName ?: "?"
-                val goalGetters = queryUseCase.getGoalGetters(league, season)
-                val teams = resolveTeams(goalGetters.map { it.teamId })
+                val goalGetters = queryUseCase.getGoalGettersByTeam(league, season, id)
+                val teams = resolveTeams(listOf(id))
                 DiscordSender.formatTeamTopScorers(goalGetters, teams, id, name, leagueName, now)
             }
             "league_top_scorers" -> {
@@ -567,12 +567,18 @@ class IngestionScheduler(
             // ── Scorer-Ausgaben via HandballStatisticsRepository ──────────────
 
             "handball_scorer_table" -> {
-                val limit = output.params?.get("limit")?.toIntOrNull() ?: 30
                 val scorerList = queryHandballStatisticsUseCase.getLatestScorerList(leagueId) ?: run {
                     log.warn { "[${module.id}] Keine Scorer-Daten für Liga $leagueId." }
                     return
                 }
-                HandballStatisticsDiscordFormatter.formatScorerTable(scorerList, now, limit)
+                val chunks = HandballStatisticsDiscordFormatter.formatScorerTableChunked(scorerList, now)
+                if (chunks.isEmpty()) return
+                chunks.forEachIndexed { i, chunk ->
+                    if (i > 0) delay(500)
+                    notificationPort.send(output.channel, chunk)
+                }
+                log.info { "[${module.id}] '${output.format}' → #${output.channel}." }
+                return
             }
 
             "handball_scorer_team" -> {

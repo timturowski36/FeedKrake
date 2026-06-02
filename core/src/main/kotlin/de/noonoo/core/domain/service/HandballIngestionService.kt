@@ -1,9 +1,9 @@
-package de.noonoo.domain.service
+package de.noonoo.core.domain.service
 
-import de.noonoo.domain.model.HandballMatch
-import de.noonoo.domain.port.input.FetchHandballDataUseCase
-import de.noonoo.domain.port.output.HandballApiPort
-import de.noonoo.domain.port.output.HandballRepository
+import de.noonoo.core.domain.model.HandballMatch
+import de.noonoo.core.domain.port.input.FetchHandballDataUseCase
+import de.noonoo.core.domain.port.output.HandballApiPort
+import de.noonoo.core.domain.port.output.HandballRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter

@@ -1,4 +1,4 @@
-package de.noonoo.adapter.config
+package de.noonoo.aggregator.adapter.config
 
 import com.charleskorn.kaml.Yaml
 import kotlinx.serialization.SerialName

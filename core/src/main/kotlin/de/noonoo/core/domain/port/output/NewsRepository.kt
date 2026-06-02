@@ -1,6 +1,6 @@
-package de.noonoo.domain.port.output
+package de.noonoo.core.domain.port.output
 
-import de.noonoo.domain.model.NewsArticle
+import de.noonoo.core.domain.model.NewsArticle
 
 interface NewsRepository {
     fun saveArticles(articles: List<NewsArticle>)

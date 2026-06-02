@@ -1,8 +1,8 @@
-package de.noonoo.domain.service
+package de.noonoo.core.domain.service
 
-import de.noonoo.domain.port.input.FetchPubgDataUseCase
-import de.noonoo.domain.port.output.PubgApiPort
-import de.noonoo.domain.port.output.PubgRepository
+import de.noonoo.core.domain.port.input.FetchPubgDataUseCase
+import de.noonoo.core.domain.port.output.PubgApiPort
+import de.noonoo.core.domain.port.output.PubgRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 
@@ -18,7 +18,7 @@ class PubgIngestionService(
 ) : FetchPubgDataUseCase {
 
     override suspend fun fetchAndStore(playerNames: List<String>, platform: String, accountIds: List<String>) {
-        val allPlayers = mutableListOf<de.noonoo.domain.model.PubgPlayer>()
+        val allPlayers = mutableListOf<de.noonoo.core.domain.model.PubgPlayer>()
 
         // Fetch by account ID directly (more reliable, bypasses name lookup)
         accountIds.forEachIndexed { index, accountId ->

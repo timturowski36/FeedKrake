@@ -1,8 +1,8 @@
-package de.noonoo.domain.service
+package de.noonoo.core.domain.service
 
-import de.noonoo.domain.model.HandballScorerList
-import de.noonoo.domain.port.input.QueryHandballStatisticsUseCase
-import de.noonoo.domain.port.output.HandballStatisticsRepository
+import de.noonoo.core.domain.model.HandballScorerList
+import de.noonoo.core.domain.port.input.QueryHandballStatisticsUseCase
+import de.noonoo.core.domain.port.output.HandballStatisticsRepository
 
 class HandballStatisticsQueryService(
     private val repository: HandballStatisticsRepository

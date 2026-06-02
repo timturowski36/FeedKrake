@@ -1,6 +1,6 @@
-package de.noonoo.domain.port.output
+package de.noonoo.core.domain.port.output
 
-import de.noonoo.domain.model.HandballScorerList
+import de.noonoo.core.domain.model.HandballScorerList
 
 interface HandballStatisticsApiPort {
     /**

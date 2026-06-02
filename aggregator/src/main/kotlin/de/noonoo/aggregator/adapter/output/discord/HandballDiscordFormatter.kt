@@ -1,8 +1,8 @@
-package de.noonoo.adapter.output.discord
+package de.noonoo.aggregator.adapter.output.discord
 
-import de.noonoo.domain.model.HandballMatch
-import de.noonoo.domain.model.HandballStanding
-import de.noonoo.domain.model.HandballTickerEvent
+import de.noonoo.core.domain.model.HandballMatch
+import de.noonoo.core.domain.model.HandballStanding
+import de.noonoo.core.domain.model.HandballTickerEvent
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -36,18 +36,18 @@ object HandballDiscordFormatter {
     private fun wochentag(date: String): String =
         kickoffToDate(date)?.dayOfWeek?.let { WOCHENTAG[it] } ?: ""
 
-    private fun result(m: HandballMatch, teamName: String): String = when {
-        !m.isFinished -> "?"
-        m.homeGoalsFt == null || m.guestGoalsFt == null -> "?"
-        m.homeTeam == teamName -> when {
-            m.homeGoalsFt > m.guestGoalsFt -> "S"
-            m.homeGoalsFt < m.guestGoalsFt -> "N"
-            else                            -> "U"
-        }
-        else -> when {
-            m.guestGoalsFt > m.homeGoalsFt -> "S"
-            m.guestGoalsFt < m.homeGoalsFt -> "N"
-            else                            -> "U"
+    private fun result(m: HandballMatch, teamName: String): String {
+        if (!m.isFinished) return "?"
+        val home = m.homeGoalsFt ?: return "?"
+        val guest = m.guestGoalsFt ?: return "?"
+        return if (m.homeTeam == teamName) when {
+            home > guest -> "S"
+            home < guest -> "N"
+            else         -> "U"
+        } else when {
+            guest > home -> "S"
+            guest < home -> "N"
+            else         -> "U"
         }
     }
 

@@ -1,8 +1,8 @@
-package de.noonoo.adapter.output.api
+package de.noonoo.aggregator.adapter.output.api
 
-import de.noonoo.domain.model.HandballScorer
-import de.noonoo.domain.model.HandballScorerList
-import de.noonoo.domain.port.output.HandballStatisticsApiPort
+import de.noonoo.core.domain.model.HandballScorer
+import de.noonoo.core.domain.model.HandballScorerList
+import de.noonoo.core.domain.port.output.HandballStatisticsApiPort
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.request.*

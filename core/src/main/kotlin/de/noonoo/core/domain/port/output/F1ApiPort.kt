@@ -1,8 +1,8 @@
-package de.noonoo.domain.port.output
+package de.noonoo.core.domain.port.output
 
-import de.noonoo.domain.model.F1Race
-import de.noonoo.domain.model.F1RaceResult
-import de.noonoo.domain.model.F1Standing
+import de.noonoo.core.domain.model.F1Race
+import de.noonoo.core.domain.model.F1RaceResult
+import de.noonoo.core.domain.model.F1Standing
 
 interface F1ApiPort {
     suspend fun fetchCurrentSchedule(): List<F1Race>

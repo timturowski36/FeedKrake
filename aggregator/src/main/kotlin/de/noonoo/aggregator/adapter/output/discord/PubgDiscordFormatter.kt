@@ -1,10 +1,10 @@
-package de.noonoo.adapter.output.discord
+package de.noonoo.aggregator.adapter.output.discord
 
-import de.noonoo.domain.model.PubgMapStat
-import de.noonoo.domain.model.PubgMatch
-import de.noonoo.domain.model.PubgMatchParticipant
-import de.noonoo.domain.model.PubgPeriodStats
-import de.noonoo.domain.model.PubgPersonalRecords
+import de.noonoo.core.domain.model.PubgMapStat
+import de.noonoo.core.domain.model.PubgMatch
+import de.noonoo.core.domain.model.PubgMatchParticipant
+import de.noonoo.core.domain.model.PubgPeriodStats
+import de.noonoo.core.domain.model.PubgPersonalRecords
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.WeekFields
@@ -13,7 +13,7 @@ import java.util.Locale
 object PubgDiscordFormatter {
 
     private val dateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy")
-    private val dateTimeFmt = DateTimeFormatter.ofPattern("dd.MM. HH:mm")
+    private val matchDateFmt = DateTimeFormatter.ofPattern("dd.MM.")
 
     private val mapNames = mapOf(
         "Baltic_Main"    to "Erangel",
@@ -73,16 +73,11 @@ object PubgDiscordFormatter {
             appendLine("👥 Player: **$playerName** ($platform)")
             appendLine()
             appendLine("🗓 Wochenstatistik:")
-            append("Matches: ${stats.matches}   ")
-            append("Wins: $wins   ")
-            append("K/D: ${fmtKd(stats.kdRatio)}   ")
-            append("Kills: ${stats.kills}   ")
-            append("Assists: ${stats.assists}   ")
-            appendLine("Ø Schaden: ${fmtDmg(stats.avgDamage)}")
+            appendLine("Matches: ${stats.matches}   Wins: $wins   K/D: ${fmtKd(stats.kdRatio)}")
+            appendLine("Kills: ${stats.kills}   Assists: ${stats.assists}   Ø Schaden: ${fmtDmg(stats.avgDamage)}")
             if (stats.longestKill > 0) appendLine("Weitester Kill: ${"%.0f".format(stats.longestKill)}m")
             if (hsTotal > 0) appendLine("Headshots: $hsTotal ($hsPct)")
-            if (stats.revives > 0) appendLine("Revives: ${stats.revives}")
-            if (stats.dbnos > 0) appendLine("Knockdowns: ${stats.dbnos}")
+            if (stats.revives > 0 || stats.dbnos > 0) appendLine("Revives: ${stats.revives}   Knockdowns: ${stats.dbnos}")
         }
     }
 
@@ -130,11 +125,11 @@ object PubgDiscordFormatter {
         return buildString {
             appendLine("📋 **$playerName** – Letzte $limit Matches")
             appendLine("```")
-            appendLine("${"Datum".padEnd(13)}  ${"Map".padEnd(10)}  Pl.  Kills    Dmg")
-            appendLine("─".repeat(48))
+            appendLine("${"Datum".padEnd(7)}  ${"Map".padEnd(4)}  Pl.  Kills    Dmg")
+            appendLine("─".repeat(36))
             matches.forEach { (m, p) ->
-                val date = m.createdAt.format(dateTimeFmt).padEnd(13)
-                val map = mapName(m.mapName).take(10).padEnd(10)
+                val date = m.createdAt.format(matchDateFmt).padEnd(7)
+                val map = mapName(m.mapName).take(3).padEnd(4)
                 val place = "#${p.winPlace}".padStart(3)
                 val kills = p.kills.toString().padStart(5)
                 val dmg = fmtDmg(p.damageDealt).padStart(6)
@@ -150,16 +145,16 @@ object PubgDiscordFormatter {
     fun formatMapStats(playerName: String, stats: List<PubgMapStat>): String {
         if (stats.isEmpty()) return "🗺 **$playerName** – Keine Map-Daten."
         return buildString {
-            appendLine("🗺 **$playerName** – Map-Stats")
+            appendLine("🗺 **$playerName** – Maps")
             appendLine("```")
-            appendLine("${"Map".padEnd(10)}  Matches   K/D   Ø Dmg  Siege")
-            appendLine("─".repeat(42))
+            appendLine("${"Map".padEnd(10)}  ${"M".padStart(4)}  ${"K/D".padStart(5)}  ${"Dmg".padStart(6)}  ${"W".padStart(3)}")
+            appendLine("─".repeat(36))
             stats.forEach { s ->
                 val map = mapName(s.mapName).take(10).padEnd(10)
-                val matches = s.matches.toString().padStart(7)
+                val matches = s.matches.toString().padStart(4)
                 val kd = fmtKd(s.kdRatio).padStart(5)
                 val dmg = fmtDmg(s.avgDamage).padStart(6)
-                val wins = s.wins.toString().padStart(5)
+                val wins = s.wins.toString().padStart(3)
                 appendLine("$map  $matches  $kd  $dmg  $wins")
             }
             append("```")
@@ -169,21 +164,21 @@ object PubgDiscordFormatter {
     // ── 6. Wochenranking ─────────────────────────────────────────────────────
 
     fun formatWeeklyRanking(entries: List<Pair<String, PubgPeriodStats>>): String {
-        if (entries.isEmpty()) return "🏆 **PUBG – Wochenranking** – Keine Daten."
+        if (entries.isEmpty()) return "🏆 **Ranking** – Keine Daten."
         val kw = LocalDateTime.now().get(WeekFields.of(Locale.GERMANY).weekOfWeekBasedYear())
         return buildString {
-            appendLine("🏆 **PUBG – Wochenranking KW$kw**")
+            appendLine("🏆 **Ranking KW$kw**")
             appendLine("```")
-            appendLine("#   ${"Spieler".padEnd(16)}  Matches  K/D   Ø Dmg  Siege")
-            appendLine("─".repeat(50))
+            appendLine("#   ${"Spieler".padEnd(16)}  ${"M".padStart(4)}  ${"K/D".padStart(5)}  ${"Dmg".padStart(6)}  ${"W".padStart(3)}")
+            appendLine("─".repeat(46))
             entries.sortedByDescending { it.second.kdRatio }
                 .forEachIndexed { i, (name, s) ->
                     val rank = "${i + 1}.".padEnd(3)
                     val n = name.take(16).padEnd(16)
-                    val m = s.matches.toString().padStart(7)
+                    val m = s.matches.toString().padStart(4)
                     val kd = fmtKd(s.kdRatio).padStart(5)
                     val dmg = fmtDmg(s.avgDamage).padStart(6)
-                    val wins = s.wins.toString().padStart(5)
+                    val wins = s.wins.toString().padStart(3)
                     appendLine("$rank $n  $m  $kd  $dmg  $wins")
                 }
             append("```")

@@ -1,10 +1,10 @@
-package de.noonoo.domain.service
+package de.noonoo.core.domain.service
 
-import de.noonoo.domain.model.F1Race
-import de.noonoo.domain.model.F1RaceResult
-import de.noonoo.domain.model.F1Standing
-import de.noonoo.domain.port.input.QueryF1DataUseCase
-import de.noonoo.domain.port.output.F1Repository
+import de.noonoo.core.domain.model.F1Race
+import de.noonoo.core.domain.model.F1RaceResult
+import de.noonoo.core.domain.model.F1Standing
+import de.noonoo.core.domain.port.input.QueryF1DataUseCase
+import de.noonoo.core.domain.port.output.F1Repository
 import java.time.LocalDate
 
 class F1QueryService(
