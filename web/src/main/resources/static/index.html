@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NooNoo Ambient</title>
+  <style>
+    :root { color-scheme: dark; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: #0b0d12;
+      color: #e6e8ee;
+      font: 18px/1.5 system-ui, -apple-system, sans-serif;
+    }
+    body { display: grid; place-items: center; padding: 2rem; }
+    main { width: min(1100px, 100%); }
+
+    h1 { font-size: clamp(1.6rem, 3vw, 2.4rem); margin-bottom: 1.2rem; color: #fff; }
+    .meta { color: #606880; font-size: .85rem; margin-top: 1.2rem; }
+
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th { text-align: left; padding: .5rem .7rem; color: #8a93a6; font-weight: 500;
+         border-bottom: 1px solid #20242d; font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; }
+    td { padding: .55rem .7rem; border-bottom: 1px solid #16191f; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #13161c; }
+
+    .rank { color: #8a93a6; width: 2rem; }
+    .pts  { font-weight: 600; color: #c8d0e0; }
+    .hl   { color: #f0b429; }
+
+    ul { list-style: none; }
+    ul li { padding: .55rem 0; border-bottom: 1px solid #16191f; }
+    ul li:last-child { border-bottom: none; }
+    ul li::before { content: "›"; margin-right: .5rem; color: #3a7bd5; }
+
+    .tag {
+      display: inline-block; font-size: .75rem; padding: .15rem .5rem;
+      border-radius: 4px; margin-bottom: .8rem; font-weight: 600; letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .tag-pubg     { background: #1a2d1a; color: #4ade80; }
+    .tag-football { background: #1a1f2d; color: #60a5fa; }
+    .tag-handball { background: #2d1a2a; color: #f472b6; }
+    .tag-news     { background: #2d261a; color: #fbbf24; }
+    .tag-f1       { background: #2d1a1a; color: #f87171; }
+
+    #slide { transition: opacity .35s ease; }
+    #slide.fade { opacity: 0; }
+
+    #status { position: fixed; bottom: 1rem; right: 1rem; font-size: .75rem; color: #404555;
+              background: #0b0d12; padding: .3rem .6rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <main id="slide">
+    <h1>NooNoo lädt…</h1>
+  </main>
+  <div id="status">verbinde…</div>
+
+  <script>
+    const slide  = document.getElementById("slide");
+    const status = document.getElementById("status");
+    let es;
+
+    function connect() {
+      es = new EventSource("/ambient");
+
+      es.addEventListener("slide", e => {
+        const data = JSON.parse(e.data);
+        transition(() => { slide.innerHTML = renderSlide(data); });
+        status.textContent = "verbunden · " + new Date().toLocaleTimeString('de-DE');
+      });
+
+      es.onerror = () => { status.textContent = "getrennt – reconnect…"; };
+      es.onopen  = () => { status.textContent = "verbunden"; };
+    }
+
+    function transition(fn) {
+      if (document.startViewTransition) {
+        document.startViewTransition(fn);
+      } else {
+        slide.classList.add("fade");
+        setTimeout(() => { fn(); slide.classList.remove("fade"); }, 350);
+      }
+    }
+
+    function renderSlide(s) {
+      const p = s.payload;
+      const ts = new Date(s.generatedAt).toLocaleString('de-DE');
+      const meta = `<div class="meta">Stand: ${ts}</div>`;
+
+      if (s.type === "pubg.daily" || s.type === "pubg.weekly") {
+        const label = s.type === "pubg.daily" ? "PUBG · Heute" : "PUBG · 7 Tage";
+        return tag(label, "pubg") + `<h1>${esc(s.title)}</h1>` + renderPubgTable(p.players) + meta;
+      }
+      if (s.type === "football.bl1" || s.type === "football.bl2") {
+        const label = s.type === "football.bl1" ? "Fußball · BL1" : "Fußball · BL2";
+        return tag(label, "football") + `<h1>${esc(s.title)}</h1>` + renderFootballTable(p.rows) + meta;
+      }
+      if (s.type === "handball.scorers") {
+        return tag("Handball · Torschützen", "handball") + `<h1>${esc(s.title)}</h1>` + renderHandballTable(p.rows) + meta;
+      }
+      if (s.type.startsWith("news.")) {
+        const label = s.type === "news.tagesschau" ? "Nachrichten · Tagesschau" : "Tech-News · Heise";
+        return tag(label, "news") + `<h1>${esc(s.title)}</h1>` + renderNews(p.items) + meta;
+      }
+      if (s.type === "f1.drivers") {
+        return tag("Formel 1 · Fahrerwertung", "f1") + `<h1>${esc(s.title)}</h1>` + renderF1Table(p.rows) + meta;
+      }
+      return `<h1>${esc(s.title)}</h1><pre>${esc(JSON.stringify(p, null, 2))}</pre>` + meta;
+    }
+
+    function tag(label, cls) {
+      return `<span class="tag tag-${cls}">${esc(label)}</span><br>`;
+    }
+
+    function renderPubgTable(players) {
+      const rows = players.map((p, i) =>
+        `<tr>
+          <td class="rank">${i + 1}</td>
+          <td><strong>${esc(p.name)}</strong></td>
+          <td>${p.matches} Spiele</td>
+          <td class="hl">${p.kills} Kills</td>
+          <td>${p.wins} Siege</td>
+          <td>${p.avgDamage} Ø-Damage</td>
+          <td>${p.headshotKills} HS</td>
+          <td>${p.longestKill ? p.longestKill.toFixed(0) + "m" : "–"}</td>
+        </tr>`
+      ).join("");
+      return `<table><thead><tr>
+        <th>#</th><th>Spieler</th><th>Matches</th><th>Kills</th><th>Siege</th>
+        <th>Ø Damage</th><th>HS-Kills</th><th>Longest</th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function renderFootballTable(rows) {
+      const trs = rows.map(r =>
+        `<tr>
+          <td class="rank">${r.position}</td>
+          <td><strong>${esc(r.team)}</strong></td>
+          <td>${r.played}</td>
+          <td>${r.won}</td>
+          <td>${r.draw}</td>
+          <td>${r.lost}</td>
+          <td>${esc(r.goals)}</td>
+          <td class="pts">${r.points}</td>
+        </tr>`
+      ).join("");
+      return `<table><thead><tr>
+        <th>#</th><th>Verein</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th>
+      </tr></thead><tbody>${trs}</tbody></table>`;
+    }
+
+    function renderHandballTable(rows) {
+      const trs = rows.map(r =>
+        `<tr>
+          <td class="rank">${r.position}</td>
+          <td><strong>${esc(r.player)}</strong></td>
+          <td>${esc(r.team)}</td>
+          <td>${r.games}</td>
+          <td class="hl">${r.goals}</td>
+          <td>${r.goalsPerGame.toFixed(2)}</td>
+        </tr>`
+      ).join("");
+      return `<table><thead><tr>
+        <th>#</th><th>Spieler</th><th>Verein</th><th>Spiele</th><th>Tore</th><th>Ø/Spiel</th>
+      </tr></thead><tbody>${trs}</tbody></table>`;
+    }
+
+    function renderNews(items) {
+      return "<ul>" + items.map(i => `<li>${esc(i.title)}</li>`).join("") + "</ul>";
+    }
+
+    function renderF1Table(rows) {
+      const trs = rows.map(r =>
+        `<tr>
+          <td class="rank">${r.position}</td>
+          <td><strong>${esc(r.driver)}</strong></td>
+          <td>${esc(r.constructor)}</td>
+          <td class="pts">${r.points}</td>
+          <td>${r.wins}</td>
+        </tr>`
+      ).join("");
+      return `<table><thead><tr>
+        <th>#</th><th>Fahrer</th><th>Team</th><th>Punkte</th><th>Siege</th>
+      </tr></thead><tbody>${trs}</tbody></table>`;
+    }
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"]/g, c =>
+        ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+    }
+
+    connect();
+  </script>
+</body>
+</html>
