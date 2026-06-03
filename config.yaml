@@ -166,5 +166,5 @@ outputs:
     channels:
       sport: ${DISCORD_SPORT_WEBHOOK}
       news: ${DISCORD_NEWS_WEBHOOK}
-      gaming: ${DISCORD_GAMING_WEBHOOK}
-      allgemein: ${DISCORD_ALLGEMEIN_WEBHOOK}
+      gaming: ${DISCORD_CHANNEL_PUBG}
+      allgemein: ${DISCORD_CHANNEL_NEWSALLGEMEIN}
