@@ -10,6 +10,7 @@ import de.noonoo.adapter.input.scheduler.IngestionScheduler
 import de.noonoo.adapter.output.api.H4aStatisticsClient
 import de.noonoo.adapter.output.api.HandballApiClient
 import de.noonoo.adapter.output.api.HandballStatisticsClientWithFallback
+import de.noonoo.adapter.output.api.ApiFootballWcClient
 import de.noonoo.adapter.output.api.JolpicaF1Client
 import de.noonoo.adapter.output.api.OpenLigaDbClient
 import de.noonoo.adapter.output.api.PlaywrightStatisticsClient
@@ -17,12 +18,15 @@ import de.noonoo.adapter.output.api.PubgApiClient
 import de.noonoo.adapter.output.api.RssNewsClient
 import de.noonoo.adapter.output.discord.DiscordSender
 import de.noonoo.adapter.output.persistence.DuckDbF1Repository
+import de.noonoo.adapter.output.persistence.DuckDbWcRepository
 import de.noonoo.adapter.output.persistence.DuckDbHandballRepository
 import de.noonoo.adapter.output.persistence.DuckDbHandballStatisticsRepository
 import de.noonoo.adapter.output.persistence.DuckDbNewsRepository
 import de.noonoo.adapter.output.persistence.DuckDbPubgRepository
 import de.noonoo.adapter.output.persistence.DuckDbRepository
 import de.noonoo.domain.port.input.FetchDataUseCase
+import de.noonoo.domain.port.input.FetchWorldCupDataUseCase
+import de.noonoo.domain.port.input.QueryWorldCupDataUseCase
 import de.noonoo.domain.port.input.FetchF1DataUseCase
 import de.noonoo.domain.port.input.FetchHandballDataUseCase
 import de.noonoo.domain.port.input.FetchHandballStatisticsUseCase
@@ -33,6 +37,8 @@ import de.noonoo.domain.port.input.QueryF1DataUseCase
 import de.noonoo.domain.port.input.QueryHandballStatisticsUseCase
 import de.noonoo.domain.port.input.QueryPubgDataUseCase
 import de.noonoo.domain.port.output.F1ApiPort
+import de.noonoo.domain.port.output.WcApiPort
+import de.noonoo.domain.port.output.WcRepository
 import de.noonoo.domain.port.output.F1Repository
 import de.noonoo.domain.port.output.FootballApiPort
 import de.noonoo.domain.port.output.HandballApiPort
@@ -46,6 +52,8 @@ import de.noonoo.domain.port.output.NotificationPort
 import de.noonoo.domain.port.output.PubgApiPort
 import de.noonoo.domain.port.output.PubgRepository
 import de.noonoo.domain.service.F1IngestionService
+import de.noonoo.domain.service.WorldCupIngestionService
+import de.noonoo.domain.service.WorldCupQueryService
 import de.noonoo.domain.service.F1QueryService
 import de.noonoo.domain.service.HandballIngestionService
 import de.noonoo.domain.service.HandballStatisticsIngestionService
@@ -154,6 +162,16 @@ val appModule = module {
     single<FetchF1DataUseCase> { F1IngestionService(get(), get()) }
     single<QueryF1DataUseCase> { F1QueryService(get()) }
 
+    // ── Adapter: WorldCup 2026 ────────────────────────────────────────────────
+    single<WcApiPort> {
+        val env = get<io.github.cdimascio.dotenv.Dotenv>()
+        val apiKey = env.get("WM_API_KEY", "")
+        ApiFootballWcClient(get(), apiKey)
+    }
+    single<WcRepository> { DuckDbWcRepository(get()) }
+    single<FetchWorldCupDataUseCase> { WorldCupIngestionService(get(), get()) }
+    single<QueryWorldCupDataUseCase> { WorldCupQueryService(get()) }
+
     // ── Adapter: Output ───────────────────────────────────────────────────────
     single<NotificationPort> { DiscordSender(get()) }
 
@@ -192,6 +210,8 @@ val appModule = module {
             queryHandballStatisticsUseCase = get(),
             fetchF1UseCase = get(),
             queryF1UseCase = get(),
+            fetchWcUseCase = get(),
+            queryWcUseCase = get(),
             f1Repository = get(),
             newsRepository = get(),
             handballRepository = get(),

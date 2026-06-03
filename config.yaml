@@ -439,6 +439,44 @@ modules:
         teams:
           - "HSG RE/OE"
 
+  - id: wm2026
+    type: worldcup2026
+    enabled: true
+    source: api_football
+    config:
+      league: "1"
+      season: "2026"
+    schedule:
+      fetchIntervalMinutes: 720
+    outputs:
+      # Gruppenstand aller Gruppen – täglich um 07:00
+      - type: discord
+        channel: sport
+        schedule: DAILY_07_00
+        format: wc_group_standings
+
+      # Spiele des Tages – täglich um 08:00
+      - type: discord
+        channel: sport
+        schedule: DAILY_08_00
+        format: wc_today_matches
+
+      # Torschützenliste – täglich um 07:05
+      - type: discord
+        channel: sport
+        schedule: DAILY_07_05
+        format: wc_top_scorers
+        params:
+          limit: "10"
+
+      # Team-Übersicht Deutschland – täglich um 07:10
+      - type: discord
+        channel: sport
+        schedule: DAILY_07_10
+        format: wc_team_overview
+        teams:
+          - "Germany"
+
 outputs:
   discord:
     channels:

@@ -7,6 +7,7 @@ import de.noonoo.adapter.output.discord.F1DiscordFormatter
 import de.noonoo.adapter.output.discord.HandballDiscordFormatter
 import de.noonoo.adapter.output.discord.HandballStatisticsDiscordFormatter
 import de.noonoo.adapter.output.discord.PubgDiscordFormatter
+import de.noonoo.adapter.output.discord.WorldCupDiscordFormatter
 import de.noonoo.domain.model.Team
 import de.noonoo.domain.port.input.FetchDataUseCase
 import de.noonoo.domain.port.input.FetchF1DataUseCase
@@ -15,8 +16,10 @@ import de.noonoo.domain.port.input.FetchHandballStatisticsUseCase
 import de.noonoo.domain.port.input.FetchNewsUseCase
 import de.noonoo.domain.port.input.FetchPubgDataUseCase
 import de.noonoo.domain.port.input.QueryDataUseCase
+import de.noonoo.domain.port.input.FetchWorldCupDataUseCase
 import de.noonoo.domain.port.input.QueryF1DataUseCase
 import de.noonoo.domain.port.input.QueryHandballStatisticsUseCase
+import de.noonoo.domain.port.input.QueryWorldCupDataUseCase
 import de.noonoo.domain.port.input.QueryPubgDataUseCase
 import de.noonoo.domain.port.output.F1Repository
 import de.noonoo.domain.port.output.HandballRepository
@@ -45,6 +48,8 @@ class IngestionScheduler(
     private val queryHandballStatisticsUseCase: QueryHandballStatisticsUseCase,
     private val fetchF1UseCase: FetchF1DataUseCase,
     private val queryF1UseCase: QueryF1DataUseCase,
+    private val fetchWcUseCase: FetchWorldCupDataUseCase,
+    private val queryWcUseCase: QueryWorldCupDataUseCase,
     private val f1Repository: F1Repository,
     private val newsRepository: NewsRepository,
     private val handballRepository: HandballRepository,
@@ -62,6 +67,7 @@ class IngestionScheduler(
                 "handball"             -> startHandballIngestion(module)
                 "handball_statistics"  -> startHandballStatisticsIngestion(module)
                 "formula1"             -> startF1Ingestion(module)
+                "worldcup2026"         -> startWorldCupIngestion(module)
                 else                   -> log.warn { "[${module.id}] Unbekannter Modultyp: ${module.type}" }
             }
             startOutputSchedules(module)
@@ -245,6 +251,7 @@ class IngestionScheduler(
                             "handball"            -> sendHandballOutput(module, debugOutput)
                             "handball_statistics" -> sendHandballStatisticsOutput(module, debugOutput)
                             "formula1"            -> sendF1Output(module, debugOutput)
+                            "worldcup2026"        -> sendWorldCupOutput(module, debugOutput)
                         }
                     } catch (e: Exception) {
                         log.error(e) { "[${module.id}][DEBUG] Fehler bei '${output.format}': ${e.message}" }
@@ -264,6 +271,7 @@ class IngestionScheduler(
                                 "handball"            -> sendHandballOutput(module, output)
                                 "handball_statistics" -> sendHandballStatisticsOutput(module, output)
                                 "formula1"            -> sendF1Output(module, output)
+                                "worldcup2026"        -> sendWorldCupOutput(module, output)
                             }
                         } catch (e: Exception) {
                             log.error(e) { "[${module.id}] Fehler bei onStartup-Ausgabe '${output.format}': ${e.message}" }
@@ -283,6 +291,7 @@ class IngestionScheduler(
                                 "handball"            -> sendHandballOutput(module, output)
                                 "handball_statistics" -> sendHandballStatisticsOutput(module, output)
                                 "formula1"            -> sendF1Output(module, output)
+                                "worldcup2026"        -> sendWorldCupOutput(module, output)
                             }
                         } catch (e: Exception) {
                             log.error(e) { "[${module.id}] Fehler bei Ausgabe '${output.format}': ${e.message}" }
@@ -764,6 +773,67 @@ class IngestionScheduler(
                 log.warn { "Unbekanntes News-Format: ${output.format}" }
                 null
             }
+        }
+    }
+
+    // ── WorldCup Ingestion ────────────────────────────────────────────────────
+
+    private fun startWorldCupIngestion(module: ModuleConfig) {
+        val intervalMs = module.schedule.fetchIntervalMinutes * 60_000L
+        scope.launch {
+            while (isActive) {
+                try {
+                    log.info { "[${module.id}] Starte WM 2026-Abruf..." }
+                    fetchWcUseCase.fetchAll()
+                    log.info { "[${module.id}] WM 2026-Abruf abgeschlossen." }
+                } catch (e: Exception) {
+                    log.error(e) { "[${module.id}] Fehler beim WM 2026-Abruf: ${e.message}" }
+                }
+                delay(intervalMs)
+            }
+        }
+    }
+
+    // ── WorldCup Output ───────────────────────────────────────────────────────
+
+    private suspend fun sendWorldCupOutput(module: ModuleConfig, output: OutputConfig) {
+        val teamName = output.teams?.firstOrNull()
+        val limit = output.params?.get("limit")?.toIntOrNull() ?: 10
+
+        val allTeams = queryWcUseCase.getAllTeams().associateBy { it.id }
+
+        val message: String? = when (output.format) {
+            "wc_group_standings" -> {
+                val group = output.params?.get("group")
+                val standings = queryWcUseCase.getStandings(group)
+                WorldCupDiscordFormatter.formatGroupStandings(standings, allTeams)
+            }
+            "wc_today_matches" -> {
+                val fixtures = queryWcUseCase.getTodaysFixtures()
+                WorldCupDiscordFormatter.formatTodayMatches(fixtures, allTeams)
+            }
+            "wc_top_scorers" -> {
+                val scorers = queryWcUseCase.getTopScorers(limit)
+                WorldCupDiscordFormatter.formatTopScorers(scorers, allTeams)
+            }
+            "wc_team_overview" -> {
+                val name = teamName ?: run {
+                    log.warn { "[${module.id}] Kein Teamname für wc_team_overview angegeben." }
+                    return
+                }
+                val fixtures = queryWcUseCase.getTeamFixtures(name)
+                val standings = queryWcUseCase.getStandings()
+                WorldCupDiscordFormatter.formatTeamOverview(name, fixtures, standings, allTeams)
+            }
+            else -> {
+                log.warn { "[${module.id}] Unbekanntes WM-Format: ${output.format}" }
+                null
+            }
+        }
+
+        if (message != null) {
+            notificationPort.send(output.channel, message)
+            log.info { "[${module.id}] '${output.format}' → #${output.channel}." }
         }
     }
 
