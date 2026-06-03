@@ -65,6 +65,69 @@ modules:
         schedule: WEEKLY_SUNDAY_23_50
         format: pubg_map_stats
 
+  - id: bundesliga1
+    type: football
+    enabled: true
+    source: openligadb
+    config:
+      league: bl1
+      season: "2024"
+    schedule:
+      fetchIntervalMinutes: 60
+    outputs: []
+
+  - id: bundesliga2
+    type: football
+    enabled: true
+    source: openligadb
+    config:
+      league: bl2
+      season: "2024"
+    schedule:
+      fetchIntervalMinutes: 60
+    outputs: []
+
+  - id: news_tagesschau
+    type: news
+    enabled: true
+    source: rss
+    config:
+      url: https://www.tagesschau.de/xml/rss2/
+      sourceName: tagesschau
+    schedule:
+      fetchIntervalMinutes: 30
+    outputs: []
+
+  - id: news_heise
+    type: news
+    enabled: true
+    source: rss
+    config:
+      url: https://www.heise.de/rss/heise-atom.xml
+      sourceName: heise
+    schedule:
+      fetchIntervalMinutes: 30
+    outputs: []
+
+  - id: formula1
+    type: formula1
+    enabled: true
+    source: jolpica
+    config: {}
+    schedule:
+      fetchIntervalMinutes: 60
+    outputs: []
+
+  - id: handball_stats
+    type: handball_statistics
+    enabled: true
+    source: h4a
+    config:
+      leagueId: 09HJMNRX
+    schedule:
+      fetchIntervalMinutes: 120
+    outputs: []
+
 outputs:
   discord:
     channels:
