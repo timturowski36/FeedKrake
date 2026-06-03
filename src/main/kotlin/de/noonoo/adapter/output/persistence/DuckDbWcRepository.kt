@@ -7,6 +7,7 @@ import de.noonoo.domain.model.WcStanding
 import de.noonoo.domain.model.WcTeam
 import de.noonoo.domain.model.WcTopScorer
 import de.noonoo.domain.port.output.WcRepository
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Timestamp
@@ -14,6 +15,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+
+private val log = KotlinLogging.logger {}
 
 class DuckDbWcRepository(private val connection: Connection) : WcRepository {
 
@@ -110,29 +113,9 @@ class DuckDbWcRepository(private val connection: Connection) : WcRepository {
         }
     }
 
-    override fun findAllTeams(): List<WcTeam> {
-        synchronized(DatabaseConfig.lock) {
-            val result = mutableListOf<WcTeam>()
-            connection.createStatement().use { stmt ->
-                stmt.executeQuery("SELECT * FROM wm_teams ORDER BY group_name, name").use { rs ->
-                    while (rs.next()) result += rs.toWcTeam()
-                }
-            }
-            return result
-        }
-    }
+    override fun findAllTeams(): List<WcTeam> = queryList("SELECT * FROM wm_teams ORDER BY group_name, name") { it.toWcTeam() }
 
-    override fun findAllFixtures(): List<WcFixture> {
-        synchronized(DatabaseConfig.lock) {
-            val result = mutableListOf<WcFixture>()
-            connection.createStatement().use { stmt ->
-                stmt.executeQuery("SELECT * FROM wm_fixtures ORDER BY kickoff_utc").use { rs ->
-                    while (rs.next()) result += rs.toWcFixture()
-                }
-            }
-            return result
-        }
-    }
+    override fun findAllFixtures(): List<WcFixture> = queryList("SELECT * FROM wm_fixtures ORDER BY kickoff_utc") { it.toWcFixture() }
 
     override fun findFixturesByDate(date: LocalDate): List<WcFixture> {
         val berlin = ZoneId.of("Europe/Berlin")
@@ -141,32 +124,9 @@ class DuckDbWcRepository(private val connection: Connection) : WcRepository {
         }
     }
 
-    override fun findAllStandings(): List<WcStanding> {
-        synchronized(DatabaseConfig.lock) {
-            val result = mutableListOf<WcStanding>()
-            connection.createStatement().use { stmt ->
-                stmt.executeQuery("SELECT * FROM wm_standings ORDER BY group_name, rank").use { rs ->
-                    while (rs.next()) result += rs.toWcStanding()
-                }
-            }
-            return result
-        }
-    }
+    override fun findAllStandings(): List<WcStanding> = queryList("SELECT * FROM wm_standings ORDER BY group_name, rank") { it.toWcStanding() }
 
-    override fun findTopScorers(limit: Int): List<WcTopScorer> {
-        synchronized(DatabaseConfig.lock) {
-            val result = mutableListOf<WcTopScorer>()
-            connection.prepareStatement(
-                "SELECT * FROM wm_top_scorers ORDER BY rank LIMIT ?"
-            ).use { stmt ->
-                stmt.setInt(1, limit)
-                stmt.executeQuery().use { rs ->
-                    while (rs.next()) result += rs.toWcTopScorer()
-                }
-            }
-            return result
-        }
-    }
+    override fun findTopScorers(limit: Int): List<WcTopScorer> = queryList("SELECT * FROM wm_top_scorers ORDER BY rank LIMIT $limit") { it.toWcTopScorer() }
 
     override fun teamCount(): Int {
         synchronized(DatabaseConfig.lock) {
@@ -202,6 +162,27 @@ class DuckDbWcRepository(private val connection: Connection) : WcRepository {
                 stmt.setTimestamp(3, Timestamp.valueOf(LocalDateTime.now()))
                 stmt.executeUpdate()
             }
+        }
+    }
+
+    // ── Query Helper ─────────────────────────────────────────────────────────
+
+    private fun <T> queryList(sql: String, mapper: (ResultSet) -> T): List<T> {
+        synchronized(DatabaseConfig.lock) {
+            // DuckDB pending-query state clearen bevor neue Query
+            runCatching { connection.prepareStatement("SELECT 1").use { it.executeQuery().use {} } }
+            return runCatching {
+                val result = mutableListOf<T>()
+                connection.prepareStatement(sql).use { stmt ->
+                    stmt.executeQuery().use { rs ->
+                        while (rs.next()) result += mapper(rs)
+                    }
+                }
+                result
+            }.onFailure { e ->
+                log.warn { "[WM] DB-Abfrage fehlgeschlagen ('${sql.take(60)}…'): ${e.message}" }
+                runCatching { connection.rollback() }
+            }.getOrDefault(emptyList())
         }
     }
 

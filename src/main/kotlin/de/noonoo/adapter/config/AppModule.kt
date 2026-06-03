@@ -64,6 +64,7 @@ import de.noonoo.domain.service.PubgIngestionService
 import de.noonoo.domain.service.PubgQueryService
 import de.noonoo.domain.service.QueryService
 import io.github.cdimascio.dotenv.dotenv
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -71,6 +72,8 @@ import io.ktor.client.plugins.logging.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import org.koin.dsl.module
+
+private val log = KotlinLogging.logger {}
 
 val appModule = module {
 
@@ -91,7 +94,9 @@ val appModule = module {
         val channels = config.outputs.discord.channels.mapValues { (_, value) ->
             if (value.startsWith("\${") && value.endsWith("}")) {
                 val key = value.removeSurrounding("\${", "}")
-                env[key] ?: error("Umgebungsvariable '$key' nicht gesetzt.")
+                env.get(key, "").also { v ->
+                    if (v.isEmpty()) log.warn { "Umgebungsvariable '$key' nicht gesetzt – Kanal deaktiviert." }
+                }
             } else value
         }.toMutableMap()
         // Test-Kanal für Debug-Modus: DISCORD_TEST_WEBHOOK aus .env, Fallback auf sport-Webhook
