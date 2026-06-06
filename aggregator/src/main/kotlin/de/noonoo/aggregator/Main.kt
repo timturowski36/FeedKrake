@@ -22,9 +22,10 @@ fun main(): Unit = runBlocking {
     scheduler.start()
 
     // Discord Bot für !analyse-Command starten (falls DISCORD_BOT_TOKEN gesetzt)
-    if (System.getenv("DISCORD_BOT_TOKEN") != null) {
+    val discordBotToken = getKoin().get<io.github.cdimascio.dotenv.Dotenv>().get("DISCORD_BOT_TOKEN")
+    if (discordBotToken != null) {
         val analyseListener = getKoin().get<AnalyseCommandListener>()
-        DiscordBotStarter.starten(analyseListener)
+        DiscordBotStarter.starten(analyseListener, discordBotToken)
     } else {
         log.info { "DISCORD_BOT_TOKEN nicht gesetzt – JDA-Bot wird nicht gestartet." }
     }

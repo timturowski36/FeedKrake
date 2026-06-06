@@ -23,14 +23,9 @@ object DiscordBotStarter {
      * Danach läuft der Bot im Hintergrund bis zur JVM-Beendigung.
      *
      * @param listener  AnalyseCommandListener für den !analyse-Command
+     * @param token     Bot-Token aus DISCORD_BOT_TOKEN (.env)
      */
-    fun starten(listener: AnalyseCommandListener) {
-        val token = System.getenv("DISCORD_BOT_TOKEN")
-            ?: error(
-                "DISCORD_BOT_TOKEN fehlt in .env. " +
-                "Bitte Bot im Discord Developer Portal anlegen und Token setzen."
-            )
-
+    fun starten(listener: AnalyseCommandListener, token: String) {
         log.info("[Discord] Starte JDA-Bot...")
 
         val jda = JDABuilder.createLight(
