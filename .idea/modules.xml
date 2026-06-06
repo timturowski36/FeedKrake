@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/FeedKrake.iml" filepath="$PROJECT_DIR$/.idea/FeedKrake.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/noonoo.iml" filepath="$PROJECT_DIR$/.idea/modules/noonoo.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/noonoo.main.iml" filepath="$PROJECT_DIR$/.idea/modules/noonoo.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/noonoo.test.iml" filepath="$PROJECT_DIR$/.idea/modules/noonoo.test.iml" />
     </modules>
   </component>
 </project>
