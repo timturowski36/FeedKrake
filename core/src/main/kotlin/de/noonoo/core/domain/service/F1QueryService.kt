@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:core/src/main/kotlin/de/noonoo/core/application/F1QueryService.kt
-package de.noonoo.core.application
-========
 package de.noonoo.core.domain.service
->>>>>>>> origin/main:core/src/main/kotlin/de/noonoo/core/domain/service/F1QueryService.kt
 
 import de.noonoo.core.domain.model.F1Race
 import de.noonoo.core.domain.model.F1RaceResult

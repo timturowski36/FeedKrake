@@ -1,6 +1,7 @@
 package de.noonoo.aggregator.adapter.output.persistence
 
 import de.noonoo.core.domain.model.Goal
+import de.noonoo.core.domain.model.GoalGetter
 import de.noonoo.core.domain.model.Match
 import de.noonoo.core.domain.model.Standing
 import de.noonoo.core.domain.model.Team
@@ -262,6 +263,58 @@ class PostgresBundesligaRepository(private val dataSource: DataSource) : MatchRe
                 }
             }
         }
+
+    override fun findGoalGettersByTeam(league: String, season: Int, teamId: Int): List<GoalGetter> {
+        val sql = """
+            WITH ordered_goals AS (
+                SELECT
+                    g.scorer_name,
+                    g.score_home,
+                    g.score_away,
+                    m.home_team_id,
+                    m.away_team_id,
+                    LAG(g.score_home, 1, 0) OVER (PARTITION BY g.match_id ORDER BY g.minute, g.id) AS prev_home,
+                    LAG(g.score_away, 1, 0) OVER (PARTITION BY g.match_id ORDER BY g.minute, g.id) AS prev_away
+                FROM goals g
+                JOIN matches m ON g.match_id = m.id
+                WHERE m.league = ? AND m.season = ?
+                AND g.scorer_name != ''
+                AND NOT g.is_own_goal
+            ),
+            goal_with_team AS (
+                SELECT
+                    scorer_name,
+                    CASE
+                        WHEN score_home > prev_home THEN home_team_id
+                        ELSE away_team_id
+                    END AS attributed_team_id
+                FROM ordered_goals
+            )
+            SELECT scorer_name, CAST(COUNT(*) AS INT) AS goals
+            FROM goal_with_team
+            WHERE attributed_team_id = ?
+            GROUP BY scorer_name
+            ORDER BY goals DESC
+        """.trimIndent()
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, league)
+                stmt.setInt(2, season)
+                stmt.setInt(3, teamId)
+                stmt.executeQuery().use { rs ->
+                    val results = mutableListOf<GoalGetter>()
+                    while (rs.next()) {
+                        results.add(GoalGetter(
+                            name = rs.getString("scorer_name") ?: "",
+                            teamId = teamId,
+                            goals = rs.getInt("goals")
+                        ))
+                    }
+                    results
+                }
+            }
+        }
+    }
 
     private fun findGoalsForMatch(conn: Connection, matchId: Int): List<Goal> =
         conn.prepareStatement("SELECT * FROM goals WHERE match_id = ? ORDER BY minute").use { stmt ->

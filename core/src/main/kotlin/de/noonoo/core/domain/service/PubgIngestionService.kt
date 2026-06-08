@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:core/src/main/kotlin/de/noonoo/core/application/PubgIngestionService.kt
-package de.noonoo.core.application
-========
 package de.noonoo.core.domain.service
->>>>>>>> origin/main:core/src/main/kotlin/de/noonoo/core/domain/service/PubgIngestionService.kt
 
 import de.noonoo.core.domain.port.input.FetchPubgDataUseCase
 import de.noonoo.core.domain.port.output.PubgApiPort

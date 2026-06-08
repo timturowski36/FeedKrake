@@ -1,6 +1,7 @@
 package de.noonoo.web.application
 
 import de.noonoo.web.adapter.db.WebRepository
+import de.noonoo.web.domain.Module
 import de.noonoo.web.domain.Slide
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -24,6 +25,16 @@ class SlideBuilder(private val repo: WebRepository) {
     )
     private var index = 0
 
+    private fun moduleFor(type: String): Module = when {
+        type.startsWith("pubg.") -> Module.PUBG
+        type.startsWith("football.") -> Module.BUNDESLIGA
+        type.startsWith("handball.") -> Module.HANDBALL
+        type.startsWith("news.") -> Module.NEWS
+        type.startsWith("f1.") -> Module.F1
+        type.startsWith("wm.") -> Module.WM
+        else -> error("Unbekannter Slide-Typ ohne Modul-Zuordnung: $type")
+    }
+
     suspend fun buildNext(): Slide? {
         repeat(rotation.size) {
             val type = rotation[index % rotation.size]
@@ -43,6 +54,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 Slide(
                     id = UUID.randomUUID().toString(),
                     type = type,
+                    module = moduleFor(type),
                     title = "PUBG – Heute",
                     generatedAt = now,
                     payload = buildJsonObject {
@@ -69,6 +81,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 Slide(
                     id = UUID.randomUUID().toString(),
                     type = type,
+                    module = moduleFor(type),
                     title = "PUBG – Letzte 7 Tage",
                     generatedAt = now,
                     payload = buildJsonObject {
@@ -95,6 +108,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 Slide(
                     id = UUID.randomUUID().toString(),
                     type = type,
+                    module = moduleFor(type),
                     title = "1. Bundesliga – Tabelle",
                     generatedAt = now,
                     payload = buildJsonObject {
@@ -122,6 +136,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 Slide(
                     id = UUID.randomUUID().toString(),
                     type = type,
+                    module = moduleFor(type),
                     title = "2. Bundesliga – Tabelle",
                     generatedAt = now,
                     payload = buildJsonObject {
@@ -149,6 +164,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 Slide(
                     id = UUID.randomUUID().toString(),
                     type = type,
+                    module = moduleFor(type),
                     title = "Handball – Torschützen",
                     generatedAt = now,
                     payload = buildJsonObject {
@@ -174,6 +190,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 Slide(
                     id = UUID.randomUUID().toString(),
                     type = type,
+                    module = moduleFor(type),
                     title = "Tagesschau – Nachrichten",
                     generatedAt = now,
                     payload = buildJsonObject {
@@ -190,6 +207,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 Slide(
                     id = UUID.randomUUID().toString(),
                     type = type,
+                    module = moduleFor(type),
                     title = "Heise – Tech-News",
                     generatedAt = now,
                     payload = buildJsonObject {
@@ -206,6 +224,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 Slide(
                     id = UUID.randomUUID().toString(),
                     type = type,
+                    module = moduleFor(type),
                     title = "Formel 1 – Fahrerwertung",
                     generatedAt = now,
                     payload = buildJsonObject {

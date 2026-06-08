@@ -6,10 +6,12 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import de.noonoo.web.adapter.db.WebRepository
 import de.noonoo.web.application.SlideBuilder
+import de.noonoo.web.domain.Module
 import de.noonoo.web.domain.Slide
 import io.github.cdimascio.dotenv.dotenv
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.http.content.*
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -80,6 +83,12 @@ fun Application.module(dataSource: HikariDataSource) {
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
+    // Globaler "Weiter"-Skip: einfache Lösung für die Einzelnutzer-Phase.
+    // Da alle Clients aus demselben tickFlow lesen, würde Pro-Client-Skip
+    // ungewollt auch für andere Clients überspringen — bei echtem Multi-User-
+    // Bedarf müsste hier auf Pro-Client-Slide-Generatoren umgestellt werden.
+    val globalSkipFlag = AtomicBoolean(false)
+
     launch {
         while (isActive) {
             runCatching { builder.buildNext() }
@@ -92,7 +101,13 @@ fun Application.module(dataSource: HikariDataSource) {
                     }
                 }
                 .onFailure { log.error("Slide build failed", it) }
-            delay(2.minutes)
+
+            // Warte 2 Minuten ODER bis zum globalen Skip-Signal
+            val deadline = System.currentTimeMillis() + 2.minutes.inWholeMilliseconds
+            while (System.currentTimeMillis() < deadline) {
+                if (globalSkipFlag.compareAndSet(true, false)) break
+                delay(200)
+            }
         }
     }
 
@@ -111,21 +126,41 @@ fun Application.module(dataSource: HikariDataSource) {
         }
 
         sse("/ambient") {
-            log.info("SSE client verbunden")
+            val modulesParam = call.request.queryParameters["modules"]
+            val selectedModules: Set<Module> = if (modulesParam.isNullOrBlank()) {
+                Module.entries.toSet()
+            } else {
+                modulesParam.split(",")
+                    .mapNotNull { Module.fromSlug(it.trim()) }
+                    .toSet()
+                    .ifEmpty { Module.entries.toSet() }
+            }
+
+            log.info("SSE client verbunden (Module: ${selectedModules.joinToString { it.slug }})")
             heartbeat {
                 period = 20.seconds
                 event = ServerSentEvent(event = "ping", data = "")
             }
             try {
-                tickFlow.collect { slide ->
-                    send(ServerSentEvent(
-                        event = "slide",
-                        data = json.encodeToString(slide)
-                    ))
-                }
+                tickFlow
+                    .filter { it.module in selectedModules }
+                    .collect { slide ->
+                        send(ServerSentEvent(
+                            event = "slide",
+                            data = json.encodeToString(slide)
+                        ))
+                    }
             } catch (e: Exception) {
                 log.debug("SSE client getrennt: ${e.message}")
             }
+        }
+
+        post("/skip") {
+            val sessionId = call.request.queryParameters["sid"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "sid missing")
+            globalSkipFlag.set(true)
+            log.debug("Skip angefordert von sid=$sessionId")
+            call.respond(HttpStatusCode.NoContent)
         }
     }
 }
