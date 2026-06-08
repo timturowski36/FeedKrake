@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:core/src/main/kotlin/de/noonoo/core/application/F1IngestionService.kt
-package de.noonoo.core.application
-========
 package de.noonoo.core.domain.service
->>>>>>>> origin/main:core/src/main/kotlin/de/noonoo/core/domain/service/F1IngestionService.kt
 
 import de.noonoo.core.domain.port.input.FetchF1DataUseCase
 import de.noonoo.core.domain.port.output.F1ApiPort
