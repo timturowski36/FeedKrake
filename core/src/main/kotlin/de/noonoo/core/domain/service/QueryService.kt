@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:core/src/main/kotlin/de/noonoo/core/application/QueryService.kt
+package de.noonoo.core.application
+========
 package de.noonoo.core.domain.service
+>>>>>>>> origin/main:core/src/main/kotlin/de/noonoo/core/domain/service/QueryService.kt
 
 import de.noonoo.core.domain.model.GoalGetter
 import de.noonoo.core.domain.model.Match
