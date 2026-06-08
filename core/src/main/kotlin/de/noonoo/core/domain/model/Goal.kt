@@ -8,5 +8,6 @@ data class Goal(
     val isOwnGoal: Boolean,
     val isPenalty: Boolean,
     val scoreHome: Int,
-    val scoreAway: Int
+    val scoreAway: Int,
+    val goalGetterId: Int = 0
 )

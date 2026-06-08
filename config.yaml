@@ -1,48 +1,15 @@
 modules:
-  - id: bundesliga_1
-    type: football
-    enabled: true
-    source: openligadb
-    config:
-      league: bl1
-      season: 2025
-    schedule:
-      fetchIntervalMinutes: 15
-    outputs: []
-
-  - id: heise_tech
-    type: news
-    enabled: true
-    source: rss
-    config:
-      url: "https://www.heise.de/rss/heise-atom.xml"
-      sourceName: "Heise Online"
-    schedule:
-      fetchIntervalMinutes: 60
-    outputs: []
-
-  - id: tagesschau
-    type: news
-    enabled: true
-    source: rss
-    config:
-      url: "https://www.tagesschau.de/xml/rss2/"
-      sourceName: "Tagesschau"
-    schedule:
-      fetchIntervalMinutes: 30
-    outputs: []
-
   - id: pubg_friends
     type: pubg
     enabled: true
     source: pubg_api
     config:
-      platform: steam  # steam | xbox | psn
+      platform: steam
     players:
       - "brotrustgaming"
       - "philipnc"
+      - "chrissi1970"
       - "Alxndr_D"
-      - "Libaty"
     accountIds:
       - "account.af4b877b95df46a3804d38d8be1d3225"
     schedule:
@@ -50,123 +17,118 @@ modules:
     outputs:
       # Tagesstatistik – täglich um 09:00
       - type: discord
-        channel: gaming
-        schedule: DAILY_09_00
-        format: pubg_daily_stats
-
-      # Tagesstatistik – allgemein-Kanal
-      - type: discord
-        channel: allgemein
+        channel: pubg
         schedule: DAILY_09_00
         format: pubg_daily_stats
 
       # Wochenstatistik – montags um 09:00
       - type: discord
-        channel: gaming
+        channel: pubg
         schedule: WEEKLY_MONDAY_09_00
         format: pubg_weekly_stats
 
       # Wochenranking – montags um 09:15
       - type: discord
-        channel: gaming
+        channel: pubg
         schedule: WEEKLY_MONDAY_09_15
         format: pubg_weekly_ranking
 
-      # Wochenvergleich – montags um 09:30
+      # Wochenvergleich – sonntags um 23:45
       - type: discord
-        channel: gaming
-        schedule: WEEKLY_MONDAY_09_30
+        channel: pubg
+        schedule: WEEKLY_SUNDAY_23_45
         format: pubg_weekly_progress
 
-      # Persönliche Rekorde – montags um 10:00
+      # Persönliche Rekorde – mittwochs um 20:00
       - type: discord
-        channel: gaming
-        schedule: WEEKLY_MONDAY_10_00
+        channel: pubg
+        schedule: WEEKLY_WEDNESDAY_20_00
+        format: pubg_records
+
+      # Persönliche Rekorde – samstags um 20:00
+      - type: discord
+        channel: pubg
+        schedule: WEEKLY_SATURDAY_20_00
         format: pubg_records
 
       # Letzte Matches – montags um 10:15
       - type: discord
-        channel: gaming
+        channel: pubg
         schedule: WEEKLY_MONDAY_10_15
         format: pubg_recent_matches
         params:
           limit: "5"
 
-      # Map-Statistiken – montags um 10:30
+      # Map-Statistiken – sonntags um 23:50
       - type: discord
-        channel: gaming
-        schedule: WEEKLY_MONDAY_10_30
+        channel: pubg
+        schedule: WEEKLY_SUNDAY_23_50
         format: pubg_map_stats
 
-  - id: bundesliga_2
+  - id: bundesliga1
+    type: football
+    enabled: true
+    source: openligadb
+    config:
+      league: bl1
+      season: "2024"
+    schedule:
+      fetchIntervalMinutes: 60
+    outputs: []
+
+  - id: bundesliga2
     type: football
     enabled: true
     source: openligadb
     config:
       league: bl2
-      season: 2025
+      season: "2024"
     schedule:
       fetchIntervalMinutes: 60
     outputs: []
 
-  # Handball — beliebig viele Teams möglich, jedes als eigenes Modul
-  # teamId aus der handball.net-URL ablesen: handball4all.{verband}.{numericId}
-  - id: handball_mein_team
-    type: handball
-    enabled: false    # teamId + Teamnamen eintragen und auf true setzen
-    source: handball_api
+  - id: news_tagesschau
+    type: news
+    enabled: true
+    source: rss
     config:
-      teamId: "handball4all.westfalen.1309001"
+      url: https://www.tagesschau.de/xml/rss2/
+      sourceName: tagesschau
     schedule:
-      fetchIntervalMinutes: 60
+      fetchIntervalMinutes: 30
     outputs: []
 
-  - id: formula1_2025
+  - id: news_heise
+    type: news
+    enabled: true
+    source: rss
+    config:
+      url: https://www.heise.de/rss/heise-atom.xml
+      sourceName: heise
+    schedule:
+      fetchIntervalMinutes: 30
+    outputs: []
+
+  - id: formula1
     type: formula1
     enabled: true
-    source: jolpica_f1
-    config:
-      season: "2025"
+    source: jolpica
+    config: {}
     schedule:
       fetchIntervalMinutes: 60
     outputs: []
 
-  - id: handball_zweites_team
-    type: handball
-    enabled: false
-    source: handball_api
-    config:
-      teamId: "handball4all.westfalen.9999999"  # Eigene ID eintragen
-    schedule:
-      fetchIntervalMinutes: 60
-    outputs: []
-
-  - id: handball_stats_nrw_300268
+  - id: handball_stats
     type: handball_statistics
     enabled: true
-    source: handball_statistics_api
+    source: h4a
     config:
-      leagueId: "300268"
-      season: "2526"
+      leagueId: 09HJMNRX
     schedule:
-      fetchIntervalMinutes: 60
-    outputs: []
-
-  - id: wm2026
-    type: worldcup2026
-    enabled: true
-    source: api_football
-    config:
-      league: "1"
-      season: "2026"
-    schedule:
-      fetchIntervalMinutes: 720
+      fetchIntervalMinutes: 120
     outputs: []
 
 outputs:
   discord:
     channels:
-      sport: ${DISCORD_SPORT_WEBHOOK}
-      news: ${DISCORD_NEWS_WEBHOOK}
-      gaming: ${DISCORD_CHANNEL_PUBG}
-      allgemein: ${DISCORD_CHANNEL_NEWSALLGEMEIN}
+      pubg: ${DISCORD_CHANNEL_PUBG}

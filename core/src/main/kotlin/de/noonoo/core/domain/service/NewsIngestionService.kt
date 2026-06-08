@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:core/src/main/kotlin/de/noonoo/core/application/NewsIngestionService.kt
 package de.noonoo.core.application
+========
+package de.noonoo.core.domain.service
+>>>>>>>> origin/main:core/src/main/kotlin/de/noonoo/core/domain/service/NewsIngestionService.kt
 
 import de.noonoo.core.domain.port.input.FetchNewsUseCase
 import de.noonoo.core.domain.port.output.NewsApiPort

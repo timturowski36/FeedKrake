@@ -6,11 +6,11 @@ import de.noonoo.aggregator.adapter.ai.HandballAnalysisContextBuilder
 import de.noonoo.aggregator.adapter.ai.HandballClaudeAnalyser
 import de.noonoo.aggregator.adapter.ai.HandballLiveFetcher
 import de.noonoo.aggregator.adapter.input.discord.AnalyseCommandListener
+import de.noonoo.aggregator.adapter.input.discord.PubgCommandListener
 import de.noonoo.aggregator.adapter.input.scheduler.IngestionScheduler
 import de.noonoo.aggregator.adapter.output.api.H4aStatisticsClient
 import de.noonoo.aggregator.adapter.output.api.HandballApiClient
 import de.noonoo.aggregator.adapter.output.api.HandballStatisticsClientWithFallback
-import de.noonoo.aggregator.adapter.output.api.ApiFootballWcClient
 import de.noonoo.aggregator.adapter.output.api.JolpicaF1Client
 import de.noonoo.aggregator.adapter.output.api.OpenLigaDbClient
 import de.noonoo.aggregator.adapter.output.api.PlaywrightStatisticsClient
@@ -18,15 +18,12 @@ import de.noonoo.aggregator.adapter.output.api.PubgApiClient
 import de.noonoo.aggregator.adapter.output.api.RssNewsClient
 import de.noonoo.aggregator.adapter.output.discord.DiscordSender
 import de.noonoo.aggregator.adapter.output.persistence.PostgresF1Repository
-import de.noonoo.aggregator.adapter.output.persistence.PostgresWcRepository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresHandballRepository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresHandballStatisticsRepository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresNewsRepository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresPubgRepository
-import de.noonoo.aggregator.adapter.output.persistence.PostgresBundesligaRepository
+import de.noonoo.aggregator.adapter.output.persistence.PostgresRepository
 import de.noonoo.core.domain.port.input.FetchDataUseCase
-import de.noonoo.core.domain.port.input.FetchWorldCupDataUseCase
-import de.noonoo.core.domain.port.input.QueryWorldCupDataUseCase
 import de.noonoo.core.domain.port.input.FetchF1DataUseCase
 import de.noonoo.core.domain.port.input.FetchHandballDataUseCase
 import de.noonoo.core.domain.port.input.FetchHandballStatisticsUseCase
@@ -37,8 +34,6 @@ import de.noonoo.core.domain.port.input.QueryF1DataUseCase
 import de.noonoo.core.domain.port.input.QueryHandballStatisticsUseCase
 import de.noonoo.core.domain.port.input.QueryPubgDataUseCase
 import de.noonoo.core.domain.port.output.F1ApiPort
-import de.noonoo.core.domain.port.output.WcApiPort
-import de.noonoo.core.domain.port.output.WcRepository
 import de.noonoo.core.domain.port.output.F1Repository
 import de.noonoo.core.domain.port.output.FootballApiPort
 import de.noonoo.core.domain.port.output.HandballApiPort
@@ -51,20 +46,17 @@ import de.noonoo.core.domain.port.output.NewsRepository
 import de.noonoo.core.domain.port.output.NotificationPort
 import de.noonoo.core.domain.port.output.PubgApiPort
 import de.noonoo.core.domain.port.output.PubgRepository
-import de.noonoo.core.application.F1IngestionService
-import de.noonoo.core.application.WorldCupIngestionService
-import de.noonoo.core.application.WorldCupQueryService
-import de.noonoo.core.application.F1QueryService
-import de.noonoo.core.application.HandballIngestionService
-import de.noonoo.core.application.HandballStatisticsIngestionService
-import de.noonoo.core.application.HandballStatisticsQueryService
-import de.noonoo.core.application.IngestionService
-import de.noonoo.core.application.NewsIngestionService
-import de.noonoo.core.application.PubgIngestionService
-import de.noonoo.core.application.PubgQueryService
-import de.noonoo.core.application.QueryService
+import de.noonoo.core.domain.service.F1IngestionService
+import de.noonoo.core.domain.service.F1QueryService
+import de.noonoo.core.domain.service.HandballIngestionService
+import de.noonoo.core.domain.service.HandballStatisticsIngestionService
+import de.noonoo.core.domain.service.HandballStatisticsQueryService
+import de.noonoo.core.domain.service.IngestionService
+import de.noonoo.core.domain.service.NewsIngestionService
+import de.noonoo.core.domain.service.PubgIngestionService
+import de.noonoo.core.domain.service.PubgQueryService
+import de.noonoo.core.domain.service.QueryService
 import io.github.cdimascio.dotenv.dotenv
-import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -72,8 +64,6 @@ import io.ktor.client.plugins.logging.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import org.koin.dsl.module
-
-private val log = KotlinLogging.logger {}
 
 val appModule = module {
 
@@ -94,13 +84,11 @@ val appModule = module {
         val channels = config.outputs.discord.channels.mapValues { (_, value) ->
             if (value.startsWith("\${") && value.endsWith("}")) {
                 val key = value.removeSurrounding("\${", "}")
-                env.get(key, "").also { v ->
-                    if (v.isEmpty()) log.warn { "Umgebungsvariable '$key' nicht gesetzt – Kanal deaktiviert." }
-                }
+                env[key] ?: error("Umgebungsvariable '$key' nicht gesetzt.")
             } else value
         }.toMutableMap()
         // Test-Kanal für Debug-Modus: DISCORD_TEST_WEBHOOK aus .env, Fallback auf sport-Webhook
-        val testWebhook = env.get("DISCORD_TEST_WEBHOOK", channels["sport"] ?: "")
+        val testWebhook = env.get("DISCORD_TEST_WEBHOOK", channels["bundesliga1"] ?: "")
         channels["test"] = testWebhook
         channels
     }
@@ -120,15 +108,19 @@ val appModule = module {
         }
     }
 
-    // ── Datenbank (PostgreSQL + HikariCP + Flyway) ────────────────────────────
+    // ── Datenbank ─────────────────────────────────────────────────────────────
     single<javax.sql.DataSource> {
         val env = get<io.github.cdimascio.dotenv.Dotenv>()
-        PostgresConfig.createDataSource(env)
+        DatabaseConfig.createDataSource(
+            url = env["POSTGRES_URL"],
+            user = env["POSTGRES_USER"],
+            password = env["POSTGRES_PASSWORD"]
+        )
     }
 
     // ── Adapter: Football ─────────────────────────────────────────────────────
     single<FootballApiPort> { OpenLigaDbClient(get()) }
-    single<MatchRepository> { PostgresBundesligaRepository(get()) }
+    single<MatchRepository> { PostgresRepository(get()) }
 
     // ── Adapter: News ─────────────────────────────────────────────────────────
     single<NewsApiPort> { RssNewsClient(get()) }
@@ -166,16 +158,6 @@ val appModule = module {
     single<FetchF1DataUseCase> { F1IngestionService(get(), get()) }
     single<QueryF1DataUseCase> { F1QueryService(get()) }
 
-    // ── Adapter: WorldCup 2026 ────────────────────────────────────────────────
-    single<WcApiPort> {
-        val env = get<io.github.cdimascio.dotenv.Dotenv>()
-        val apiKey = env.get("WM_API_KEY", "")
-        ApiFootballWcClient(get(), apiKey)
-    }
-    single<WcRepository> { PostgresWcRepository(get()) }
-    single<FetchWorldCupDataUseCase> { WorldCupIngestionService(get(), get()) }
-    single<QueryWorldCupDataUseCase> { WorldCupQueryService(get()) }
-
     // ── Adapter: Output ───────────────────────────────────────────────────────
     single<NotificationPort> { DiscordSender(get()) }
 
@@ -197,6 +179,13 @@ val appModule = module {
     single { HandballClaudeAnalyser(get()) }
     single { AnalyseCommandListener(get(), get(), get()) }
 
+    single {
+        val env = get<io.github.cdimascio.dotenv.Dotenv>()
+        val players = env.get("PUBG_PLAYERS", "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val channelId = env.get("DISCORD_CHANNEL_PUBG", "")
+        PubgCommandListener(get(), players, channelId)
+    }
+
     // ── Scheduler ─────────────────────────────────────────────────────────────
     single {
         val env = get<io.github.cdimascio.dotenv.Dotenv>()
@@ -214,8 +203,6 @@ val appModule = module {
             queryHandballStatisticsUseCase = get(),
             fetchF1UseCase = get(),
             queryF1UseCase = get(),
-            fetchWcUseCase = get(),
-            queryWcUseCase = get(),
             f1Repository = get(),
             newsRepository = get(),
             handballRepository = get(),

@@ -16,4 +16,5 @@ interface QueryDataUseCase {
     fun getLastMatchesByTeam(league: String, season: Int, teamId: Int, limit: Int): List<Match>
     fun getNextMatchesByTeam(league: String, season: Int, teamId: Int, limit: Int): List<Match>
     suspend fun getGoalGetters(league: String, season: Int): List<GoalGetter>
+    fun getGoalGettersByTeam(league: String, season: Int, teamId: Int): List<GoalGetter>
 }

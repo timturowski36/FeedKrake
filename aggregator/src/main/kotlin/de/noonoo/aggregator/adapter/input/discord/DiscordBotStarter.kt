@@ -21,11 +21,9 @@ object DiscordBotStarter {
     /**
      * Startet den JDA-Bot und blockiert bis zur erfolgreichen Verbindung.
      * Danach läuft der Bot im Hintergrund bis zur JVM-Beendigung.
-     *
-     * @param listener  AnalyseCommandListener für den !analyse-Command
-     * @param token     Bot-Token aus DISCORD_BOT_TOKEN (.env)
      */
-    fun starten(listener: AnalyseCommandListener, token: String) {
+    fun starten(token: String, analyseListener: AnalyseCommandListener, pubgListener: PubgCommandListener) {
+
         log.info("[Discord] Starte JDA-Bot...")
 
         val jda = JDABuilder.createLight(
@@ -35,10 +33,10 @@ object DiscordBotStarter {
                 GatewayIntent.MESSAGE_CONTENT  // Privileged Intent – im Dev-Portal aktivieren!
             )
         )
-            .addEventListeners(listener)
+            .addEventListeners(analyseListener, pubgListener)
             .build()
 
         jda.awaitReady()
-        log.info("[Discord] JDA-Bot verbunden. Ping: {}ms. Warte auf !analyse-Commands.", jda.gatewayPing)
+        log.info("[Discord] JDA-Bot verbunden. Ping: {}ms. Warte auf Commands.", jda.gatewayPing)
     }
 }

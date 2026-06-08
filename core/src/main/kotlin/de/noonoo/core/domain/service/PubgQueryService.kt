@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:core/src/main/kotlin/de/noonoo/core/application/PubgQueryService.kt
 package de.noonoo.core.application
+========
+package de.noonoo.core.domain.service
+>>>>>>>> origin/main:core/src/main/kotlin/de/noonoo/core/domain/service/PubgQueryService.kt
 
 import de.noonoo.core.domain.model.PubgMapStat
 import de.noonoo.core.domain.model.PubgMatch

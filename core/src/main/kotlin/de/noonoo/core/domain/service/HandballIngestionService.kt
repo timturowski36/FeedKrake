@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:core/src/main/kotlin/de/noonoo/core/application/HandballIngestionService.kt
 package de.noonoo.core.application
+========
+package de.noonoo.core.domain.service
+>>>>>>>> origin/main:core/src/main/kotlin/de/noonoo/core/domain/service/HandballIngestionService.kt
 
 import de.noonoo.core.domain.model.HandballMatch
 import de.noonoo.core.domain.port.input.FetchHandballDataUseCase

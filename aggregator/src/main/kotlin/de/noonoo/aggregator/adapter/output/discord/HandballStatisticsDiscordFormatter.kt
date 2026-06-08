@@ -27,31 +27,53 @@ object HandballStatisticsDiscordFormatter {
     fun formatScorerTable(
         scorerList: HandballScorerList,
         now: LocalDateTime,
-        limit: Int = 30
+        limit: Int = Int.MAX_VALUE
     ): String? {
         if (scorerList.scorers.isEmpty()) return null
+        val chunks = formatScorerTableChunked(scorerList, now)
+        return chunks.firstOrNull()
+    }
 
-        val scorers = scorerList.scorers.take(limit)
-        val truncated = scorerList.scorers.size > limit
+    fun formatScorerTableChunked(
+        scorerList: HandballScorerList,
+        now: LocalDateTime,
+        maxCharsPerMessage: Int = 1800
+    ): List<String> {
+        if (scorerList.scorers.isEmpty()) return emptyList()
 
-        val header = "🥅 **Torschützenliste** — ${scorerList.leagueName.ifBlank { "Liga ${scorerList.leagueId}" }}" +
-            "  |  Stand: ${now.format(NOW_FMT)}"
+        val leagueLabel = scorerList.leagueName.ifBlank { "Liga ${scorerList.leagueId}" }
+        val header = "🥅 **Torschützenliste** — $leagueLabel  |  Stand: ${now.format(NOW_FMT)}"
+        val colHeader = " #  %-12s %-8s  Tore".format("Name", "Mannschaft")
+        val sep = "─".repeat(34)
+        val blockPrefix = "$header\n```\n$colHeader\n$sep\n"
+        val blockSuffix = "```"
 
-        val colHeader = " #  %-19s %-16s  Sp  Tore  T/Sp".format("Name", "Mannschaft")
-        val sep = "─".repeat(57)
-
-        val rows = scorers.joinToString("\n") { s ->
+        val rows = scorerList.scorers.map { s ->
             val pos  = s.position.toString().padStart(2)
-            val name = s.playerName.take(19).padEnd(19)
-            val team = s.teamName.take(16).padEnd(16)
-            val sp   = s.gamesPlayed.toString().padStart(2)
+            val name = s.playerName.take(12).padEnd(12)
+            val team = s.teamName.take(8).padEnd(8)
             val tore = s.totalGoals.toString().padStart(4)
-            val tpg  = "%.2f".format(s.goalsPerGame).padStart(5)
-            "$pos  $name $team  $sp  $tore  $tpg"
+            "$pos  $name $team  $tore"
         }
 
-        val suffix = if (truncated) "\n(+${scorerList.scorers.size - limit} weitere)" else ""
-        return "$header\n```\n$colHeader\n$sep\n$rows$suffix\n```"
+        val result = mutableListOf<String>()
+        var currentRows = mutableListOf<String>()
+        var currentLength = blockPrefix.length + blockSuffix.length
+
+        for (row in rows) {
+            val rowLen = row.length + 1  // +1 for newline
+            if (currentLength + rowLen > maxCharsPerMessage && currentRows.isNotEmpty()) {
+                result.add(blockPrefix + currentRows.joinToString("\n") + "\n" + blockSuffix)
+                currentRows = mutableListOf()
+                currentLength = blockPrefix.length + blockSuffix.length
+            }
+            currentRows.add(row)
+            currentLength += rowLen
+        }
+        if (currentRows.isNotEmpty()) {
+            result.add(blockPrefix + currentRows.joinToString("\n") + "\n" + blockSuffix)
+        }
+        return result
     }
 
     // ── handball_scorer_team ──────────────────────────────────────────────────
@@ -144,13 +166,13 @@ object HandballStatisticsDiscordFormatter {
         if (teamScorers.isEmpty()) return null
 
         val header = "🏅 **Torschützen $teamName** | Stand: ${now.format(NOW_FMT)}"
-        val colHeader = "#T  %2s  %-16s  Sp  Tore  7m".format("#G", "Name")
-        val sep = "─".repeat(38)
+        val colHeader = "#T  %2s  %-12s  Sp  Tore  7m".format("#G", "Name")
+        val sep = "─".repeat(34)
 
         val rows = teamScorers.mapIndexed { idx, s ->
             val teamRank   = (idx + 1).toString().padStart(2)
             val leagueRank = s.position.toString().padStart(2)
-            val name       = abbreviateName(s.playerName, s.jerseyNumber).take(16).padEnd(16)
+            val name       = abbreviateName(s.playerName, s.jerseyNumber).take(12).padEnd(12)
             val sp         = s.gamesPlayed.toString().padStart(2)
             val tore       = s.totalGoals.toString().padStart(4)
             val sm         = s.sevenMeterGoals.toString().padStart(2)

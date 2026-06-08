@@ -3,7 +3,7 @@ plugins {
     kotlin("plugin.serialization") version "2.3.0" apply false
 }
 
-subprojects {
+allprojects {
     repositories {
         mavenCentral()
     }

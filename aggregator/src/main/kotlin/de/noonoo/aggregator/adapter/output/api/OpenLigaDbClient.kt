@@ -73,6 +73,7 @@ class OpenLigaDbClient(
         @SerialName("scoreTeam2") val scoreAway: Int,
         @SerialName("matchMinute") val minute: Int? = null,
         @SerialName("goalGetterName") val scorerName: String = "",
+        @SerialName("goalGetterID") val goalGetterId: Int = 0,
         @SerialName("isOwnGoal") val isOwnGoal: Boolean = false,
         @SerialName("isPenalty") val isPenalty: Boolean = false
     ) {
@@ -84,7 +85,8 @@ class OpenLigaDbClient(
             isOwnGoal = isOwnGoal,
             isPenalty = isPenalty,
             scoreHome = scoreHome,
-            scoreAway = scoreAway
+            scoreAway = scoreAway,
+            goalGetterId = goalGetterId
         )
     }
 
@@ -140,9 +142,10 @@ class OpenLigaDbClient(
     private data class ApiGoalGetter(
         @SerialName("goalGetterName") val name: String = "",
         @SerialName("goalCount") val goals: Int = 0,
+        @SerialName("goalGetterId") val id: Int = 0,
         val teamId: Int = 0  // nicht mehr in API-Antwort – standardmäßig 0
     ) {
-        fun toDomain() = GoalGetter(name = name, teamId = teamId, goals = goals)
+        fun toDomain() = GoalGetter(name = name, teamId = teamId, goals = goals, id = id)
     }
 
     @Serializable

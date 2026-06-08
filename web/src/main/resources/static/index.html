@@ -5,246 +5,195 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NooNoo Ambient</title>
   <style>
-    :root { color-scheme: dark; --accent: #4f9cf9; }
-    *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; background: #0b0d12; color: #e6e8ee;
-                 font: 17px/1.5 system-ui, sans-serif; }
-    body { display: grid; place-items: center; }
-    main { width: min(1100px, 94vw); padding: 3vh 0 4vh; }
+    :root { color-scheme: dark; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: #0b0d12;
+      color: #e6e8ee;
+      font: 18px/1.5 system-ui, -apple-system, sans-serif;
+    }
+    body { display: grid; place-items: center; padding: 2rem; }
+    main { width: min(1100px, 100%); }
 
-    h1   { font-size: clamp(1.6rem, 3vw, 2.4rem); margin: 0 0 .6rem; }
-    .meta { color: #687080; font-size: .85rem; margin-bottom: 1.4rem; }
-    .badge { display: inline-block; background: #1a2030; border: 1px solid #2a3245;
-             border-radius: 4px; padding: .15em .55em; font-size: .75rem;
-             color: var(--accent); margin-right: .4rem; vertical-align: middle; }
+    h1 { font-size: clamp(1.6rem, 3vw, 2.4rem); margin-bottom: 1.2rem; color: #fff; }
+    .meta { color: #606880; font-size: .85rem; margin-top: 1.2rem; }
 
     table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-    th    { text-align: left; padding: .4rem .7rem; color: #687080;
-            font-weight: 500; border-bottom: 1px solid #1e2535; font-size: .85rem; }
-    td    { padding: .45rem .7rem; border-bottom: 1px solid #151b27; }
-    tr:hover td { background: #12182a; }
-    .num  { text-align: right; }
+    th { text-align: left; padding: .5rem .7rem; color: #8a93a6; font-weight: 500;
+         border-bottom: 1px solid #20242d; font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; }
+    td { padding: .55rem .7rem; border-bottom: 1px solid #16191f; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #13161c; }
 
-    /* News */
-    .news-list { list-style: none; padding: 0; margin: 0; }
-    .news-list li { padding: .6rem 0; border-bottom: 1px solid #151b27; }
-    .news-list li:last-child { border: none; }
-    .news-list a { color: #d0daf0; text-decoration: none; font-size: 1.05rem; }
-    .news-list a:hover { color: var(--accent); }
-    .news-ts { color: #687080; font-size: .8rem; margin-top: .15rem; }
+    .rank { color: #8a93a6; width: 2rem; }
+    .pts  { font-weight: 600; color: #c8d0e0; }
+    .hl   { color: #f0b429; }
 
-    /* WM Gruppen */
-    .group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.2rem; }
-    .group-card { background: #111622; border: 1px solid #1e2535; border-radius: 8px; padding: .8rem 1rem; }
-    .group-label { font-size: .75rem; color: var(--accent); font-weight: 600;
-                   letter-spacing: .06em; margin-bottom: .5rem; }
+    ul { list-style: none; }
+    ul li { padding: .55rem 0; border-bottom: 1px solid #16191f; }
+    ul li:last-child { border-bottom: none; }
+    ul li::before { content: "›"; margin-right: .5rem; color: #3a7bd5; }
 
-    /* View Transitions */
-    #slide { view-transition-name: slide; }
-    @keyframes fadeIn  { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }
-    @keyframes fadeOut { from { opacity:1 } to { opacity:0 } }
-    ::view-transition-old(slide) { animation: fadeOut .35s ease both; }
-    ::view-transition-new(slide) { animation: fadeIn  .35s ease both; }
-    @media (prefers-reduced-motion: reduce) {
-      ::view-transition-old(slide), ::view-transition-new(slide) { animation: none; }
+    .tag {
+      display: inline-block; font-size: .75rem; padding: .15rem .5rem;
+      border-radius: 4px; margin-bottom: .8rem; font-weight: 600; letter-spacing: .06em;
+      text-transform: uppercase;
     }
+    .tag-pubg     { background: #1a2d1a; color: #4ade80; }
+    .tag-football { background: #1a1f2d; color: #60a5fa; }
+    .tag-handball { background: #2d1a2a; color: #f472b6; }
+    .tag-news     { background: #2d261a; color: #fbbf24; }
+    .tag-f1       { background: #2d1a1a; color: #f87171; }
+
+    #slide { transition: opacity .35s ease; }
+    #slide.fade { opacity: 0; }
+
+    #status { position: fixed; bottom: 1rem; right: 1rem; font-size: .75rem; color: #404555;
+              background: #0b0d12; padding: .3rem .6rem; border-radius: 4px; }
   </style>
 </head>
 <body>
   <main id="slide">
     <h1>NooNoo lädt…</h1>
-    <p class="meta">Verbinde mit Server…</p>
   </main>
+  <div id="status">verbinde…</div>
 
   <script>
-    const el = document.getElementById("slide");
-    const es = new EventSource("/ambient");
+    const slide  = document.getElementById("slide");
+    const status = document.getElementById("status");
+    let es;
 
-    es.addEventListener("slide", e => {
-      const s = JSON.parse(e.data);
-      const html = render(s);
+    function connect() {
+      es = new EventSource("/ambient");
+
+      es.addEventListener("slide", e => {
+        const data = JSON.parse(e.data);
+        transition(() => { slide.innerHTML = renderSlide(data); });
+        status.textContent = "verbunden · " + new Date().toLocaleTimeString('de-DE');
+      });
+
+      es.onerror = () => { status.textContent = "getrennt – reconnect…"; };
+      es.onopen  = () => { status.textContent = "verbunden"; };
+    }
+
+    function transition(fn) {
       if (document.startViewTransition) {
-        document.startViewTransition(() => { el.innerHTML = html; });
+        document.startViewTransition(fn);
       } else {
-        el.innerHTML = html;
+        slide.classList.add("fade");
+        setTimeout(() => { fn(); slide.classList.remove("fade"); }, 350);
       }
-    });
-    es.onerror = () => {};  // EventSource reconnectet automatisch
-
-    // ── Render-Dispatcher ────────────────────────────────────────────────────
-
-    function render(s) {
-      const header = `<h1><span class="badge">${esc(s.type)}</span> ${esc(s.title)}</h1>
-        <div class="meta">Stand: ${fmtTs(s.generatedAt)}</div>`;
-      const body = renderData(s.type, s.data);
-      return header + body;
     }
 
-    function renderData(type, data) {
-      if (!data || data.length === 0) return "<p>Keine Daten verfügbar.</p>";
-      if (type === "bundesliga.t1" || type === "bundesliga.t2") return renderBundesliga(data);
-      if (type === "news.tagesschau" || type === "news.heise")  return renderNews(data);
-      if (type === "f1.standings")   return renderF1(data);
-      if (type === "handball.table") return renderHandball(data);
-      if (type === "wm.standings")   return renderWmStandings(data);
-      if (type === "wm.fixtures")    return renderWmFixtures(data);
-      if (type === "pubg.ranking")   return renderPubg(data);
-      return `<pre>${esc(JSON.stringify(data, null, 2))}</pre>`;
+    function renderSlide(s) {
+      const p = s.payload;
+      const ts = new Date(s.generatedAt).toLocaleString('de-DE');
+      const meta = `<div class="meta">Stand: ${ts}</div>`;
+
+      if (s.type === "pubg.daily" || s.type === "pubg.weekly") {
+        const label = s.type === "pubg.daily" ? "PUBG · Heute" : "PUBG · 7 Tage";
+        return tag(label, "pubg") + `<h1>${esc(s.title)}</h1>` + renderPubgTable(p.players) + meta;
+      }
+      if (s.type === "football.bl1" || s.type === "football.bl2") {
+        const label = s.type === "football.bl1" ? "Fußball · BL1" : "Fußball · BL2";
+        return tag(label, "football") + `<h1>${esc(s.title)}</h1>` + renderFootballTable(p.rows) + meta;
+      }
+      if (s.type === "handball.scorers") {
+        return tag("Handball · Torschützen", "handball") + `<h1>${esc(s.title)}</h1>` + renderHandballTable(p.rows) + meta;
+      }
+      if (s.type.startsWith("news.")) {
+        const label = s.type === "news.tagesschau" ? "Nachrichten · Tagesschau" : "Tech-News · Heise";
+        return tag(label, "news") + `<h1>${esc(s.title)}</h1>` + renderNews(p.items) + meta;
+      }
+      if (s.type === "f1.drivers") {
+        return tag("Formel 1 · Fahrerwertung", "f1") + `<h1>${esc(s.title)}</h1>` + renderF1Table(p.rows) + meta;
+      }
+      return `<h1>${esc(s.title)}</h1><pre>${esc(JSON.stringify(p, null, 2))}</pre>` + meta;
     }
 
-    // ── Bundesliga ────────────────────────────────────────────────────────────
+    function tag(label, cls) {
+      return `<span class="tag tag-${cls}">${esc(label)}</span><br>`;
+    }
 
-    function renderBundesliga(rows) {
-      const body = rows.map(r => `
-        <tr>
-          <td class="num">${r.pos}</td>
-          <td>${esc(r.team)}</td>
-          <td class="num">${r.sp}</td>
-          <td class="num">${r.w}</td>
-          <td class="num">${r.d}</td>
-          <td class="num">${r.l}</td>
-          <td class="num">${r.gf}:${r.ga}</td>
-          <td class="num"><strong>${r.pts}</strong></td>
-        </tr>`).join("");
+    function renderPubgTable(players) {
+      const rows = players.map((p, i) =>
+        `<tr>
+          <td class="rank">${i + 1}</td>
+          <td><strong>${esc(p.name)}</strong></td>
+          <td>${p.matches} Spiele</td>
+          <td class="hl">${p.kills} Kills</td>
+          <td>${p.wins} Siege</td>
+          <td>${p.avgDamage} Ø-Damage</td>
+          <td>${p.headshotKills} HS</td>
+          <td>${p.longestKill ? p.longestKill.toFixed(0) + "m" : "–"}</td>
+        </tr>`
+      ).join("");
       return `<table><thead><tr>
-        <th class="num">#</th><th>Verein</th><th class="num">Sp</th>
-        <th class="num">S</th><th class="num">U</th><th class="num">N</th>
-        <th class="num">Tore</th><th class="num">Pkt</th>
-      </tr></thead><tbody>${body}</tbody></table>`;
+        <th>#</th><th>Spieler</th><th>Matches</th><th>Kills</th><th>Siege</th>
+        <th>Ø Damage</th><th>HS-Kills</th><th>Longest</th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
     }
 
-    // ── News ──────────────────────────────────────────────────────────────────
+    function renderFootballTable(rows) {
+      const trs = rows.map(r =>
+        `<tr>
+          <td class="rank">${r.position}</td>
+          <td><strong>${esc(r.team)}</strong></td>
+          <td>${r.played}</td>
+          <td>${r.won}</td>
+          <td>${r.draw}</td>
+          <td>${r.lost}</td>
+          <td>${esc(r.goals)}</td>
+          <td class="pts">${r.points}</td>
+        </tr>`
+      ).join("");
+      return `<table><thead><tr>
+        <th>#</th><th>Verein</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th>
+      </tr></thead><tbody>${trs}</tbody></table>`;
+    }
+
+    function renderHandballTable(rows) {
+      const trs = rows.map(r =>
+        `<tr>
+          <td class="rank">${r.position}</td>
+          <td><strong>${esc(r.player)}</strong></td>
+          <td>${esc(r.team)}</td>
+          <td>${r.games}</td>
+          <td class="hl">${r.goals}</td>
+          <td>${r.goalsPerGame.toFixed(2)}</td>
+        </tr>`
+      ).join("");
+      return `<table><thead><tr>
+        <th>#</th><th>Spieler</th><th>Verein</th><th>Spiele</th><th>Tore</th><th>Ø/Spiel</th>
+      </tr></thead><tbody>${trs}</tbody></table>`;
+    }
 
     function renderNews(items) {
-      return "<ul class='news-list'>" + items.map(i => `
-        <li>
-          <a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a>
-          <div class="news-ts">${fmtTs(i.ts)}</div>
-        </li>`).join("") + "</ul>";
+      return "<ul>" + items.map(i => `<li>${esc(i.title)}</li>`).join("") + "</ul>";
     }
 
-    // ── F1 ────────────────────────────────────────────────────────────────────
-
-    function renderF1(rows) {
-      const body = rows.map(r => `
-        <tr>
-          <td class="num">${r.pos}.</td>
-          <td>${esc(r.driver)}</td>
-          <td style="color:#687080">${esc(r.team)}</td>
-          <td class="num"><strong>${r.pts}</strong></td>
-          <td class="num">${r.wins} Siege</td>
-        </tr>`).join("");
+    function renderF1Table(rows) {
+      const trs = rows.map(r =>
+        `<tr>
+          <td class="rank">${r.position}</td>
+          <td><strong>${esc(r.driver)}</strong></td>
+          <td>${esc(r.constructor)}</td>
+          <td class="pts">${r.points}</td>
+          <td>${r.wins}</td>
+        </tr>`
+      ).join("");
       return `<table><thead><tr>
-        <th class="num">#</th><th>Fahrer</th><th>Team</th>
-        <th class="num">Punkte</th><th class="num">Siege</th>
-      </tr></thead><tbody>${body}</tbody></table>`;
+        <th>#</th><th>Fahrer</th><th>Team</th><th>Punkte</th><th>Siege</th>
+      </tr></thead><tbody>${trs}</tbody></table>`;
     }
-
-    // ── Handball ─────────────────────────────────────────────────────────────
-
-    function renderHandball(rows) {
-      const body = rows.map(r => `
-        <tr>
-          <td class="num">${r.pos}</td>
-          <td>${esc(r.team)}</td>
-          <td class="num">${r.sp}</td>
-          <td class="num">${r.gf}:${r.ga}</td>
-          <td class="num"><strong>${r.pts}</strong></td>
-        </tr>`).join("");
-      return `<table><thead><tr>
-        <th class="num">#</th><th>Team</th>
-        <th class="num">Sp</th><th class="num">Tore</th><th class="num">Pkt</th>
-      </tr></thead><tbody>${body}</tbody></table>`;
-    }
-
-    // ── WM 2026 Gruppen ───────────────────────────────────────────────────────
-
-    function renderWmStandings(rows) {
-      const groups = {};
-      rows.forEach(r => { (groups[r.group] = groups[r.group] || []).push(r); });
-      const cards = Object.entries(groups).map(([g, teams]) => {
-        const rows = teams.map(t => `
-          <tr>
-            <td class="num">${t.rank}</td>
-            <td>${esc(t.team)}</td>
-            <td class="num">${t.sp}</td>
-            <td class="num">${t.gf}:${t.ga}</td>
-            <td class="num"><strong>${t.pts}</strong></td>
-          </tr>`).join("");
-        return `<div class="group-card">
-          <div class="group-label">Gruppe ${esc(g)}</div>
-          <table><thead><tr>
-            <th class="num">#</th><th>Team</th>
-            <th class="num">Sp</th><th class="num">Tore</th><th class="num">Pkt</th>
-          </tr></thead><tbody>${rows}</tbody></table>
-        </div>`;
-      }).join("");
-      return `<div class="group-grid">${cards}</div>`;
-    }
-
-    // ── WM 2026 Fixtures ──────────────────────────────────────────────────────
-
-    function renderWmFixtures(fixtures) {
-      if (!fixtures.length) return "<p>Keine anstehenden Spiele.</p>";
-      const body = fixtures.map(f => {
-        const score = (f.homeScore != null)
-          ? `<strong>${f.homeScore} : ${f.awayScore}</strong>`
-          : fmtKickoff(f.kickoff);
-        return `<tr>
-          <td>${esc(f.round)}${f.group ? " / Gr. " + esc(f.group) : ""}</td>
-          <td style="text-align:right">${esc(f.home)}</td>
-          <td style="text-align:center;padding:0 .8rem">${score}</td>
-          <td>${esc(f.away)}</td>
-          <td style="color:#687080;font-size:.85rem">${esc(f.status)}</td>
-        </tr>`;
-      }).join("");
-      return `<table><thead><tr>
-        <th>Runde</th><th style="text-align:right">Heim</th>
-        <th style="text-align:center">Ergebnis / Anpfiff</th>
-        <th>Gast</th><th>Status</th>
-      </tr></thead><tbody>${body}</tbody></table>`;
-    }
-
-    // ── PUBG ─────────────────────────────────────────────────────────────────
-
-    function renderPubg(rows) {
-      const body = rows.map(r => `
-        <tr>
-          <td class="num">${r.rank}.</td>
-          <td>${esc(r.player)}</td>
-          <td class="num">${r.matches}</td>
-          <td class="num">${r.wins}</td>
-          <td class="num">${r.avgKills}</td>
-          <td class="num">${r.avgDamage}</td>
-        </tr>`).join("");
-      return `<table><thead><tr>
-        <th class="num">#</th><th>Spieler</th>
-        <th class="num">Matches</th><th class="num">Siege</th>
-        <th class="num">Ø Kills</th><th class="num">Ø Damage</th>
-      </tr></thead><tbody>${body}</tbody></table>`;
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     function esc(s) {
       return String(s ?? "").replace(/[&<>"]/g, c =>
         ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
     }
 
-    function fmtTs(iso) {
-      if (!iso) return "";
-      return new Date(iso).toLocaleString("de-DE",
-        { day:"2-digit", month:"2-digit", year:"numeric",
-          hour:"2-digit", minute:"2-digit" });
-    }
-
-    function fmtKickoff(iso) {
-      if (!iso) return "?";
-      const d = new Date(iso);
-      return d.toLocaleString("de-DE",
-        { weekday:"short", day:"2-digit", month:"2-digit",
-          hour:"2-digit", minute:"2-digit" }) + " Uhr";
-    }
+    connect();
   </script>
 </body>
 </html>

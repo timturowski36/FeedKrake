@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:core/src/main/kotlin/de/noonoo/core/application/QueryService.kt
 package de.noonoo.core.application
+========
+package de.noonoo.core.domain.service
+>>>>>>>> origin/main:core/src/main/kotlin/de/noonoo/core/domain/service/QueryService.kt
 
 import de.noonoo.core.domain.model.GoalGetter
 import de.noonoo.core.domain.model.Match
@@ -42,4 +46,7 @@ class QueryService(
 
     override suspend fun getGoalGetters(league: String, season: Int): List<GoalGetter> =
         apiPort.fetchGoalGetters(league, season)
+
+    override fun getGoalGettersByTeam(league: String, season: Int, teamId: Int): List<GoalGetter> =
+        repository.findGoalGettersByTeam(league, season, teamId)
 }
