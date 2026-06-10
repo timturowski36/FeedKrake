@@ -21,18 +21,27 @@ import de.noonoo.aggregator.adapter.output.persistence.PostgresF1Repository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresHandballRepository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresHandballStatisticsRepository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresNewsRepository
+import de.noonoo.aggregator.adapter.input.scheduler.WmPollingScheduler
+import de.noonoo.aggregator.adapter.output.api.wm.EspnWmAdapter
+import de.noonoo.aggregator.adapter.output.api.wm.OpenFootballAdapter
+import de.noonoo.aggregator.adapter.output.api.wm.WmDataSource
 import de.noonoo.aggregator.adapter.output.persistence.PostgresPubgRepository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresRepository
+import de.noonoo.aggregator.adapter.output.persistence.PostgresWcRepository
+import de.noonoo.core.application.WorldCupIngestionService
+import de.noonoo.core.application.WorldCupQueryService
 import de.noonoo.core.domain.port.input.FetchDataUseCase
 import de.noonoo.core.domain.port.input.FetchF1DataUseCase
 import de.noonoo.core.domain.port.input.FetchHandballDataUseCase
 import de.noonoo.core.domain.port.input.FetchHandballStatisticsUseCase
 import de.noonoo.core.domain.port.input.FetchNewsUseCase
 import de.noonoo.core.domain.port.input.FetchPubgDataUseCase
+import de.noonoo.core.domain.port.input.FetchWorldCupDataUseCase
 import de.noonoo.core.domain.port.input.QueryDataUseCase
 import de.noonoo.core.domain.port.input.QueryF1DataUseCase
 import de.noonoo.core.domain.port.input.QueryHandballStatisticsUseCase
 import de.noonoo.core.domain.port.input.QueryPubgDataUseCase
+import de.noonoo.core.domain.port.input.QueryWorldCupDataUseCase
 import de.noonoo.core.domain.port.output.F1ApiPort
 import de.noonoo.core.domain.port.output.F1Repository
 import de.noonoo.core.domain.port.output.FootballApiPort
@@ -46,6 +55,9 @@ import de.noonoo.core.domain.port.output.NewsRepository
 import de.noonoo.core.domain.port.output.NotificationPort
 import de.noonoo.core.domain.port.output.PubgApiPort
 import de.noonoo.core.domain.port.output.PubgRepository
+import de.noonoo.core.domain.port.output.WcApiPort
+import org.koin.core.qualifier.named
+import de.noonoo.core.domain.port.output.WcRepository
 import de.noonoo.core.domain.service.F1IngestionService
 import de.noonoo.core.domain.service.F1QueryService
 import de.noonoo.core.domain.service.HandballIngestionService
@@ -158,6 +170,22 @@ val appModule = module {
     single<FetchF1DataUseCase> { F1IngestionService(get(), get()) }
     single<QueryF1DataUseCase> { F1QueryService(get()) }
 
+    // ── Adapter: WM 2026 ──────────────────────────────────────────────────────
+    single<WmDataSource>(named("wm-primary"))  { EspnWmAdapter(get()) }
+    single<WmDataSource>(named("wm-fallback")) { OpenFootballAdapter(get()) }
+    single { WmPollingScheduler(
+        primary  = get(named("wm-primary")),
+        fallback = get(named("wm-fallback")),
+        wcRepo   = get()
+    )}
+    // WcApiPort bleibt als Stub für WorldCupIngestionService (kein Key nötig, nie aktiv aufgerufen)
+    single<WcApiPort> {
+        de.noonoo.aggregator.adapter.output.api.ApiFootballWcClient(get(), apiKey = "")
+    }
+    single<WcRepository> { PostgresWcRepository(get()) }
+    single<FetchWorldCupDataUseCase> { WorldCupIngestionService(get(), get()) }
+    single<QueryWorldCupDataUseCase> { WorldCupQueryService(get()) }
+
     // ── Adapter: Output ───────────────────────────────────────────────────────
     single<NotificationPort> { DiscordSender(get()) }
 
@@ -203,6 +231,8 @@ val appModule = module {
             queryHandballStatisticsUseCase = get(),
             fetchF1UseCase = get(),
             queryF1UseCase = get(),
+            fetchWorldCupUseCase = get(),
+            wmPollingScheduler = get(),
             f1Repository = get(),
             newsRepository = get(),
             handballRepository = get(),

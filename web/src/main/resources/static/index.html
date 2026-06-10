@@ -17,6 +17,7 @@
 
     h1 { font-size: clamp(1.6rem, 3vw, 2.4rem); margin-bottom: 1.2rem; color: #fff; }
     .meta { color: #606880; font-size: .85rem; margin-top: 1.2rem; }
+    .empty-info { color: #9aa3b5; font-size: 1.05rem; max-width: 36rem; line-height: 1.5; }
 
     table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
     th { text-align: left; padding: .5rem .7rem; color: #8a93a6; font-weight: 500;
@@ -44,6 +45,13 @@
     .tag-handball { background: #2d1a2a; color: #f472b6; }
     .tag-news     { background: #2d261a; color: #fbbf24; }
     .tag-f1       { background: #2d1a1a; color: #f87171; }
+    .tag-wm       { background: #1a2d2d; color: #2dd4bf; }
+
+    .wm-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.2rem; }
+    .wm-group h3 { font-size: .8rem; color: #8a93a6; margin-bottom: .4rem;
+                   text-transform: uppercase; letter-spacing: .05em; font-weight: 500; }
+    .wm-group table { font-size: .85rem; }
+    .wm-group th, .wm-group td { padding: .3rem .4rem; }
 
     main { flex: 1; display: grid; place-items: center; padding: 2rem; }
     #slide { width: min(1100px, 100%); transition: opacity .35s ease; }
@@ -259,6 +267,18 @@
       if (s.type === "f1.drivers") {
         return tag("Formel 1 · Fahrerwertung", "f1") + `<h1>${esc(s.title)}</h1>` + renderF1Table(p.rows) + meta;
       }
+      if (s.type === "wm.fixtures") {
+        return tag("WM 2026 · Spiele", "wm") + `<h1>${esc(s.title)}</h1>` + renderWmFixtures(p.fixtures) + meta;
+      }
+      if (s.type === "wm.standings") {
+        return tag("WM 2026 · Gruppen", "wm") + `<h1>${esc(s.title)}</h1>` + renderWmGroups(p.groups) + meta;
+      }
+      if (s.type === "wm.topscorers") {
+        return tag("WM 2026 · Torschützen", "wm") + `<h1>${esc(s.title)}</h1>` + renderWmScorers(p.rows) + meta;
+      }
+      if (s.type === "system.empty") {
+        return `<h1>${esc(s.title)}</h1><p class="empty-info">${esc(p.message)}</p>`;
+      }
       return `<h1>${esc(s.title)}</h1><pre>${esc(JSON.stringify(p, null, 2))}</pre>` + meta;
     }
 
@@ -335,6 +355,61 @@
       ).join("");
       return `<table><thead><tr>
         <th>#</th><th>Fahrer</th><th>Team</th><th>Punkte</th><th>Siege</th>
+      </tr></thead><tbody>${trs}</tbody></table>`;
+    }
+
+    const WM_STATUS_LABELS = {
+      NS: "Bevorstehend", FIRST_HALF: "1. Halbzeit", HT: "Halbzeit", SECOND_HALF: "2. Halbzeit",
+      ET: "Verlängerung", BT: "Pause", PEN: "Elfmeterschießen", FT: "Beendet", AET: "n. V.",
+      PST: "Verschoben", CANC: "Abgesagt"
+    };
+
+    function renderWmFixtures(fixtures) {
+      const trs = fixtures.map(f => {
+        const dt = new Date(f.kickoff).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        const score = (f.homeScore !== null && f.awayScore !== null) ? `${f.homeScore}:${f.awayScore}` : "–";
+        return `<tr>
+          <td>${esc(dt)}</td>
+          <td><strong>${esc(f.home)}</strong> – <strong>${esc(f.away)}</strong></td>
+          <td>${esc(f.group || f.round)}</td>
+          <td class="hl">${esc(score)}</td>
+          <td>${esc(WM_STATUS_LABELS[f.status] || f.status)}</td>
+        </tr>`;
+      }).join("");
+      return `<table><thead><tr>
+        <th>Anstoß</th><th>Spiel</th><th>Gruppe</th><th>Ergebnis</th><th>Status</th>
+      </tr></thead><tbody>${trs}</tbody></table>`;
+    }
+
+    function renderWmGroups(groups) {
+      const cards = groups.map(g => `
+        <div class="wm-group">
+          <h3>${esc(g.name)}</h3>
+          <table><thead><tr><th>#</th><th>Team</th><th>Sp</th><th>Pkt</th><th>Tordiff</th></tr></thead>
+          <tbody>${g.rows.map(r => `<tr>
+            <td class="rank">${r.rank}</td>
+            <td>${esc(r.team)}</td>
+            <td>${r.played}</td>
+            <td class="pts">${r.points}</td>
+            <td>${r.goalDiff > 0 ? "+" + r.goalDiff : r.goalDiff}</td>
+          </tr>`).join("")}</tbody></table>
+        </div>`
+      ).join("");
+      return `<div class="wm-groups">${cards}</div>`;
+    }
+
+    function renderWmScorers(rows) {
+      const trs = rows.map(r =>
+        `<tr>
+          <td class="rank">${r.rank}</td>
+          <td><strong>${esc(r.player)}</strong></td>
+          <td>${esc(r.team)}</td>
+          <td class="hl">${r.goals}</td>
+          <td>${r.assists}</td>
+        </tr>`
+      ).join("");
+      return `<table><thead><tr>
+        <th>#</th><th>Spieler</th><th>Team</th><th>Tore</th><th>Assists</th>
       </tr></thead><tbody>${trs}</tbody></table>`;
     }
 

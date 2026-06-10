@@ -1,0 +1,101 @@
+package de.noonoo.aggregator.adapter.input.scheduler
+
+import de.noonoo.aggregator.adapter.output.api.wm.WmDataSource
+import de.noonoo.core.domain.port.output.WcRepository
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.*
+import java.time.Duration
+import java.time.ZoneId
+import java.time.ZonedDateTime
+
+private val log = KotlinLogging.logger {}
+
+class WmPollingScheduler(
+    private val primary: WmDataSource,
+    private val fallback: WmDataSource,
+    private val wcRepo: WcRepository
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    fun start(): Job = scope.launch {
+        log.info { "[WM] Starte initialen Komplett-Sync (ESPN)..." }
+        runCatching { syncAll() }.onFailure { log.error(it) { "[WM] Initialer Sync fehlgeschlagen." } }
+
+        while (isActive) {
+            val anyLive = runCatching { wcRepo.hasLiveFixtures() }.getOrElse { false }
+            val minsUntilNext = runCatching { wcRepo.minutesUntilNextKickoff() }.getOrElse { null }
+
+            val intervalMs = when {
+                anyLive                                      -> 60_000L
+                minsUntilNext != null && minsUntilNext < 15 -> 120_000L
+                else                                         -> untilNextMorningMs()
+            }
+
+            runCatching {
+                if (anyLive) pollLive() else syncToday()
+            }.onFailure { log.warn { "[WM] Poll fehlgeschlagen: ${it.message}" } }
+
+            log.info { "[WM] Nächster Poll in ${intervalMs / 1000}s (live=$anyLive, minsUntilNext=$minsUntilNext)." }
+            delay(intervalMs)
+        }
+    }
+
+    fun stop() = scope.cancel()
+
+    private suspend fun pollLive() {
+        val fixtures = tryPrimary { it.liveFixtures() } ?: return
+        fixtures.forEach { wcRepo.upsertFixture(it) }
+        log.info { "[WM] ${fixtures.size} Live-Fixture(s) aktualisiert." }
+
+        val finishedFixtures = wcRepo.findAllFixtures()
+        val scorers = tryPrimary { it.topScorers(finishedFixtures) } ?: return
+        if (scorers.isNotEmpty()) {
+            wcRepo.replaceTopScorers(scorers)
+            log.info { "[WM] ${scorers.size} TopScorer aktualisiert." }
+        }
+    }
+
+    private suspend fun syncToday() {
+        val fixtures = tryPrimary { it.todaysFixtures() }
+            ?: tryFallback { it.todaysFixtures() }
+            ?: return
+        fixtures.forEach { wcRepo.upsertFixture(it) }
+        log.info { "[WM] ${fixtures.size} heutige Fixture(s) synchronisiert." }
+    }
+
+    private suspend fun syncAll() {
+        val teams = tryPrimary { it.teams() } ?: run {
+            log.warn { "[WM] Teams konnten nicht geladen werden." }
+            return
+        }
+        teams.forEach { wcRepo.upsertTeam(it) }
+        log.info { "[WM] ${teams.size} Teams gespeichert." }
+
+        val fixtures = tryPrimary { it.allFixtures() }
+            ?: tryFallback { it.allFixtures() }
+            ?: return
+        fixtures.forEach { wcRepo.upsertFixture(it) }
+        log.info { "[WM] ${fixtures.size} Fixtures gespeichert." }
+
+        val standings = tryPrimary { it.standings() } ?: return
+        standings.forEach { wcRepo.upsertStanding(it) }
+        log.info { "[WM] ${standings.size} Standings gespeichert." }
+    }
+
+    private suspend fun <T> tryPrimary(block: suspend (WmDataSource) -> T): T? =
+        runCatching { block(primary) }
+            .onFailure { log.warn { "[WM] ${primary.sourceName} fehlgeschlagen: ${it.message}" } }
+            .getOrNull()
+
+    private suspend fun <T> tryFallback(block: suspend (WmDataSource) -> T): T? =
+        runCatching { block(fallback) }
+            .onFailure { log.error { "[WM] ${fallback.sourceName} ebenfalls fehlgeschlagen: ${it.message}" } }
+            .getOrNull()
+
+    private fun untilNextMorningMs(): Long {
+        val berlin = ZoneId.of("Europe/Berlin")
+        val now = ZonedDateTime.now(berlin)
+        val next5am = now.toLocalDate().plusDays(1).atTime(5, 0).atZone(berlin)
+        return Duration.between(now, next5am).toMillis().coerceAtLeast(600_000L)
+    }
+}

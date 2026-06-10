@@ -179,6 +179,31 @@ class PostgresWcRepository(private val dataSource: DataSource) : WcRepository {
             }
         }
 
+    override fun hasLiveFixtures(): Boolean =
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT COUNT(*) FROM wm_fixtures WHERE status IN ('FIRST_HALF','HT','SECOND_HALF','ET','BT','PEN')"
+            ).use { stmt ->
+                stmt.executeQuery().use { rs -> rs.next() && rs.getInt(1) > 0 }
+            }
+        }
+
+    override fun minutesUntilNextKickoff(): Long? =
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT kickoff_utc FROM wm_fixtures WHERE status = 'NS' AND kickoff_utc > ? ORDER BY kickoff_utc ASC LIMIT 1"
+            ).use { stmt ->
+                val now = Timestamp.from(Instant.now())
+                stmt.setTimestamp(1, now)
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) {
+                        val kickoff = rs.getTimestamp("kickoff_utc").toInstant()
+                        java.time.Duration.between(Instant.now(), kickoff).toMinutes()
+                    } else null
+                }
+            }
+        }
+
     override fun getSyncState(key: String): String? =
         dataSource.connection.use { conn ->
             conn.prepareStatement("SELECT value FROM wm_sync_state WHERE key = ?").use { stmt ->

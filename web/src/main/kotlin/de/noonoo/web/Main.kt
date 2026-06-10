@@ -29,7 +29,11 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
+import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -141,6 +145,22 @@ fun Application.module(dataSource: HikariDataSource) {
                 period = 20.seconds
                 event = ServerSentEvent(event = "ping", data = "")
             }
+
+            // Sofort einen passenden Slide für die Auswahl liefern, statt auf die globale
+            // Rotation zu warten (deren nächster passender Tick erst in vielen Minuten
+            // kommen kann – oder, bei aktuell leeren Modulen wie WM, nie).
+            val firstSlide = builder.buildFor(selectedModules) ?: Slide(
+                id = UUID.randomUUID().toString(),
+                type = "system.empty",
+                module = selectedModules.first(),
+                title = "Noch keine Inhalte",
+                generatedAt = Instant.now().toString(),
+                payload = buildJsonObject {
+                    put("message", "Für die gewählten Module liegen aktuell keine Daten vor. Wähle ein anderes Modul oder schau später wieder vorbei.")
+                }
+            )
+            send(ServerSentEvent(event = "slide", data = json.encodeToString(firstSlide)))
+
             try {
                 tickFlow
                     .filter { it.module in selectedModules }

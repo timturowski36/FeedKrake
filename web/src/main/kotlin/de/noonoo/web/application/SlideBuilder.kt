@@ -3,6 +3,8 @@ package de.noonoo.web.application
 import de.noonoo.web.adapter.db.WebRepository
 import de.noonoo.web.domain.Module
 import de.noonoo.web.domain.Slide
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -21,7 +23,10 @@ class SlideBuilder(private val repo: WebRepository) {
         "handball.scorers",
         "news.tagesschau",
         "news.heise",
-        "f1.drivers"
+        "f1.drivers",
+        "wm.fixtures",
+        "wm.standings",
+        "wm.topscorers"
     )
     private var index = 0
 
@@ -39,6 +44,20 @@ class SlideBuilder(private val repo: WebRepository) {
         repeat(rotation.size) {
             val type = rotation[index % rotation.size]
             index++
+            val slide = tryBuild(type)
+            if (slide != null) return slide
+        }
+        return null
+    }
+
+    /**
+     * Liefert sofort einen Slide für eine der gewünschten Module, ohne auf die
+     * globale Rotation zu warten – damit neu verbundene Clients mit enger
+     * Modul-Auswahl nicht erst minutenlang auf den nächsten passenden Tick warten.
+     */
+    suspend fun buildFor(modules: Set<Module>): Slide? {
+        for (type in rotation) {
+            if (moduleFor(type) !in modules) continue
             val slide = tryBuild(type)
             if (slide != null) return slide
         }
@@ -236,6 +255,91 @@ class SlideBuilder(private val repo: WebRepository) {
                                     put("constructor", r.constructor)
                                     put("points", r.points)
                                     put("wins", r.wins)
+                                })
+                            }
+                        }
+                    }
+                )
+            }
+
+            "wm.fixtures" -> {
+                val rows = repo.wmUpcomingFixtures()
+                if (rows.isEmpty()) return null
+                Slide(
+                    id = UUID.randomUUID().toString(),
+                    type = type,
+                    module = moduleFor(type),
+                    title = "WM 2026 – Spiele",
+                    generatedAt = now,
+                    payload = buildJsonObject {
+                        putJsonArray("fixtures") {
+                            rows.forEach { r ->
+                                add(buildJsonObject {
+                                    put("kickoff", r.kickoffUtc.toString())
+                                    put("round", r.round)
+                                    put("group", r.group ?: "")
+                                    put("status", r.status)
+                                    put("home", r.home)
+                                    put("away", r.away)
+                                    put("homeScore", r.homeScore?.let { JsonPrimitive(it) } ?: JsonNull)
+                                    put("awayScore", r.awayScore?.let { JsonPrimitive(it) } ?: JsonNull)
+                                })
+                            }
+                        }
+                    }
+                )
+            }
+
+            "wm.standings" -> {
+                val rows = repo.wmStandings()
+                if (rows.isEmpty()) return null
+                Slide(
+                    id = UUID.randomUUID().toString(),
+                    type = type,
+                    module = moduleFor(type),
+                    title = "WM 2026 – Gruppentabellen",
+                    generatedAt = now,
+                    payload = buildJsonObject {
+                        putJsonArray("groups") {
+                            rows.groupBy { it.group }.toSortedMap().forEach { (group, teamRows) ->
+                                add(buildJsonObject {
+                                    put("name", group)
+                                    putJsonArray("rows") {
+                                        teamRows.sortedBy { it.rank }.forEach { r ->
+                                            add(buildJsonObject {
+                                                put("rank", r.rank)
+                                                put("team", r.team)
+                                                put("played", r.played)
+                                                put("points", r.points)
+                                                put("goalDiff", r.goalsFor - r.goalsAgainst)
+                                            })
+                                        }
+                                    }
+                                })
+                            }
+                        }
+                    }
+                )
+            }
+
+            "wm.topscorers" -> {
+                val rows = repo.wmTopScorers()
+                if (rows.isEmpty()) return null
+                Slide(
+                    id = UUID.randomUUID().toString(),
+                    type = type,
+                    module = moduleFor(type),
+                    title = "WM 2026 – Torschützen",
+                    generatedAt = now,
+                    payload = buildJsonObject {
+                        putJsonArray("rows") {
+                            rows.forEach { r ->
+                                add(buildJsonObject {
+                                    put("rank", r.rank)
+                                    put("player", r.player)
+                                    put("team", r.team)
+                                    put("goals", r.goals)
+                                    put("assists", r.assists)
                                 })
                             }
                         }

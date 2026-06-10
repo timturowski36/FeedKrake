@@ -14,6 +14,7 @@ import de.noonoo.core.domain.port.input.FetchHandballDataUseCase
 import de.noonoo.core.domain.port.input.FetchHandballStatisticsUseCase
 import de.noonoo.core.domain.port.input.FetchNewsUseCase
 import de.noonoo.core.domain.port.input.FetchPubgDataUseCase
+import de.noonoo.core.domain.port.input.FetchWorldCupDataUseCase
 import de.noonoo.core.domain.port.input.QueryDataUseCase
 import de.noonoo.core.domain.port.input.QueryF1DataUseCase
 import de.noonoo.core.domain.port.input.QueryHandballStatisticsUseCase
@@ -45,6 +46,8 @@ class IngestionScheduler(
     private val queryHandballStatisticsUseCase: QueryHandballStatisticsUseCase,
     private val fetchF1UseCase: FetchF1DataUseCase,
     private val queryF1UseCase: QueryF1DataUseCase,
+    private val fetchWorldCupUseCase: FetchWorldCupDataUseCase,
+    private val wmPollingScheduler: WmPollingScheduler,
     private val f1Repository: F1Repository,
     private val newsRepository: NewsRepository,
     private val handballRepository: HandballRepository,
@@ -62,6 +65,7 @@ class IngestionScheduler(
                 "handball"             -> startHandballIngestion(module)
                 "handball_statistics"  -> startHandballStatisticsIngestion(module)
                 "formula1"             -> startF1Ingestion(module)
+                "worldcup"             -> startWorldCupIngestion(module)
                 else                   -> log.warn { "[${module.id}] Unbekannter Modultyp: ${module.type}" }
             }
             startOutputSchedules(module)
@@ -70,6 +74,7 @@ class IngestionScheduler(
 
     fun stop() {
         scope.cancel()
+        wmPollingScheduler.stop()
     }
 
     // ── Ingestion ─────────────────────────────────────────────────────────────
@@ -211,6 +216,11 @@ class IngestionScheduler(
                 delay(intervalMs)
             }
         }
+    }
+
+    private fun startWorldCupIngestion(module: ModuleConfig) {
+        log.info { "[${module.id}] Starte WM-2026-Scheduler (ESPN, adaptives Polling)..." }
+        wmPollingScheduler.start()
     }
 
     private fun isRaceWeekend(): Boolean {
