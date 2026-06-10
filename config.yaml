@@ -128,6 +128,17 @@ modules:
       fetchIntervalMinutes: 120
     outputs: []
 
+  - id: worldcup2026
+    type: worldcup
+    enabled: true
+    source: espn
+    config:
+      league: "1"
+      season: "2026"
+    schedule:
+      fetchIntervalMinutes: 60  # wird vom WmPollingScheduler ignoriert (adaptives Polling)
+    outputs: []
+
 outputs:
   discord:
     channels:

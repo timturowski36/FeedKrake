@@ -17,6 +17,8 @@ interface WcRepository {
     fun findAllStandings(): List<WcStanding>
     fun findTopScorers(limit: Int = 20): List<WcTopScorer>
     fun teamCount(): Int
+    fun hasLiveFixtures(): Boolean
+    fun minutesUntilNextKickoff(): Long?
     fun getSyncState(key: String): String?
     fun setSyncState(key: String, value: String)
 }

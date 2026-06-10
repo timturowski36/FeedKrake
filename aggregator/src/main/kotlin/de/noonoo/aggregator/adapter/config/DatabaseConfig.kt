@@ -18,11 +18,12 @@ object DatabaseConfig {
             maxLifetime = 1_800_000
         }
         val dataSource = HikariDataSource(config)
-        Flyway.configure()
+        val flyway = Flyway.configure()
             .dataSource(dataSource)
             .locations("classpath:db/migration")
             .load()
-            .migrate()
+        flyway.repair()
+        flyway.migrate()
         return dataSource
     }
 }
