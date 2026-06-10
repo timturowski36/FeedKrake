@@ -5,6 +5,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -28,13 +30,12 @@ services:
   noonoo-aggregator:
     image: ghcr.io/${GITHUB_USERNAME}/noonoo-aggregator:latest
     restart: unless-stopped
+    env_file: .env
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-    networks: [internal]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    networks: [public, internal]
     depends_on:
       postgres:
         condition: service_healthy
