@@ -1,0 +1,6 @@
+{$DOMAIN} {
+    reverse_proxy noonoo-web:8080 {
+        flush_interval -1
+        # flush_interval -1 ist WICHTIG für SSE — ohne das puffert Caddy den Stream
+    }
+}
