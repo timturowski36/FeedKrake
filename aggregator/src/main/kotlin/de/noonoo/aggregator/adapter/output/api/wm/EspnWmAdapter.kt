@@ -52,6 +52,19 @@ class EspnWmAdapter(private val http: HttpClient) : WmDataSource {
         return resp.events.mapNotNull { it.toWcFixture(::teamLookup) }
     }
 
+    override suspend fun recentFixtures(): List<WcFixture> = coroutineScope {
+        val fmt = DateTimeFormatter.ofPattern("yyyyMMdd")
+        val dates = listOf(LocalDate.now().minusDays(1), LocalDate.now()).map { it.format(fmt) }
+        dates.map { date ->
+            async {
+                runCatching {
+                    http.get("$SCOREBOARD?dates=$date").body<EspnScoreboardResponse>()
+                        .events.mapNotNull { it.toWcFixture(::teamLookup) }
+                }.getOrElse { emptyList() }
+            }
+        }.awaitAll().flatten().distinctBy { it.id }
+    }
+
     override suspend fun allFixtures(): List<WcFixture> = coroutineScope {
         wmDates().map { date ->
             async {

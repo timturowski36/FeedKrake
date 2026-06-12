@@ -25,8 +25,7 @@ import io.ktor.server.sse.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.sse.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -34,9 +33,10 @@ import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.channels.Channel
 
 @Serializable
 private data class WebAppConfig(val modules: List<WebModuleConfig>)
@@ -81,39 +81,9 @@ fun Application.module(dataSource: HikariDataSource) {
     val builder = SlideBuilder(repo)
     val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
 
-    val tickFlow = MutableSharedFlow<Slide>(
-        replay = 1,
-        extraBufferCapacity = 8,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-
-    // Globaler "Weiter"-Skip: einfache Lösung für die Einzelnutzer-Phase.
-    // Da alle Clients aus demselben tickFlow lesen, würde Pro-Client-Skip
-    // ungewollt auch für andere Clients überspringen — bei echtem Multi-User-
-    // Bedarf müsste hier auf Pro-Client-Slide-Generatoren umgestellt werden.
-    val globalSkipFlag = AtomicBoolean(false)
-
-    launch {
-        while (isActive) {
-            runCatching { builder.buildNext() }
-                .onSuccess { slide ->
-                    if (slide != null) {
-                        tickFlow.emit(slide)
-                        log.info("Slide emitted: ${slide.type} – ${slide.title}")
-                    } else {
-                        log.warn("SlideBuilder: alle Quellen leer, überspringe Tick")
-                    }
-                }
-                .onFailure { log.error("Slide build failed", it) }
-
-            // Warte 2 Minuten ODER bis zum globalen Skip-Signal
-            val deadline = System.currentTimeMillis() + 2.minutes.inWholeMilliseconds
-            while (System.currentTimeMillis() < deadline) {
-                if (globalSkipFlag.compareAndSet(true, false)) break
-                delay(200)
-            }
-        }
-    }
+    // sid → Modulauswahl + Skip-Channel (pro SSE-Client)
+    val clientModules  = ConcurrentHashMap<String, Set<Module>>()
+    val skipChannels   = ConcurrentHashMap<String, Channel<Unit>>()
 
     install(ContentNegotiation) { json(json) }
     install(CallLogging)
@@ -130,6 +100,7 @@ fun Application.module(dataSource: HikariDataSource) {
         }
 
         sse("/ambient") {
+            val sid = call.request.queryParameters["sid"] ?: UUID.randomUUID().toString()
             val modulesParam = call.request.queryParameters["modules"]
             val selectedModules: Set<Module> = if (modulesParam.isNullOrBlank()) {
                 Module.entries.toSet()
@@ -140,46 +111,54 @@ fun Application.module(dataSource: HikariDataSource) {
                     .ifEmpty { Module.entries.toSet() }
             }
 
-            log.info("SSE client verbunden (Module: ${selectedModules.joinToString { it.slug }})")
+            val skipCh = Channel<Unit>(Channel.CONFLATED)
+            clientModules[sid] = selectedModules
+            skipChannels[sid]  = skipCh
+            log.info("SSE client verbunden sid=$sid (Module: ${selectedModules.joinToString { it.slug }})")
             heartbeat {
                 period = 20.seconds
                 event = ServerSentEvent(event = "ping", data = "")
             }
 
-            // Sofort einen passenden Slide für die Auswahl liefern, statt auf die globale
-            // Rotation zu warten (deren nächster passender Tick erst in vielen Minuten
-            // kommen kann – oder, bei aktuell leeren Modulen wie WM, nie).
-            val firstSlide = builder.buildFor(selectedModules) ?: Slide(
+            fun emptySlide() = Slide(
                 id = UUID.randomUUID().toString(),
                 type = "system.empty",
                 module = selectedModules.first(),
                 title = "Noch keine Inhalte",
                 generatedAt = Instant.now().toString(),
                 payload = buildJsonObject {
-                    put("message", "Für die gewählten Module liegen aktuell keine Daten vor. Wähle ein anderes Modul oder schau später wieder vorbei.")
+                    put("message", "Für die gewählten Module liegen aktuell keine Daten vor.")
                 }
             )
-            send(ServerSentEvent(event = "slide", data = json.encodeToString(firstSlide)))
 
             try {
-                tickFlow
-                    .filter { it.module in selectedModules }
-                    .collect { slide ->
-                        send(ServerSentEvent(
-                            event = "slide",
-                            data = json.encodeToString(slide)
-                        ))
-                    }
+                // Ersten Slide sofort senden
+                val first = runCatching { builder.buildFor(selectedModules) }.getOrNull() ?: emptySlide()
+                send(ServerSentEvent(event = "slide", data = json.encodeToString(first)))
+
+                // Endlosschleife: 2 Minuten warten (oder Skip-Signal), dann nächsten Slide senden
+                while (true) {
+                    withTimeoutOrNull(2.minutes) { skipCh.receive() }
+                    val slide = runCatching { builder.buildNextFor(selectedModules) }.getOrNull()
+                        ?: runCatching { builder.buildFor(selectedModules) }.getOrNull()
+                        ?: emptySlide()
+                    send(ServerSentEvent(event = "slide", data = json.encodeToString(slide)))
+                    log.info("Slide → sid=$sid: ${slide.type}")
+                }
             } catch (e: Exception) {
-                log.debug("SSE client getrennt: ${e.message}")
+                log.debug("SSE client getrennt sid=$sid: ${e.message}")
+            } finally {
+                clientModules.remove(sid)
+                skipChannels.remove(sid)
+                skipCh.close()
             }
         }
 
         post("/skip") {
-            val sessionId = call.request.queryParameters["sid"]
+            val sid = call.request.queryParameters["sid"]
                 ?: return@post call.respond(HttpStatusCode.BadRequest, "sid missing")
-            globalSkipFlag.set(true)
-            log.debug("Skip angefordert von sid=$sessionId")
+            skipChannels[sid]?.trySend(Unit)
+            log.debug("Skip-Signal → sid=$sid")
             call.respond(HttpStatusCode.NoContent)
         }
     }

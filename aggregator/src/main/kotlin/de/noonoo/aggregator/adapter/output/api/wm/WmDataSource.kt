@@ -10,6 +10,7 @@ interface WmDataSource {
     suspend fun teams(): List<WcTeam>
     suspend fun allFixtures(): List<WcFixture>
     suspend fun todaysFixtures(): List<WcFixture>
+    suspend fun recentFixtures(): List<WcFixture> = todaysFixtures()
     suspend fun liveFixtures(): List<WcFixture>
     suspend fun standings(): List<WcStanding>
     suspend fun topScorers(finishedFixtures: List<WcFixture>): List<WcTopScorer>

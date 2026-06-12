@@ -10,6 +10,8 @@ modules:
       - "philipnc"
       - "chrissi1970"
       - "Alxndr_D"
+      - "Libaty"
+      - "EinfachDen"
     accountIds:
       - "account.af4b877b95df46a3804d38d8be1d3225"
     schedule:
@@ -71,7 +73,7 @@ modules:
     source: openligadb
     config:
       league: bl1
-      season: "2024"
+      season: "2025"
     schedule:
       fetchIntervalMinutes: 60
     outputs: []
@@ -82,7 +84,7 @@ modules:
     source: openligadb
     config:
       league: bl2
-      season: "2024"
+      season: "2025"
     schedule:
       fetchIntervalMinutes: 60
     outputs: []
