@@ -32,7 +32,7 @@ class WmPollingScheduler(
             }
 
             runCatching {
-                if (anyLive) pollLive() else syncToday()
+                if (anyLive) pollLive() else syncRecent()
             }.onFailure { log.warn { "[WM] Poll fehlgeschlagen: ${it.message}" } }
 
             log.info { "[WM] Nächster Poll in ${intervalMs / 1000}s (live=$anyLive, minsUntilNext=$minsUntilNext)." }
@@ -61,6 +61,20 @@ class WmPollingScheduler(
             ?: return
         fixtures.forEach { wcRepo.upsertFixture(it) }
         log.info { "[WM] ${fixtures.size} heutige Fixture(s) synchronisiert." }
+    }
+
+    // Holt auch den Vortag, damit gestrige Endresultate nach dem Morgen-Wakeup aktuell sind.
+    private suspend fun syncRecent() {
+        val fixtures = tryPrimary { it.recentFixtures() }
+            ?: tryFallback { it.todaysFixtures() }
+            ?: return
+        fixtures.forEach { wcRepo.upsertFixture(it) }
+
+        // Standings nach Spieltag aktualisieren
+        val standings = tryPrimary { it.standings() }
+        standings?.forEach { wcRepo.upsertStanding(it) }
+
+        log.info { "[WM] ${fixtures.size} Fixture(s) (heute + gestern) synchronisiert, Standings aktualisiert." }
     }
 
     private suspend fun syncAll() {

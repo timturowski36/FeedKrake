@@ -15,11 +15,23 @@ data class Slide(
 
 @Serializable
 enum class Module {
-    BUNDESLIGA, PUBG, WM, F1, HANDBALL, NEWS;
+    WM,
+    BUNDESLIGA_1,
+    BUNDESLIGA_2,
+    PUBG_BROTRUSTGAMING,
+    PUBG_ALXNDR_D,
+    PUBG_LIBATY,
+    PUBG_PHILIPNC,
+    PUBG_EINFACHDEN,
+    PUBG_CHRISSI1970,
+    F1,
+    NEWS_TAGESSCHAU,
+    NEWS_HEISE;
 
-    val slug: String get() = name.lowercase()
+    val slug: String get() = name.lowercase().replace('_', '-')
 
     companion object {
-        fun fromSlug(s: String): Module? = entries.firstOrNull { it.slug == s }
+        fun fromSlug(s: String): Module? =
+            entries.firstOrNull { it.slug == s }
     }
 }

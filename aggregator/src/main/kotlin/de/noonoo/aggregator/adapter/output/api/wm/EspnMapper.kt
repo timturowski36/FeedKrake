@@ -12,11 +12,12 @@ fun EspnStatusType.toWcStatus(period: Int): WcFixtureStatus = when (name) {
     "STATUS_IN_PROGRESS" -> if (period <= 1) WcFixtureStatus.FIRST_HALF else WcFixtureStatus.SECOND_HALF
     "STATUS_HALFTIME"    -> WcFixtureStatus.HT
     "STATUS_FINAL"       -> WcFixtureStatus.FT
+    "STATUS_FULL_TIME"   -> WcFixtureStatus.FT
     "STATUS_FINAL_AET"   -> WcFixtureStatus.AET
     "STATUS_FINAL_PEN"   -> WcFixtureStatus.PEN
     "STATUS_POSTPONED"   -> WcFixtureStatus.PST
     "STATUS_CANCELLED"   -> WcFixtureStatus.CANC
-    else                 -> WcFixtureStatus.NS
+    else                 -> if (completed) WcFixtureStatus.FT else WcFixtureStatus.NS
 }
 
 fun EspnEvent.toWcFixture(teamLookup: (String) -> WcTeam?): WcFixture? {
