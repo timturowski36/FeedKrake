@@ -28,6 +28,7 @@ class WmPollingScheduler(
             val intervalMs = when {
                 anyLive                                      -> 60_000L
                 minsUntilNext != null && minsUntilNext < 15 -> 120_000L
+                minsUntilNext != null                        -> ((minsUntilNext - 30) * 60_000L).coerceIn(600_000L, untilNextMorningMs())
                 else                                         -> untilNextMorningMs()
             }
 
