@@ -17,7 +17,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /build/aggregator/build/install/aggregator .
 
-# Pre-install Playwright browsers during build (needs internet at build time)
-RUN java -cp "lib/*" com.microsoft.playwright.CLI install chromium
-
 CMD ["bin/aggregator"]
