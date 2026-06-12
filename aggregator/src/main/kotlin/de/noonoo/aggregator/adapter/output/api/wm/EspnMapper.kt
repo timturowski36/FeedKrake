@@ -1,5 +1,6 @@
 package de.noonoo.aggregator.adapter.output.api.wm
 
+import de.noonoo.core.domain.model.WcEvent
 import de.noonoo.core.domain.model.WcFixture
 import de.noonoo.core.domain.model.WcFixtureStatus
 import de.noonoo.core.domain.model.WcStanding
@@ -91,6 +92,73 @@ fun List<EspnKeyEvent>.aggregateTopScorers(teamLookup: (String) -> WcTeam?): Lis
                 fetchedAt  = now
             )
         }
+}
+
+fun List<Pair<Int, EspnDetail>>.aggregateTopScorersFromDetails(teamLookup: (String) -> WcTeam?): List<WcTopScorer> {
+    val now = Instant.now()
+    return filter { (_, d) -> d.scoringPlay && !d.ownGoal }
+        .groupBy { (_, d) -> d.athletesInvolved.firstOrNull()?.displayName ?: "" }
+        .filter { it.key.isNotBlank() }
+        .map { (player, entries) ->
+            val teamId = entries.firstOrNull()?.second?.team?.id ?: ""
+            val team = teamLookup(teamId)
+            Triple(player, team, entries.size)
+        }
+        .sortedByDescending { it.third }
+        .mapIndexed { idx, (player, team, goals) ->
+            WcTopScorer(
+                rank       = idx + 1,
+                playerName = player,
+                teamId     = team?.id ?: 0,
+                teamName   = team?.name ?: "",
+                goals      = goals,
+                assists    = 0,
+                fetchedAt  = now
+            )
+        }
+}
+
+fun List<Pair<Int, EspnDetail>>.aggregateCardEventsFromDetails(teamLookup: (String) -> WcTeam?): List<WcEvent> {
+    val now = Instant.now()
+    return mapNotNull { (fixtureId, d) ->
+        val eventType = when {
+            d.redCard && d.yellowCard -> "YELLOW_RED"
+            d.redCard                 -> "RED"
+            d.yellowCard              -> "YELLOW"
+            else                      -> return@mapNotNull null
+        }
+        WcEvent(
+            fixtureId  = fixtureId,
+            eventType  = eventType,
+            playerName = d.athletesInvolved.firstOrNull()?.displayName,
+            teamName   = d.team?.id?.let { teamLookup(it) }?.name,
+            minute     = d.clock?.displayValue?.substringBefore("'")?.trimEnd('+')?.toIntOrNull(),
+            detail     = d.type?.text,
+            fetchedAt  = now
+        )
+    }
+}
+
+fun List<EspnKeyEvent>.aggregateCardEvents(fixtureId: Int, teamLookup: (String) -> WcTeam?): List<WcEvent> {
+    val now = Instant.now()
+    return mapNotNull { event ->
+        val typeText = event.type?.text ?: return@mapNotNull null
+        val eventType = when {
+            typeText.contains("Yellow-Red", ignoreCase = true) -> "YELLOW_RED"
+            typeText.contains("Red Card", ignoreCase = true)   -> "RED"
+            typeText.contains("Yellow Card", ignoreCase = true) -> "YELLOW"
+            else -> return@mapNotNull null
+        }
+        WcEvent(
+            fixtureId  = fixtureId,
+            eventType  = eventType,
+            playerName = event.athletesInvolved.firstOrNull()?.displayName,
+            teamName   = event.team?.let { teamLookup(it.abbreviation) }?.name,
+            minute     = event.clock?.displayValue?.substringBefore(":")?.toIntOrNull(),
+            detail     = typeText,
+            fetchedAt  = now
+        )
+    }
 }
 
 fun OpenFootballResponse.toWcFixtures(teamLookup: (String) -> WcTeam?): List<WcFixture> {

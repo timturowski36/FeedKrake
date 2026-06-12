@@ -1,5 +1,6 @@
 package de.noonoo.aggregator.adapter.output.api.wm
 
+import de.noonoo.core.domain.model.WcEvent
 import de.noonoo.core.domain.model.WcFixture
 import de.noonoo.core.domain.model.WcFixtureStatus
 import de.noonoo.core.domain.model.WcStanding
@@ -13,6 +14,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val log = KotlinLogging.logger {}
@@ -25,10 +27,12 @@ class EspnWmAdapter(private val http: HttpClient) : WmDataSource {
     private val SUMMARY    = "https://site.web.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary"
     private val STANDINGS  = "https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings"
 
-    private fun teamLookup(code: String): WcTeam? =
-        EspnTeamSeed.byEspnCode(code)
+    private fun teamLookup(code: String): WcTeam? {
+        if (code.isBlank()) return null
+        return EspnTeamSeed.byEspnCode(code)
             ?.let { EspnTeamSeed.toWcTeam(it) }
             .also { if (it == null && !isKoPlaceholder(code)) log.warn { "[WM-ESPN] Unbekannter ESPN-Code: '$code' — EspnTeamSeed ergänzen!" } }
+    }
 
     // K.O.-Platzhalter wie "1A", "2B", "RD32", "QFW1", "SFW1", "RD16 W3" → kein Warning
     private fun isKoPlaceholder(code: String): Boolean =
@@ -84,22 +88,58 @@ class EspnWmAdapter(private val http: HttpClient) : WmDataSource {
         }
     }
 
-    override suspend fun topScorers(finishedFixtures: List<WcFixture>): List<WcTopScorer> = coroutineScope {
-        val relevantFixtures = finishedFixtures.filter {
+    override suspend fun topScorers(finishedFixtures: List<WcFixture>): List<WcTopScorer> {
+        val details = fetchFinishedDetails(finishedFixtures)
+        return details.aggregateTopScorersFromDetails(::teamLookupById)
+    }
+
+    override suspend fun cardEvents(finishedFixtures: List<WcFixture>): List<WcEvent> {
+        val details = fetchFinishedDetails(finishedFixtures)
+        return details.aggregateCardEventsFromDetails(::teamLookupById)
+    }
+
+    private suspend fun fetchFinishedDetails(finishedFixtures: List<WcFixture>): List<Pair<Int, EspnDetail>> = coroutineScope {
+        val relevant = finishedFixtures.filter {
             it.status == WcFixtureStatus.FT || it.status == WcFixtureStatus.AET || it.status == WcFixtureStatus.PEN
         }
-        if (relevantFixtures.isEmpty()) return@coroutineScope emptyList()
+        if (relevant.isEmpty()) return@coroutineScope emptyList()
 
-        val allEvents = relevantFixtures.map { fix ->
+        val berlin = ZoneId.of("Europe/Berlin")
+        val fmt = DateTimeFormatter.ofPattern("yyyyMMdd")
+        val dates = relevant.map { it.kickoffUtc.atZone(berlin).toLocalDate().format(fmt) }.distinct()
+
+        val scoreboards = dates.map { date ->
             async {
                 runCatching {
-                    http.get("$SUMMARY?event=${fix.id}").body<EspnSummaryResponse>().keyEvents
-                }.onFailure { log.warn { "[WM-ESPN] Summary für Fixture ${fix.id} fehlgeschlagen: ${it.message}" } }
+                    http.get("$SCOREBOARD?dates=$date").body<EspnScoreboardResponse>().events
+                }.onFailure { log.warn { "[WM-ESPN] Scoreboard $date fehlgeschlagen: ${it.message}" } }
                     .getOrElse { emptyList() }
             }
         }.awaitAll().flatten()
 
-        allEvents.aggregateTopScorers(::teamLookup)
+        // ID → abbreviation aus Competitor-Daten aufbauen
+        scoreboards.forEach { ev ->
+            ev.competitions.firstOrNull()?.competitors?.forEach { c ->
+                if (c.team.id.isNotBlank() && c.team.abbreviation.isNotBlank())
+                    teamIdToAbbrev[c.team.id] = c.team.abbreviation
+            }
+        }
+
+        scoreboards.flatMap { ev ->
+            val fixtureId = ev.id.toIntOrNull() ?: return@flatMap emptyList()
+            val comp = ev.competitions.firstOrNull() ?: return@flatMap emptyList()
+            val status = ev.status.type.toWcStatus(ev.status.period)
+            if (status != WcFixtureStatus.FT && status != WcFixtureStatus.AET && status != WcFixtureStatus.PEN)
+                return@flatMap emptyList()
+            comp.details.map { fixtureId to it }
+        }
+    }
+
+    private val teamIdToAbbrev = mutableMapOf<String, String>()
+
+    private fun teamLookupById(teamId: String): WcTeam? {
+        val abbrev = teamIdToAbbrev[teamId] ?: return null
+        return teamLookup(abbrev)
     }
 
     private fun wmDates(): List<String> {

@@ -1,5 +1,6 @@
 package de.noonoo.core.domain.port.output
 
+import de.noonoo.core.domain.model.WcEvent
 import de.noonoo.core.domain.model.WcFixture
 import de.noonoo.core.domain.model.WcStanding
 import de.noonoo.core.domain.model.WcTeam
@@ -11,6 +12,7 @@ interface WcRepository {
     fun upsertFixture(fixture: WcFixture)
     fun upsertStanding(standing: WcStanding)
     fun replaceTopScorers(scorers: List<WcTopScorer>)
+    fun replaceEvents(events: List<WcEvent>)
     fun findAllTeams(): List<WcTeam>
     fun findAllFixtures(): List<WcFixture>
     fun findFixturesByDate(date: LocalDate): List<WcFixture>

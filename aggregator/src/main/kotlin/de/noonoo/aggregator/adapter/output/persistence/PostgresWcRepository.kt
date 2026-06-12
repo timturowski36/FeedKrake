@@ -1,5 +1,6 @@
 package de.noonoo.aggregator.adapter.output.persistence
 
+import de.noonoo.core.domain.model.WcEvent
 import de.noonoo.core.domain.model.WcFixture
 import de.noonoo.core.domain.model.WcFixtureStatus
 import de.noonoo.core.domain.model.WcStanding
@@ -119,6 +120,40 @@ class PostgresWcRepository(private val dataSource: DataSource) : WcRepository {
                             stmt.setInt(1, s.rank); stmt.setString(2, s.playerName)
                             stmt.setInt(3, s.teamId); stmt.setString(4, s.teamName)
                             stmt.setInt(5, s.goals); stmt.setInt(6, s.assists)
+                            stmt.setTimestamp(7, now)
+                            stmt.addBatch()
+                        }
+                        stmt.executeBatch()
+                    }
+                }
+                conn.commit()
+            } catch (e: Exception) {
+                conn.rollback()
+                throw e
+            } finally {
+                conn.autoCommit = true
+            }
+        }
+    }
+
+    override fun replaceEvents(events: List<WcEvent>) {
+        dataSource.connection.use { conn ->
+            conn.autoCommit = false
+            try {
+                conn.createStatement().use { it.executeUpdate("DELETE FROM wm_events") }
+                if (events.isNotEmpty()) {
+                    val now = Timestamp.from(Instant.now())
+                    conn.prepareStatement("""
+                        INSERT INTO wm_events (fixture_id, event_type, player_name, team_name, minute, detail, fetched_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """.trimIndent()).use { stmt ->
+                        for (e in events) {
+                            stmt.setInt(1, e.fixtureId)
+                            stmt.setString(2, e.eventType)
+                            stmt.setString(3, e.playerName)
+                            stmt.setString(4, e.teamName)
+                            e.minute?.let { stmt.setInt(5, it) } ?: stmt.setNull(5, java.sql.Types.INTEGER)
+                            stmt.setString(6, e.detail)
                             stmt.setTimestamp(7, now)
                             stmt.addBatch()
                         }

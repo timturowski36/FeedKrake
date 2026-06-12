@@ -28,6 +28,7 @@ class WmPollingScheduler(
             val intervalMs = when {
                 anyLive                                      -> 60_000L
                 minsUntilNext != null && minsUntilNext < 15 -> 120_000L
+                minsUntilNext != null                        -> ((minsUntilNext - 10) * 60_000L).coerceAtLeast(60_000L)
                 else                                         -> untilNextMorningMs()
             }
 
@@ -53,6 +54,11 @@ class WmPollingScheduler(
             wcRepo.replaceTopScorers(scorers)
             log.info { "[WM] ${scorers.size} TopScorer aktualisiert." }
         }
+        val events = tryPrimary { it.cardEvents(finishedFixtures) }
+        if (!events.isNullOrEmpty()) {
+            wcRepo.replaceEvents(events)
+            log.info { "[WM] ${events.size} Karten-Events (live) aktualisiert." }
+        }
     }
 
     private suspend fun syncToday() {
@@ -70,9 +76,20 @@ class WmPollingScheduler(
             ?: return
         fixtures.forEach { wcRepo.upsertFixture(it) }
 
-        // Standings nach Spieltag aktualisieren
         val standings = tryPrimary { it.standings() }
         standings?.forEach { wcRepo.upsertStanding(it) }
+
+        val finishedFixtures = wcRepo.findAllFixtures()
+        val scorers = tryPrimary { it.topScorers(finishedFixtures) }
+        if (!scorers.isNullOrEmpty()) {
+            wcRepo.replaceTopScorers(scorers)
+            log.info { "[WM] ${scorers.size} TopScorer aktualisiert." }
+        }
+        val events = tryPrimary { it.cardEvents(finishedFixtures) }
+        if (!events.isNullOrEmpty()) {
+            wcRepo.replaceEvents(events)
+            log.info { "[WM] ${events.size} Karten-Events aktualisiert." }
+        }
 
         log.info { "[WM] ${fixtures.size} Fixture(s) (heute + gestern) synchronisiert, Standings aktualisiert." }
     }
@@ -94,6 +111,18 @@ class WmPollingScheduler(
         val standings = tryPrimary { it.standings() } ?: return
         standings.forEach { wcRepo.upsertStanding(it) }
         log.info { "[WM] ${standings.size} Standings gespeichert." }
+
+        val finishedFixtures = wcRepo.findAllFixtures()
+        val scorers = tryPrimary { it.topScorers(finishedFixtures) }
+        if (!scorers.isNullOrEmpty()) {
+            wcRepo.replaceTopScorers(scorers)
+            log.info { "[WM] ${scorers.size} TopScorer initialisiert." }
+        }
+        val events = tryPrimary { it.cardEvents(finishedFixtures) }
+        if (!events.isNullOrEmpty()) {
+            wcRepo.replaceEvents(events)
+            log.info { "[WM] ${events.size} Karten-Events initialisiert." }
+        }
     }
 
     private suspend fun <T> tryPrimary(block: suspend (WmDataSource) -> T): T? =

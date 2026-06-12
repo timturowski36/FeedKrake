@@ -121,15 +121,20 @@ class SlideBuilder(private val repo: WebRepository) {
         return null
     }
 
-    /** Erster passender Slide für die Module — für den initialen SSE-Slide beim Verbinden. Verändert den Index nicht. */
+    /** Erster passender Slide für die Module — für den initialen SSE-Slide beim Verbinden. */
     suspend fun buildFor(modules: Set<Module>): Slide? {
         val live = runCatching { tryBuild("wm.live") }.getOrNull()
         if (live != null && modules.any { it in WM_MODULES }) return live
 
-        for (type in rotation) {
+        for (i in 0 until rotation.size) {
+            val current = (index + i) % rotation.size
+            val type = rotation[current]
             if (moduleFor(type) !in modules) continue
             val slide = runCatching { tryBuild(type) }.getOrNull()
-            if (slide != null) return slide
+            if (slide != null) {
+                index = (current + 1) % rotation.size
+                return slide
+            }
         }
         return null
     }
