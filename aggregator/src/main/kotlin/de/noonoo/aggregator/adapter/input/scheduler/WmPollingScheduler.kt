@@ -54,11 +54,6 @@ class WmPollingScheduler(
             wcRepo.replaceTopScorers(scorers)
             log.info { "[WM] ${scorers.size} TopScorer aktualisiert." }
         }
-        val events = tryPrimary { it.cardEvents(finishedFixtures) }
-        if (!events.isNullOrEmpty()) {
-            wcRepo.replaceEvents(events)
-            log.info { "[WM] ${events.size} Karten-Events (live) aktualisiert." }
-        }
     }
 
     private suspend fun syncToday() {
@@ -76,6 +71,7 @@ class WmPollingScheduler(
             ?: return
         fixtures.forEach { wcRepo.upsertFixture(it) }
 
+        // Standings nach Spieltag aktualisieren
         val standings = tryPrimary { it.standings() }
         standings?.forEach { wcRepo.upsertStanding(it) }
 
