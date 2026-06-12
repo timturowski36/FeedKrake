@@ -43,14 +43,20 @@ private val MAP_ABBR = mapOf(
     "Rondo" to "Ron", "Miramar" to "Mir", "Sanhok" to "San", "Karakin" to "Kar"
 )
 
+private val WM_MODULES = setOf(
+    Module.WM_NAECHSTE_SPIELE, Module.WM_LETZTE_ERGEBNISSE, Module.WM_GRUPPEN,
+    Module.WM_DEUTSCHLAND, Module.WM_TORSCHUETZEN, Module.WM_KARTEN
+)
+
 class SlideBuilder(private val repo: WebRepository) {
 
     private val rotation: List<String> = buildList {
-        // WM (live is checked separately as priority interrupt)
+        // WM
         add("wm.fixtures")
         add("wm.results")
         for (i in 0..5) add("wm.standings.$i")
         add("wm.topscorers")
+        add("wm.karten")
         add("wm.de.next")
         add("wm.de.last")
         // F1
@@ -63,10 +69,11 @@ class SlideBuilder(private val repo: WebRepository) {
         add("football.bl1.scorers")
         add("football.bl2")
         add("football.bl2.scorers")
-        // PUBG per player
+        // PUBG per player: weekly, daily, recent, records
         for (slug in PUBG_SLUGS) {
             add("pubg.weekly.$slug")
             add("pubg.daily.$slug")
+            add("pubg.recent.$slug")
             add("pubg.records.$slug")
         }
         // News
@@ -74,41 +81,50 @@ class SlideBuilder(private val repo: WebRepository) {
         add("news.heise")
     }
 
+    // Index points to the NEXT slot to show. Advances only after a slide is actually returned.
     private var index = 0
 
     private fun moduleFor(type: String): Module = when {
-        type == "wm.results" -> Module.WM
-        type.startsWith("wm.") -> Module.WM
-        type.startsWith("football.bl1") -> Module.BUNDESLIGA_1
-        type.startsWith("football.bl2") -> Module.BUNDESLIGA_2
+        type == "wm.fixtures"                          -> Module.WM_NAECHSTE_SPIELE
+        type == "wm.results"                           -> Module.WM_LETZTE_ERGEBNISSE
+        type.startsWith("wm.standings.")               -> Module.WM_GRUPPEN
+        type == "wm.de.next" || type == "wm.de.last"  -> Module.WM_DEUTSCHLAND
+        type == "wm.topscorers"                        -> Module.WM_TORSCHUETZEN
+        type == "wm.karten"                            -> Module.WM_KARTEN
+        type.startsWith("football.bl1")                -> Module.BUNDESLIGA_1
+        type.startsWith("football.bl2")                -> Module.BUNDESLIGA_2
         type.startsWith("pubg.") -> {
             val slug = type.substringAfterLast(".")
             PUBG_SLUG_TO_MODULE[slug] ?: error("Unbekannter PUBG-Slug: $slug")
         }
-        type.startsWith("f1.") -> Module.F1
-        type == "news.tagesschau" -> Module.NEWS_TAGESSCHAU
-        type == "news.heise" -> Module.NEWS_HEISE
+        type == "f1.next"          -> Module.F1_NAECHSTES_RENNEN
+        type == "f1.last.result"   -> Module.F1_LETZTES_RENNEN
+        type == "f1.drivers"       -> Module.F1_FAHRER
+        type == "f1.constructors"  -> Module.F1_KONSTRUKTEURE
+        type == "news.tagesschau"  -> Module.NEWS_TAGESSCHAU
+        type == "news.heise"       -> Module.NEWS_HEISE
         else -> error("Unbekannter Slide-Typ ohne Modul-Zuordnung: $type")
     }
 
     suspend fun buildNext(): Slide? {
-        // Priority interrupt: live WM game
         val live = runCatching { tryBuild("wm.live") }.getOrNull()
         if (live != null) return live
 
-        repeat(rotation.size) {
-            val type = rotation[index % rotation.size]
-            index++
-            val slide = runCatching { tryBuild(type) }.getOrNull()
-            if (slide != null) return slide
+        for (i in 0 until rotation.size) {
+            val current = (index + i) % rotation.size
+            val slide = runCatching { tryBuild(rotation[current]) }.getOrNull()
+            if (slide != null) {
+                index = (current + 1) % rotation.size
+                return slide
+            }
         }
         return null
     }
 
-    /** Erster passender Slide für die Module — für den initialen SSE-Slide beim Verbinden. */
+    /** Erster passender Slide für die Module — für den initialen SSE-Slide beim Verbinden. Verändert den Index nicht. */
     suspend fun buildFor(modules: Set<Module>): Slide? {
         val live = runCatching { tryBuild("wm.live") }.getOrNull()
-        if (live != null && Module.WM in modules) return live
+        if (live != null && modules.any { it in WM_MODULES }) return live
 
         for (type in rotation) {
             if (moduleFor(type) !in modules) continue
@@ -118,17 +134,20 @@ class SlideBuilder(private val repo: WebRepository) {
         return null
     }
 
-    /** Nächster passender Slide für die Module — treibt den globalen Index voran (für Skip). */
+    /** Nächster passender Slide für die Module — treibt den globalen Index voran. */
     suspend fun buildNextFor(modules: Set<Module>): Slide? {
         val live = runCatching { tryBuild("wm.live") }.getOrNull()
-        if (live != null && Module.WM in modules) return live
+        if (live != null && modules.any { it in WM_MODULES }) return live
 
-        repeat(rotation.size) {
-            val type = rotation[index % rotation.size]
-            index++
-            if (moduleFor(type) !in modules) return@repeat
+        for (i in 0 until rotation.size) {
+            val current = (index + i) % rotation.size
+            val type = rotation[current]
+            if (moduleFor(type) !in modules) continue
             val slide = runCatching { tryBuild(type) }.getOrNull()
-            if (slide != null) return slide
+            if (slide != null) {
+                index = (current + 1) % rotation.size
+                return slide
+            }
         }
         return null
     }
@@ -151,7 +170,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 }
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.WM, title = "🔴 LIVE — WM 2026",
+                    module = Module.WM_NAECHSTE_SPIELE, title = "🔴 LIVE — WM 2026",
                     generatedAt = now,
                     payload = buildJsonObject {
                         put("statusLabel", statusLabel)
@@ -170,7 +189,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 if (rows.isEmpty()) return null
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.WM, title = "WM 2026 – Nächste Spiele",
+                    module = Module.WM_NAECHSTE_SPIELE, title = "WM 2026 – Nächste Spiele",
                     generatedAt = now,
                     payload = buildJsonObject {
                         putJsonArray("fixtures") {
@@ -197,7 +216,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 if (rows.isEmpty()) return null
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.WM, title = "WM 2026 – Ergebnisse",
+                    module = Module.WM_LETZTE_ERGEBNISSE, title = "WM 2026 – Ergebnisse",
                     generatedAt = now,
                     payload = buildJsonObject {
                         putJsonArray("fixtures") {
@@ -233,7 +252,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 val pairLabel = if (g2name != null) "Gruppe $g1name + Gruppe $g2name" else "Gruppe $g1name"
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.WM, title = "WM 2026 – $pairLabel",
+                    module = Module.WM_GRUPPEN, title = "WM 2026 – $pairLabel",
                     generatedAt = now,
                     payload = buildJsonObject {
                         putJsonArray("groups") {
@@ -269,7 +288,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 if (rows.isEmpty()) return null
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.WM, title = "⚽ Torschützen — FIFA WM 2026",
+                    module = Module.WM_TORSCHUETZEN, title = "⚽ Torschützen — FIFA WM 2026",
                     generatedAt = now,
                     payload = buildJsonObject {
                         putJsonArray("rows") {
@@ -287,6 +306,24 @@ class SlideBuilder(private val repo: WebRepository) {
                 )
             }
 
+            // ── WM Karten-Statistik ───────────────────────────────────────────
+            type == "wm.karten" -> {
+                val cards = repo.wmCardStats() ?: return null
+                Slide(
+                    id = UUID.randomUUID().toString(), type = type,
+                    module = Module.WM_KARTEN, title = "🟨 Karten-Statistik — FIFA WM 2026",
+                    generatedAt = now,
+                    payload = buildJsonObject {
+                        putJsonArray("yellow") {
+                            cards.yellow.forEach { c -> add(buildJsonObject { put("player", c.player); put("team", c.team); put("count", c.count) }) }
+                        }
+                        putJsonArray("red") {
+                            cards.red.forEach { c -> add(buildJsonObject { put("player", c.player); put("team", c.team); put("count", c.count) }) }
+                        }
+                    }
+                )
+            }
+
             // ── WM Deutschland Highlight ──────────────────────────────────────
             type == "wm.de.next" -> {
                 val f = repo.wmGermanyNextFixture() ?: return null
@@ -295,7 +332,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 val kickoff = DATE_FMT.format(f.kickoffUtc)
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.WM, title = "🇩🇪 Deutschland – Nächstes Spiel",
+                    module = Module.WM_DEUTSCHLAND, title = "🇩🇪 Deutschland – Nächstes Spiel",
                     generatedAt = now,
                     payload = buildJsonObject {
                         put("opponent", opponent)
@@ -315,7 +352,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 val kickoff = DATE_SHORT.format(f.kickoffUtc)
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.WM, title = "🇩🇪 Deutschland – Letztes Ergebnis",
+                    module = Module.WM_DEUTSCHLAND, title = "🇩🇪 Deutschland – Letztes Ergebnis",
                     generatedAt = now,
                     payload = buildJsonObject {
                         put("opponent", opponent)
@@ -344,7 +381,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 )
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.F1,
+                    module = Module.F1_NAECHSTES_RENNEN,
                     title = "🏎 Nächster Grand Prix: ${r.raceName}",
                     generatedAt = now,
                     payload = buildJsonObject {
@@ -364,7 +401,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 if (rows.isEmpty()) return null
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.F1, title = "🏁 Formel 1 – Fahrerwertung",
+                    module = Module.F1_FAHRER, title = "🏁 Formel 1 – Fahrerwertung",
                     generatedAt = now,
                     payload = buildJsonObject {
                         putJsonArray("rows") {
@@ -388,7 +425,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 if (rows.isEmpty()) return null
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.F1, title = "🏗 Formel 1 – Konstrukteurswertung",
+                    module = Module.F1_KONSTRUKTEURE, title = "🏗 Formel 1 – Konstrukteurswertung",
                     generatedAt = now,
                     payload = buildJsonObject {
                         putJsonArray("rows") {
@@ -411,7 +448,7 @@ class SlideBuilder(private val repo: WebRepository) {
                 if (results.isEmpty()) return null
                 Slide(
                     id = UUID.randomUUID().toString(), type = type,
-                    module = Module.F1,
+                    module = Module.F1_LETZTES_RENNEN,
                     title = "🏁 ${info.season} – Rennen ${info.round}: ${info.raceName}",
                     generatedAt = now,
                     payload = buildJsonObject {
@@ -449,7 +486,7 @@ class SlideBuilder(private val repo: WebRepository) {
                     payload = buildJsonObject {
                         put("season", seasonLabel)
                         putJsonArray("rows") {
-                            entries.take(10).forEach { (_, r) ->
+                            entries.forEach { (_, r) ->
                                 add(buildJsonObject {
                                     put("position", r.position)
                                     put("team", r.team)
@@ -479,7 +516,7 @@ class SlideBuilder(private val repo: WebRepository) {
                     payload = buildJsonObject {
                         put("season", seasonLabel)
                         putJsonArray("rows") {
-                            entries.take(10).forEach { (_, r) ->
+                            entries.forEach { (_, r) ->
                                 add(buildJsonObject {
                                     put("position", r.position)
                                     put("team", r.team)

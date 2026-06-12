@@ -462,6 +462,24 @@
       color: var(--color-text-muted);
     }
 
+    /* ── Bundesliga Zwei-Spalten ────────────────────────────────────────────── */
+    .bl-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-8);
+      flex: 1;
+      min-height: 0;
+    }
+    .bl-two-col .data-table {
+      font-size: clamp(0.6rem, 1.1vw, 0.85rem);
+    }
+    .bl-two-col .data-table thead th {
+      font-size: clamp(0.55rem, 0.85vw, 0.7rem);
+    }
+    @media (max-width: 599px) {
+      .bl-two-col { grid-template-columns: 1fr; }
+    }
+
     /* ── View Transitions ───────────────────────────────────────────────────── */
     ::view-transition-old(slide) {
       animation: slide-out 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
@@ -525,7 +543,14 @@
     // ── Menü-Struktur ─────────────────────────────────────────────────────────
 
     const MENU = [
-      { key: "wm",         label: "WM",         slug: "wm" },
+      { key: "wm", label: "WM ▾", children: [
+          { slug: "wm-naechste-spiele",   label: "Nächste Spiele" },
+          { slug: "wm-letzte-ergebnisse", label: "Letzte Ergebnisse" },
+          { slug: "wm-gruppen",           label: "Gruppenstände" },
+          { slug: "wm-deutschland",       label: "🇩🇪 Deutschland" },
+          { slug: "wm-torschuetzen",      label: "Torschützen" },
+          { slug: "wm-karten",            label: "Karten" }
+      ]},
       { key: "bundesliga", label: "Bundesliga ▾", children: [
           { slug: "bundesliga-1", label: "1. Bundesliga" },
           { slug: "bundesliga-2", label: "2. Bundesliga" }
@@ -538,7 +563,12 @@
           { slug: "pubg-einfachden",     label: "EinfachDen" },
           { slug: "pubg-chrissi1970",    label: "chrissi1970" }
       ]},
-      { key: "f1",   label: "F1",    slug: "f1" },
+      { key: "f1", label: "F1 ▾", children: [
+          { slug: "f1-naechstes-rennen", label: "Nächstes Rennen" },
+          { slug: "f1-letztes-rennen",   label: "Letztes Rennen" },
+          { slug: "f1-fahrer",           label: "Fahrerwertung" },
+          { slug: "f1-konstrukteure",    label: "Konstrukteurswertung" }
+      ]},
       { key: "news", label: "News ▾", children: [
           { slug: "news-tagesschau", label: "Tagesschau" },
           { slug: "news-heise",      label: "Heise" }
@@ -546,7 +576,12 @@
     ];
 
     const ALL_MODULES = MENU.flatMap(g => g.children ? g.children.map(c => c.slug) : [g.slug]);
-    const DEFAULT_MODULES = new Set(["wm","bundesliga-1","bundesliga-2","pubg-philipnc","f1","news-tagesschau","news-heise"]);
+    const DEFAULT_MODULES = new Set([
+      "wm-naechste-spiele","wm-letzte-ergebnisse","wm-gruppen","wm-deutschland","wm-torschuetzen",
+      "bundesliga-1","bundesliga-2","pubg-philipnc",
+      "f1-naechstes-rennen","f1-letztes-rennen","f1-fahrer","f1-konstrukteure",
+      "news-tagesschau","news-heise"
+    ]);
     const STORAGE_KEY = "noonoo.modules";
     const EMPTY_FALLBACK_MS = 10_000;
 
@@ -836,6 +871,28 @@
           </tr></thead><tbody>${rows}</tbody></table>` + ft(s.generatedAt, "ESPN");
       }
 
+      // WM Karten-Statistik
+      if (s.type === "wm.karten") {
+        function cardRows(entries) {
+          return (entries || []).slice(0,10).map(c => `<tr>
+            <td class="col-name">${esc(c.player)}</td>
+            <td style="color:var(--color-text-secondary)">${esc(c.team)}</td>
+            <td class="col-num col-hl">${c.count}</td>
+          </tr>`).join("");
+        }
+        return hd("WM 2026 · Karten", "Karten-Statistik") +
+          `<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-8);flex:1;min-height:0">
+            <div>
+              <div class="wm-group-title">🟨 Gelbe Karten</div>
+              <table class="data-table"><tbody>${cardRows(p.yellow)}</tbody></table>
+            </div>
+            <div>
+              <div class="wm-group-title">🟥 Rote Karten</div>
+              <table class="data-table"><tbody>${cardRows(p.red)}</tbody></table>
+            </div>
+          </div>` + ft(s.generatedAt, "ESPN");
+      }
+
       // WM Deutschland nächstes Spiel
       if (s.type === "wm.de.next") {
         return `<div style="border-left:3px solid var(--color-de);padding-left:var(--space-6)">` +
@@ -928,26 +985,35 @@
           ft(s.generatedAt, "Jolpica / F1");
       }
 
-      // Bundesliga Tabelle
+      // Bundesliga Tabelle (alle 18 Zeilen, zwei Spalten)
       if (s.type === "football.bl1" || s.type === "football.bl2") {
         const tier = s.type === "football.bl1" ? "1. Bundesliga" : "2. Bundesliga";
-        const rows = (p.rows || []).map(r => `<tr>
-          <td class="col-rank">${r.position}</td>
-          <td class="col-name">${esc(r.team)}</td>
-          <td class="col-num">${r.played}</td>
-          <td class="col-num col-optional">${r.won}</td>
-          <td class="col-num col-optional">${r.draw}</td>
-          <td class="col-num col-optional">${r.lost}</td>
-          <td class="col-num col-optional">${esc(r.goals)}</td>
-          <td class="col-num col-hl">${r.points}</td>
-        </tr>`).join("");
+        const all = p.rows || [];
+        const left  = all.slice(0, 9);
+        const right = all.slice(9, 18);
+        function blRows(rows) {
+          return rows.map(r => {
+            const pos = r.position;
+            let cls = "";
+            if (pos <= 2) cls = "row-promoted";
+            else if (pos >= 16) cls = "row-relegated";
+            return `<tr class="${cls}">
+              <td class="col-rank">${pos}</td>
+              <td class="col-name">${esc(r.team)}</td>
+              <td class="col-num col-optional">${r.played}</td>
+              <td class="col-num col-hl">${r.points}</td>
+            </tr>`;
+          }).join("");
+        }
+        const tHead = `<thead><tr>
+          <th>#</th><th>Verein</th>
+          <th class="col-num col-optional">Sp</th><th class="col-num">Pkt</th>
+        </tr></thead>`;
         return hd(`Fußball · ${tier}`, `Tabelle ${esc(p.season || "")}`) +
-          `<table class="data-table"><thead><tr>
-            <th>#</th><th>Verein</th><th class="col-num">Sp</th>
-            <th class="col-num col-optional">S</th><th class="col-num col-optional">U</th>
-            <th class="col-num col-optional">N</th><th class="col-num col-optional">Tore</th>
-            <th class="col-num">Pkt</th>
-          </tr></thead><tbody>${rows}</tbody></table>` + ft(s.generatedAt, "OpenLigaDB");
+          `<div class="bl-two-col">
+            <table class="data-table">${tHead}<tbody>${blRows(left)}</tbody></table>
+            <table class="data-table">${tHead}<tbody>${blRows(right)}</tbody></table>
+          </div>` + ft(s.generatedAt, "OpenLigaDB");
       }
 
       // Bundesliga Torjäger
