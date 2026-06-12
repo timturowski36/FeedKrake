@@ -1,6 +1,7 @@
 # NooNoo
 
-Ambient-Display das Sport- und Newsdaten als rotierende Slides im Browser streamt. Läuft dauerhaft auf dem zweiten Monitor.
+Ambient-Display das Sport- und Newsdaten als rotierende Slides im Browser streamt.
+Kann bspw. auf 2. Monitor laufen oder einem digitalen Bilderrahmen.
 
 ---
 
