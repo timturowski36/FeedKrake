@@ -34,6 +34,7 @@ data class EspnStatusType(
 @Serializable
 data class EspnCompetition(
     val competitors: List<EspnCompetitor> = emptyList(),
+    val details: List<EspnDetail> = emptyList(),
     val venue: EspnVenue? = null
 )
 
@@ -46,8 +47,22 @@ data class EspnCompetitor(
 
 @Serializable
 data class EspnTeam(
-    val abbreviation: String,
+    val id: String = "",
+    val abbreviation: String = "",
     val displayName: String = ""
+)
+
+@Serializable
+data class EspnDetail(
+    val type: EspnEventType? = null,
+    val clock: EspnClock? = null,
+    val team: EspnTeam? = null,
+    val scoringPlay: Boolean = false,
+    val redCard: Boolean = false,
+    val yellowCard: Boolean = false,
+    val ownGoal: Boolean = false,
+    val penaltyKick: Boolean = false,
+    val athletesInvolved: List<EspnAthlete> = emptyList()
 )
 
 @Serializable

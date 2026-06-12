@@ -15,16 +15,29 @@ data class Slide(
 
 @Serializable
 enum class Module {
-    WM,
+    // WM Sub-Module
+    WM_NAECHSTE_SPIELE,
+    WM_LETZTE_ERGEBNISSE,
+    WM_GRUPPEN,
+    WM_DEUTSCHLAND,
+    WM_TORSCHUETZEN,
+    WM_KARTEN,
+    // Bundesliga
     BUNDESLIGA_1,
     BUNDESLIGA_2,
+    // PUBG
     PUBG_BROTRUSTGAMING,
     PUBG_ALXNDR_D,
     PUBG_LIBATY,
     PUBG_PHILIPNC,
     PUBG_EINFACHDEN,
     PUBG_CHRISSI1970,
-    F1,
+    // F1 Sub-Module
+    F1_NAECHSTES_RENNEN,
+    F1_LETZTES_RENNEN,
+    F1_FAHRER,
+    F1_KONSTRUKTEURE,
+    // News
     NEWS_TAGESSCHAU,
     NEWS_HEISE;
 

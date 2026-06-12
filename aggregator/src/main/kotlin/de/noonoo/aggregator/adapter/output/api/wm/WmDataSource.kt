@@ -1,5 +1,6 @@
 package de.noonoo.aggregator.adapter.output.api.wm
 
+import de.noonoo.core.domain.model.WcEvent
 import de.noonoo.core.domain.model.WcFixture
 import de.noonoo.core.domain.model.WcStanding
 import de.noonoo.core.domain.model.WcTeam
@@ -14,4 +15,5 @@ interface WmDataSource {
     suspend fun liveFixtures(): List<WcFixture>
     suspend fun standings(): List<WcStanding>
     suspend fun topScorers(finishedFixtures: List<WcFixture>): List<WcTopScorer>
+    suspend fun cardEvents(finishedFixtures: List<WcFixture>): List<WcEvent> = emptyList()
 }

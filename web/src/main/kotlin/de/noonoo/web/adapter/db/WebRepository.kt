@@ -156,6 +156,9 @@ data class WmLiveRow(
     val awayScore: Int?
 )
 
+data class WmCardEntry(val player: String, val team: String, val count: Int)
+data class WmCardStatsRow(val yellow: List<WmCardEntry>, val red: List<WmCardEntry>)
+
 // ── Repository ────────────────────────────────────────────────────────────────
 
 class WebRepository(private val dataSource: DataSource, private val pubgPlayers: List<String> = emptyList()) {
@@ -373,10 +376,12 @@ class WebRepository(private val dataSource: DataSource, private val pubgPlayers:
                JOIN pubg_matches m2 ON p2.match_id = m2.match_id
                WHERE p2.player_name = ? AND p2.longest_kill = MAX(p.longest_kill)
                ORDER BY m2.created_at DESC LIMIT 1)                        AS longest_kill_date,
-              SUM(CASE WHEN p.win_place = 1 THEN 1 ELSE 0 END)             AS lifetime_wins
+              COALESCE(ls.wins, SUM(CASE WHEN p.win_place = 1 THEN 1 ELSE 0 END)) AS lifetime_wins
             FROM pubg_match_participants p
             JOIN pubg_matches m ON p.match_id = m.match_id
+            LEFT JOIN pubg_lifetime_stats ls ON ls.player_name = p.player_name
             WHERE p.player_name = ? AND m.match_type = 'official'
+            GROUP BY ls.wins
         """.trimIndent()
         dataSource.connection.use { conn ->
             conn.prepareStatement(sql).use { stmt ->
@@ -824,6 +829,38 @@ class WebRepository(private val dataSource: DataSource, private val pubgPlayers:
                 }
             }
         }
+    }
+
+    suspend fun wmCardStats(): WmCardStatsRow? = withContext(Dispatchers.IO) {
+        fun queryCards(eventType: String): List<WmCardEntry> {
+            val sql = """
+                SELECT player_name, team_name, COUNT(*) AS cnt
+                FROM wm_events
+                WHERE event_type = ?
+                  AND player_name IS NOT NULL
+                GROUP BY player_name, team_name
+                ORDER BY cnt DESC
+                LIMIT 10
+            """.trimIndent()
+            return dataSource.connection.use { conn ->
+                conn.prepareStatement(sql).use { stmt ->
+                    stmt.setString(1, eventType)
+                    stmt.executeQuery().use { rs ->
+                        val result = mutableListOf<WmCardEntry>()
+                        while (rs.next()) result += WmCardEntry(
+                            player = rs.getString("player_name") ?: "?",
+                            team   = rs.getString("team_name") ?: "?",
+                            count  = rs.getInt("cnt")
+                        )
+                        result
+                    }
+                }
+            }
+        }
+        val yellow = queryCards("YELLOW")
+        val red    = queryCards("RED")
+        if (yellow.isEmpty() && red.isEmpty()) return@withContext null
+        WmCardStatsRow(yellow = yellow, red = red)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
