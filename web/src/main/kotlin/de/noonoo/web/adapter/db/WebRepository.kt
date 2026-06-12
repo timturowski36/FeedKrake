@@ -118,6 +118,35 @@ data class BundesligaScorerRow(val rank: Int, val name: String, val team: String
 
 data class F1ConstructorRow(val position: Int, val team: String, val points: Double)
 
+data class F1NextRaceRow(
+    val season: Int,
+    val round: Int,
+    val raceName: String,
+    val circuitName: String,
+    val locality: String,
+    val raceDate: java.time.LocalDate,
+    val raceTime: java.time.LocalTime?,
+    val qualiDate: java.time.LocalDate?,
+    val qualiTime: java.time.LocalTime?,
+    val fp1Date: java.time.LocalDate?
+)
+
+data class F1LastRaceInfoRow(
+    val season: Int,
+    val round: Int,
+    val raceName: String,
+    val circuitName: String,
+    val laps: Int,
+    val fastestLapDriver: String?
+)
+
+data class F1LastRaceEntryRow(
+    val position: Int,
+    val driverName: String,
+    val constructorName: String,
+    val points: Double
+)
+
 data class WmLiveRow(
     val status: String,
     val group: String?,
@@ -502,6 +531,91 @@ class WebRepository(private val dataSource: DataSource, private val pubgPlayers:
                 team = getString("entity_name") ?: "",
                 points = getDouble("points")
             )
+        }
+    }
+
+    suspend fun f1NextRace(): F1NextRaceRow? = withContext(Dispatchers.IO) {
+        val sql = """
+            SELECT season, round, race_name, circuit_name, locality,
+                   race_date, race_time, quali_date, quali_time, fp1_date
+            FROM f1_races
+            WHERE race_date > CURRENT_DATE
+            ORDER BY race_date
+            LIMIT 1
+        """.trimIndent()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) F1NextRaceRow(
+                        season      = rs.getInt("season"),
+                        round       = rs.getInt("round"),
+                        raceName    = rs.getString("race_name"),
+                        circuitName = rs.getString("circuit_name"),
+                        locality    = rs.getString("locality"),
+                        raceDate    = rs.getDate("race_date").toLocalDate(),
+                        raceTime    = rs.getTime("race_time")?.toLocalTime(),
+                        qualiDate   = rs.getDate("quali_date")?.toLocalDate(),
+                        qualiTime   = rs.getTime("quali_time")?.toLocalTime(),
+                        fp1Date     = rs.getDate("fp1_date")?.toLocalDate()
+                    ) else null
+                }
+            }
+        }
+    }
+
+    suspend fun f1LastRaceInfo(): F1LastRaceInfoRow? = withContext(Dispatchers.IO) {
+        val sql = """
+            SELECT r.season, r.round, r.race_name, r.circuit_name,
+                   COALESCE(MAX(rr.laps), 0) AS laps,
+                   MAX(CASE WHEN rr.fastest_lap THEN rr.driver_name END) AS fastest_lap_driver
+            FROM f1_races r
+            LEFT JOIN f1_race_results rr
+                   ON r.season = rr.season AND r.round = rr.round AND rr.result_type = 'race'
+            WHERE r.race_date < CURRENT_DATE
+            GROUP BY r.season, r.round, r.race_name, r.circuit_name
+            ORDER BY r.season DESC, r.round DESC
+            LIMIT 1
+        """.trimIndent()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) F1LastRaceInfoRow(
+                        season           = rs.getInt("season"),
+                        round            = rs.getInt("round"),
+                        raceName         = rs.getString("race_name"),
+                        circuitName      = rs.getString("circuit_name"),
+                        laps             = rs.getInt("laps"),
+                        fastestLapDriver = rs.getString("fastest_lap_driver")
+                    ) else null
+                }
+            }
+        }
+    }
+
+    suspend fun f1LastRaceResults(season: Int, round: Int): List<F1LastRaceEntryRow> = withContext(Dispatchers.IO) {
+        val sql = """
+            SELECT position, driver_name, constructor_name, points
+            FROM f1_race_results
+            WHERE season = ? AND round = ? AND result_type = 'race'
+              AND position IS NOT NULL
+            ORDER BY position
+            LIMIT 10
+        """.trimIndent()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setInt(1, season)
+                stmt.setInt(2, round)
+                stmt.executeQuery().use { rs ->
+                    val out = mutableListOf<F1LastRaceEntryRow>()
+                    while (rs.next()) out.add(F1LastRaceEntryRow(
+                        position        = rs.getInt("position"),
+                        driverName      = rs.getString("driver_name"),
+                        constructorName = rs.getString("constructor_name"),
+                        points          = rs.getDouble("points")
+                    ))
+                    out
+                }
+            }
         }
     }
 

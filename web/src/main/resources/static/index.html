@@ -869,6 +869,19 @@
           `</div>` + ft(s.generatedAt, "ESPN");
       }
 
+      // F1 Nächster Grand Prix
+      if (s.type === "f1.next") {
+        const rows = [
+          p.raceDate  ? `<tr><td class="col-name">📅 Rennen</td><td class="col-hl">${esc(p.raceDate)}</td></tr>` : "",
+          p.qualiDate ? `<tr><td class="col-name">⏱ Qualifying</td><td>${esc(p.qualiDate)}</td></tr>` : "",
+          p.fp1Date   ? `<tr><td class="col-name">🔧 Training</td><td>${esc(p.fp1Date)}</td></tr>` : "",
+          `<tr><td class="col-name">📍 Strecke</td><td>${esc(p.circuitName)}${p.locality ? ", " + esc(p.locality) : ""}</td></tr>`
+        ].filter(Boolean).join("");
+        return hd("Formel 1 · Nächster GP", esc(p.raceName || "")) +
+          `<table class="data-table"><tbody>${rows}</tbody></table>` +
+          ft(s.generatedAt, "Jolpica / F1");
+      }
+
       // F1 Fahrerwertung
       if (s.type === "f1.drivers") {
         const rows = (p.rows || []).slice(0, 10).map(r => `
@@ -890,6 +903,29 @@
             <span class="podium-pts">${r.points}</span>
           </div>`).join("");
         return hd("Formel 1 · Saison", "Konstrukteure") + `<div>${rows}</div>` + ft(s.generatedAt, "Jolpica / F1");
+      }
+
+      // F1 Letztes Rennen
+      if (s.type === "f1.last.result") {
+        const MEDALS = ["🥇","🥈","🥉"];
+        const rows = (p.results || []).map(r => {
+          const medal = r.position <= 3 ? MEDALS[r.position - 1] : `${r.position}.`;
+          return `<div class="podium-row">
+            <span class="podium-pos${r.position <= 3 ? ' p1' : ''}">${medal}</span>
+            <span class="podium-driver">${esc(r.driver)}</span>
+            <span class="podium-team">${esc(r.constructor)}</span>
+            <span class="podium-pts">${r.points} Pkt</span>
+          </div>`;
+        }).join("");
+        const meta = [
+          p.circuitName ? `📍 ${esc(p.circuitName)}` : "",
+          p.laps        ? `${p.laps} Runden` : "",
+        ].filter(Boolean).join(" | ");
+        const fl = p.fastestLap ? `<div class="slide-meta" style="margin-top:.8rem">⚡ Schnellste Runde: <strong>${esc(p.fastestLap)}</strong></div>` : "";
+        return hd(`Formel 1 · ${p.season || ""}`, `Rennen ${p.round || ""}: ${esc(p.raceName || "")}`) +
+          `<div class="slide-meta" style="margin-bottom:.8rem;opacity:.6">${meta}</div>` +
+          `<div>${rows}</div>${fl}` +
+          ft(s.generatedAt, "Jolpica / F1");
       }
 
       // Bundesliga Tabelle

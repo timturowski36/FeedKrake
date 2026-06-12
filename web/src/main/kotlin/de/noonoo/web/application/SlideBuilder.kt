@@ -54,8 +54,10 @@ class SlideBuilder(private val repo: WebRepository) {
         add("wm.de.next")
         add("wm.de.last")
         // F1
+        add("f1.next")
         add("f1.drivers")
         add("f1.constructors")
+        add("f1.last.result")
         // Bundesliga
         add("football.bl1")
         add("football.bl1.scorers")
@@ -326,6 +328,36 @@ class SlideBuilder(private val repo: WebRepository) {
                 )
             }
 
+            // ── F1 Nächster Grand Prix ────────────────────────────────────────
+            type == "f1.next" -> {
+                val r = repo.f1NextRace() ?: return null
+                val UTC = java.time.ZoneId.of("UTC")
+                val raceTs = r.raceDate
+                    .atTime(r.raceTime ?: java.time.LocalTime.of(12, 0))
+                    .atZone(UTC).withZoneSameInstant(BERLIN)
+                val qualiStr = if (r.qualiDate != null) {
+                    r.qualiDate.atTime(r.qualiTime ?: java.time.LocalTime.of(12, 0))
+                        .atZone(UTC).withZoneSameInstant(BERLIN).format(DATE_FMT)
+                } else null
+                val fp1Str = r.fp1Date?.format(
+                    DateTimeFormatter.ofPattern("EE, dd.MM.yyyy").withLocale(java.util.Locale.GERMAN)
+                )
+                Slide(
+                    id = UUID.randomUUID().toString(), type = type,
+                    module = Module.F1,
+                    title = "🏎 Nächster Grand Prix: ${r.raceName}",
+                    generatedAt = now,
+                    payload = buildJsonObject {
+                        put("raceName",    r.raceName)
+                        put("circuitName", r.circuitName)
+                        put("locality",    r.locality)
+                        put("raceDate",    raceTs.format(DATE_FMT))
+                        qualiStr?.let { put("qualiDate", it) }
+                        fp1Str?.let  { put("fp1Date",   it) }
+                    }
+                )
+            }
+
             // ── F1 Fahrerwertung ──────────────────────────────────────────────
             type == "f1.drivers" -> {
                 val rows = repo.f1DriverStandings()
@@ -365,6 +397,37 @@ class SlideBuilder(private val repo: WebRepository) {
                                     put("position", r.position)
                                     put("team", r.team)
                                     put("points", r.points)
+                                })
+                            }
+                        }
+                    }
+                )
+            }
+
+            // ── F1 Letztes Rennen ─────────────────────────────────────────────
+            type == "f1.last.result" -> {
+                val info = repo.f1LastRaceInfo() ?: return null
+                val results = repo.f1LastRaceResults(info.season, info.round)
+                if (results.isEmpty()) return null
+                Slide(
+                    id = UUID.randomUUID().toString(), type = type,
+                    module = Module.F1,
+                    title = "🏁 ${info.season} – Rennen ${info.round}: ${info.raceName}",
+                    generatedAt = now,
+                    payload = buildJsonObject {
+                        put("raceName",    info.raceName)
+                        put("circuitName", info.circuitName)
+                        put("season",      info.season)
+                        put("round",       info.round)
+                        put("laps",        info.laps)
+                        info.fastestLapDriver?.let { put("fastestLap", it) }
+                        putJsonArray("results") {
+                            results.forEach { r ->
+                                add(buildJsonObject {
+                                    put("position",    r.position)
+                                    put("driver",      r.driverName)
+                                    put("constructor", r.constructorName)
+                                    put("points",      r.points.toInt())
                                 })
                             }
                         }
