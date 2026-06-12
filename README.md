@@ -1,32 +1,34 @@
 # NooNoo
 
-An ambient information display that streams rotating slides of sports and news data to the browser. Runs continuously as a second-monitor feed.
-
-**https://noonoo-channel.duckdns.org/**
+Ambient-Display das Sport- und Newsdaten als rotierende Slides im Browser streamt. Läuft dauerhaft auf dem zweiten Monitor.
 
 ---
 
-## Architecture
-
-Multi-module Kotlin project with a hexagonal architecture.
-
-- **`:core`** — shared domain models and ports
-- **`:aggregator`** — data collection, Discord bot (JDA), scheduled polling
-- **`:web`** — Ktor SSE server, slide builder, static frontend
-
-PostgreSQL for persistence, Flyway for migrations. The frontend connects via `EventSource` and receives slides every 2 minutes. Module selection is stored in the URL (`?modules=wm,f1,pubg-philipnc`) and synced to LocalStorage.
-
-Hosted on a Hetzner CX22, deployed via GitHub Actions + Watchtower.
+## ➜ [noonoo-channel.duckdns.org](https://noonoo-channel.duckdns.org/)
 
 ---
 
-## Data Sources
+## Architektur
 
-| Module | Source |
+Kotlin Multi-Module-Projekt mit hexagonaler Architektur.
+
+- **`:core`** — geteilte Domain-Modelle und Ports
+- **`:aggregator`** — Datenabruf, Discord-Bot (JDA), Scheduler
+- **`:web`** — Ktor SSE-Server, Slide-Builder, statisches Frontend
+
+PostgreSQL als Datenbank, Flyway für Migrationen. Das Frontend verbindet sich per `EventSource` und empfängt alle 2 Minuten einen neuen Slide. Die Modulauswahl wird in der URL gespeichert (`?modules=wm,f1,pubg-philipnc`) und per LocalStorage persistiert.
+
+Gehostet auf einem Hetzner CX22, Deployment via GitHub Actions und Watchtower.
+
+---
+
+## Datenquellen
+
+| Modul | Quelle |
 |---|---|
-| WM 2026 | ESPN (unofficial) |
+| WM 2026 | ESPN (inoffiziell) |
 | Bundesliga | OpenLigaDB |
-| Formula 1 | Jolpica API |
-| PUBG | Official PUBG Developer API |
+| Formel 1 | Jolpica API |
+| PUBG | Offizielle PUBG Developer API |
 | News | Tagesschau RSS · Heise RSS |
 | WM Fallback | openfootball/worldcup.json |
