@@ -47,15 +47,29 @@ class WmPollingScheduler(
     fun stop() = scope.cancel()
 
     private suspend fun pollLive() {
-        val fixtures = tryPrimary { it.liveFixtures() } ?: return
-        fixtures.forEach { wcRepo.upsertFixture(it) }
-        log.info { "[WM] ${fixtures.size} Live-Fixture(s) aktualisiert." }
+        val liveFixtures = tryPrimary { it.liveFixtures() } ?: emptyList()
+        liveFixtures.forEach { wcRepo.upsertFixture(it) }
+        log.info { "[WM] ${liveFixtures.size} Live-Fixture(s) aktualisiert." }
 
-        val finishedFixtures = wcRepo.findAllFixtures()
-        val scorers = tryPrimary { it.topScorers(finishedFixtures) } ?: return
-        if (scorers.isNotEmpty()) {
+        // Wenn kein Spiel mehr live ist, Recent-Sync durchführen, damit
+        // soeben beendete Spiele ihren FT-Status in der DB bekommen und
+        // hasLiveFixtures() korrekt auf false wechselt.
+        if (liveFixtures.isEmpty()) {
+            val recentFixtures = tryPrimary { it.recentFixtures() } ?: emptyList()
+            recentFixtures.forEach { wcRepo.upsertFixture(it) }
+            log.info { "[WM] Kein Live-Spiel mehr — ${recentFixtures.size} Recent-Fixture(s) nachgezogen." }
+        }
+
+        val allFixtures = wcRepo.findAllFixtures()
+        val scorers = tryPrimary { it.topScorers(allFixtures) }
+        if (!scorers.isNullOrEmpty()) {
             wcRepo.replaceTopScorers(scorers)
             log.info { "[WM] ${scorers.size} TopScorer aktualisiert." }
+        }
+        val events = tryPrimary { it.cardEvents(allFixtures) }
+        if (!events.isNullOrEmpty()) {
+            wcRepo.replaceEvents(events)
+            log.info { "[WM] ${events.size} Karten-Events aktualisiert." }
         }
     }
 
