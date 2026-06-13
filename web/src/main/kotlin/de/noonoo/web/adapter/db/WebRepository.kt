@@ -376,12 +376,14 @@ class WebRepository(private val dataSource: DataSource, private val pubgPlayers:
                JOIN pubg_matches m2 ON p2.match_id = m2.match_id
                WHERE p2.player_name = ? AND p2.longest_kill = MAX(p.longest_kill)
                ORDER BY m2.created_at DESC LIMIT 1)                        AS longest_kill_date,
-              COALESCE(ls.wins, SUM(CASE WHEN p.win_place = 1 THEN 1 ELSE 0 END)) AS lifetime_wins
+              (SELECT COALESCE(SUM(ss.wins), 0)
+               FROM pubg_season_stats ss
+               JOIN pubg_players pl ON pl.account_id = ss.account_id
+               WHERE pl.name = p.player_name
+                 AND ss.season_id = 'lifetime')                               AS lifetime_wins
             FROM pubg_match_participants p
             JOIN pubg_matches m ON p.match_id = m.match_id
-            LEFT JOIN pubg_lifetime_stats ls ON ls.player_name = p.player_name
             WHERE p.player_name = ? AND m.match_type = 'official'
-            GROUP BY ls.wins
         """.trimIndent()
         dataSource.connection.use { conn ->
             conn.prepareStatement(sql).use { stmt ->
