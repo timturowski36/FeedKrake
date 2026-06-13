@@ -28,8 +28,7 @@ fun EspnEvent.toWcFixture(teamLookup: (String) -> WcTeam?): WcFixture? {
     val homeTeam = teamLookup(homeComp.team.abbreviation) ?: return null
     val awayTeam = teamLookup(awayComp.team.abbreviation) ?: return null
 
-    val isActive = status.type.completed || status.type.name == "STATUS_IN_PROGRESS" ||
-            status.type.name == "STATUS_HALFTIME"
+    val isActive = status.type.state == "in" || status.type.state == "post"
 
     return WcFixture(
         id = id.toIntOrNull() ?: return null,
@@ -142,6 +141,51 @@ fun List<Pair<Int, EspnDetail>>.aggregateCardEventsFromDetails(teamLookup: (Stri
 fun List<EspnKeyEvent>.aggregateCardEvents(fixtureId: Int, teamLookup: (String) -> WcTeam?): List<WcEvent> {
     val now = Instant.now()
     return mapNotNull { event ->
+        val typeText = event.type?.text ?: return@mapNotNull null
+        val eventType = when {
+            typeText.contains("Yellow-Red", ignoreCase = true) -> "YELLOW_RED"
+            typeText.contains("Red Card", ignoreCase = true)   -> "RED"
+            typeText.contains("Yellow Card", ignoreCase = true) -> "YELLOW"
+            else -> return@mapNotNull null
+        }
+        WcEvent(
+            fixtureId  = fixtureId,
+            eventType  = eventType,
+            playerName = event.athletesInvolved.firstOrNull()?.displayName,
+            teamName   = event.team?.let { teamLookup(it.abbreviation) }?.name,
+            minute     = event.clock?.displayValue?.substringBefore(":")?.toIntOrNull(),
+            detail     = typeText,
+            fetchedAt  = now
+        )
+    }
+}
+
+fun List<Pair<Int, EspnKeyEvent>>.aggregateTopScorersFromKeyEvents(teamLookup: (String) -> WcTeam?): List<WcTopScorer> {
+    val now = Instant.now()
+    return filter { (_, e) -> e.scoringPlay && !e.ownGoal }
+        .groupBy { (_, e) -> e.athletesInvolved.firstOrNull()?.displayName ?: "" }
+        .filter { it.key.isNotBlank() }
+        .map { (player, entries) ->
+            val team = entries.firstOrNull()?.second?.team?.let { teamLookup(it.abbreviation) }
+            Triple(player, team, entries.size)
+        }
+        .sortedByDescending { it.third }
+        .mapIndexed { idx, (player, team, goals) ->
+            WcTopScorer(
+                rank       = idx + 1,
+                playerName = player,
+                teamId     = team?.id ?: 0,
+                teamName   = team?.name ?: "",
+                goals      = goals,
+                assists    = 0,
+                fetchedAt  = now
+            )
+        }
+}
+
+fun List<Pair<Int, EspnKeyEvent>>.aggregateCardEventsFromKeyEvents(teamLookup: (String) -> WcTeam?): List<WcEvent> {
+    val now = Instant.now()
+    return mapNotNull { (fixtureId, event) ->
         val typeText = event.type?.text ?: return@mapNotNull null
         val eventType = when {
             typeText.contains("Yellow-Red", ignoreCase = true) -> "YELLOW_RED"

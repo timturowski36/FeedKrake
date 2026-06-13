@@ -28,6 +28,7 @@ data class EspnStatus(
 data class EspnStatusType(
     val id: String = "",
     val name: String,
+    val state: String = "",   // "pre" | "in" | "post"
     val completed: Boolean = false
 )
 

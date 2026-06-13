@@ -14,7 +14,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val log = KotlinLogging.logger {}
@@ -46,7 +45,7 @@ class EspnWmAdapter(private val http: HttpClient) : WmDataSource {
     override suspend fun liveFixtures(): List<WcFixture> {
         val resp = http.get(SCOREBOARD).body<EspnScoreboardResponse>()
         return resp.events
-            .filter { it.status.type.name == "STATUS_IN_PROGRESS" || it.status.type.name == "STATUS_HALFTIME" }
+            .filter { it.status.type.state == "in" }
             .mapNotNull { it.toWcFixture(::teamLookup) }
     }
 
@@ -89,57 +88,31 @@ class EspnWmAdapter(private val http: HttpClient) : WmDataSource {
     }
 
     override suspend fun topScorers(finishedFixtures: List<WcFixture>): List<WcTopScorer> {
-        val details = fetchFinishedDetails(finishedFixtures)
-        return details.aggregateTopScorersFromDetails(::teamLookupById)
+        val events = fetchFinishedSummaryEvents(finishedFixtures)
+        return events.aggregateTopScorersFromKeyEvents(::teamLookup)
     }
 
     override suspend fun cardEvents(finishedFixtures: List<WcFixture>): List<WcEvent> {
-        val details = fetchFinishedDetails(finishedFixtures)
-        return details.aggregateCardEventsFromDetails(::teamLookupById)
+        val events = fetchFinishedSummaryEvents(finishedFixtures)
+        return events.aggregateCardEventsFromKeyEvents(::teamLookup)
     }
 
-    private suspend fun fetchFinishedDetails(finishedFixtures: List<WcFixture>): List<Pair<Int, EspnDetail>> = coroutineScope {
+    private suspend fun fetchFinishedSummaryEvents(
+        finishedFixtures: List<WcFixture>
+    ): List<Pair<Int, EspnKeyEvent>> = coroutineScope {
         val relevant = finishedFixtures.filter {
             it.status == WcFixtureStatus.FT || it.status == WcFixtureStatus.AET || it.status == WcFixtureStatus.PEN
         }
         if (relevant.isEmpty()) return@coroutineScope emptyList()
-
-        val berlin = ZoneId.of("Europe/Berlin")
-        val fmt = DateTimeFormatter.ofPattern("yyyyMMdd")
-        val dates = relevant.map { it.kickoffUtc.atZone(berlin).toLocalDate().format(fmt) }.distinct()
-
-        val scoreboards = dates.map { date ->
+        relevant.map { fixture ->
             async {
                 runCatching {
-                    http.get("$SCOREBOARD?dates=$date").body<EspnScoreboardResponse>().events
-                }.onFailure { log.warn { "[WM-ESPN] Scoreboard $date fehlgeschlagen: ${it.message}" } }
+                    http.get("$SUMMARY?event=${fixture.id}").body<EspnSummaryResponse>()
+                        .keyEvents.map { fixture.id to it }
+                }.onFailure { log.warn { "[WM-ESPN] Summary ${fixture.id} fehlgeschlagen: ${it.message}" } }
                     .getOrElse { emptyList() }
             }
         }.awaitAll().flatten()
-
-        // ID → abbreviation aus Competitor-Daten aufbauen
-        scoreboards.forEach { ev ->
-            ev.competitions.firstOrNull()?.competitors?.forEach { c ->
-                if (c.team.id.isNotBlank() && c.team.abbreviation.isNotBlank())
-                    teamIdToAbbrev[c.team.id] = c.team.abbreviation
-            }
-        }
-
-        scoreboards.flatMap { ev ->
-            val fixtureId = ev.id.toIntOrNull() ?: return@flatMap emptyList()
-            val comp = ev.competitions.firstOrNull() ?: return@flatMap emptyList()
-            val status = ev.status.type.toWcStatus(ev.status.period)
-            if (status != WcFixtureStatus.FT && status != WcFixtureStatus.AET && status != WcFixtureStatus.PEN)
-                return@flatMap emptyList()
-            comp.details.map { fixtureId to it }
-        }
-    }
-
-    private val teamIdToAbbrev = mutableMapOf<String, String>()
-
-    private fun teamLookupById(teamId: String): WcTeam? {
-        val abbrev = teamIdToAbbrev[teamId] ?: return null
-        return teamLookup(abbrev)
     }
 
     private fun wmDates(): List<String> {
