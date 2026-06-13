@@ -717,7 +717,7 @@ class WebRepository(private val dataSource: DataSource, private val pubgPlayers:
         }
     }
 
-    suspend fun wmTopScorers(limit: Int = 10): List<WmTopScorerRow> = withContext(Dispatchers.IO) {
+    suspend fun wmTopScorers(limit: Int = 15): List<WmTopScorerRow> = withContext(Dispatchers.IO) {
         val sql = """
             SELECT rank, player_name, team_name, goals, assists
             FROM wm_top_scorers
