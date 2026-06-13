@@ -87,18 +87,20 @@ data class EspnSummaryResponse(val keyEvents: List<EspnKeyEvent> = emptyList())
 data class EspnKeyEvent(
     val clock: EspnClock? = null,
     val type: EspnEventType? = null,
-    val athletesInvolved: List<EspnAthlete> = emptyList(),
+    val participants: List<EspnParticipant> = emptyList(),
     val team: EspnTeam? = null,
     val scoringPlay: Boolean = false,
-    val ownGoal: Boolean = false,
     val penaltyKick: Boolean = false
 )
+
+@Serializable
+data class EspnParticipant(val athlete: EspnAthlete = EspnAthlete())
 
 @Serializable
 data class EspnClock(val displayValue: String = "0:00")
 
 @Serializable
-data class EspnEventType(val id: String = "", val text: String = "")
+data class EspnEventType(val id: String = "", val text: String = "", val type: String = "")
 
 @Serializable
 data class EspnAthlete(val displayName: String = "")

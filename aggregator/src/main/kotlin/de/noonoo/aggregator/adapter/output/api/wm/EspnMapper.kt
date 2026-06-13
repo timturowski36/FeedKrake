@@ -162,11 +162,12 @@ fun List<EspnKeyEvent>.aggregateCardEvents(fixtureId: Int, teamLookup: (String) 
 
 fun List<Pair<Int, EspnKeyEvent>>.aggregateTopScorersFromKeyEvents(teamLookup: (String) -> WcTeam?): List<WcTopScorer> {
     val now = Instant.now()
-    return filter { (_, e) -> e.scoringPlay && !e.ownGoal }
-        .groupBy { (_, e) -> e.athletesInvolved.firstOrNull()?.displayName ?: "" }
+    return filter { (_, e) -> e.scoringPlay && e.type?.type != "own-goal" }
+        .groupBy { (_, e) -> e.participants.firstOrNull()?.athlete?.displayName ?: "" }
         .filter { it.key.isNotBlank() }
         .map { (player, entries) ->
-            val team = entries.firstOrNull()?.second?.team?.let { teamLookup(it.abbreviation) }
+            val espnId = entries.firstOrNull()?.second?.team?.id ?: ""
+            val team = EspnTeamSeed.byEspnId(espnId)?.let { EspnTeamSeed.toWcTeam(it) }
             Triple(player, team, entries.size)
         }
         .sortedByDescending { it.third }
@@ -186,20 +187,22 @@ fun List<Pair<Int, EspnKeyEvent>>.aggregateTopScorersFromKeyEvents(teamLookup: (
 fun List<Pair<Int, EspnKeyEvent>>.aggregateCardEventsFromKeyEvents(teamLookup: (String) -> WcTeam?): List<WcEvent> {
     val now = Instant.now()
     return mapNotNull { (fixtureId, event) ->
-        val typeText = event.type?.text ?: return@mapNotNull null
-        val eventType = when {
-            typeText.contains("Yellow-Red", ignoreCase = true) -> "YELLOW_RED"
-            typeText.contains("Red Card", ignoreCase = true)   -> "RED"
-            typeText.contains("Yellow Card", ignoreCase = true) -> "YELLOW"
-            else -> return@mapNotNull null
+        val typeType = event.type?.type ?: return@mapNotNull null
+        val eventType = when (typeType) {
+            "yellow-red-card" -> "YELLOW_RED"
+            "red-card"        -> "RED"
+            "yellow-card"     -> "YELLOW"
+            else              -> return@mapNotNull null
         }
+        val espnId = event.team?.id ?: ""
+        val teamName = EspnTeamSeed.byEspnId(espnId)?.name
         WcEvent(
             fixtureId  = fixtureId,
             eventType  = eventType,
-            playerName = event.athletesInvolved.firstOrNull()?.displayName,
-            teamName   = event.team?.let { teamLookup(it.abbreviation) }?.name,
-            minute     = event.clock?.displayValue?.substringBefore(":")?.toIntOrNull(),
-            detail     = typeText,
+            playerName = event.participants.firstOrNull()?.athlete?.displayName,
+            teamName   = teamName,
+            minute     = event.clock?.displayValue?.substringBefore("'")?.trimEnd('+')?.toIntOrNull(),
+            detail     = event.type?.text,
             fetchedAt  = now
         )
     }
