@@ -226,10 +226,8 @@ class PostgresWcRepository(private val dataSource: DataSource) : WcRepository {
     override fun minutesUntilNextKickoff(): Long? =
         dataSource.connection.use { conn ->
             conn.prepareStatement(
-                "SELECT kickoff_utc FROM wm_fixtures WHERE status = 'NS' AND kickoff_utc > ? ORDER BY kickoff_utc ASC LIMIT 1"
+                "SELECT kickoff_utc FROM wm_fixtures WHERE status = 'NS' ORDER BY kickoff_utc ASC LIMIT 1"
             ).use { stmt ->
-                val now = Timestamp.from(Instant.now())
-                stmt.setTimestamp(1, now)
                 stmt.executeQuery().use { rs ->
                     if (rs.next()) {
                         val kickoff = rs.getTimestamp("kickoff_utc").toInstant()

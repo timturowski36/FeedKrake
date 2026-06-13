@@ -25,8 +25,11 @@ class WmPollingScheduler(
             val anyLive = runCatching { wcRepo.hasLiveFixtures() }.getOrElse { false }
             val minsUntilNext = runCatching { wcRepo.minutesUntilNextKickoff() }.getOrElse { null }
 
+            // minsUntilNext <= 0: Spiel hätte schon begonnen, ESPN-Status noch nicht aktualisiert
+            val hasStaleNs = minsUntilNext != null && minsUntilNext <= 0
+
             val intervalMs = when {
-                anyLive                                      -> 60_000L
+                anyLive || hasStaleNs                        -> 60_000L
                 minsUntilNext != null && minsUntilNext < 15 -> 120_000L
                 minsUntilNext != null                        -> ((minsUntilNext - 10) * 60_000L).coerceAtLeast(60_000L)
                 else                                         -> untilNextMorningMs()
