@@ -328,6 +328,32 @@
       color: var(--color-text-muted);
     }
 
+    /* ── Record-Liste (PUBG Persönliche Rekorde) ───────────────────────────── */
+    .record-list { display: flex; flex-direction: column; gap: var(--space-4); }
+    .record-row { display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; }
+    .record-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      flex: 0 0 160px;
+    }
+    .record-value {
+      font-family: var(--font-mono);
+      font-size: clamp(1.1rem, 2vw, 1.5rem);
+      font-weight: var(--weight-bold);
+      font-variant-numeric: tabular-nums;
+      min-width: 50px;
+      text-align: right;
+    }
+    .record-value.hl { color: var(--color-accent); }
+    .record-meta {
+      font-family: var(--font-mono);
+      font-size: var(--text-micro);
+      color: var(--color-text-muted);
+    }
+
     /* ── WM Gruppen-Paar ────────────────────────────────────────────────────── */
     .group-pair {
       display: grid;
@@ -1142,7 +1168,7 @@
       // PUBG Wochenstatistik
       if (s.type.startsWith("pubg.weekly.")) {
         return hd(`PUBG · ${esc(p.player)}`, "Wochenstatistik", "Letzte 7 Tage — Steam") +
-          `<div class="stat-grid">
+          `<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
             <div class="stat-item"><span class="stat-label">Matches</span><span class="stat-value">${p.matches}</span></div>
             <div class="stat-item"><span class="stat-label">Wins</span><span class="stat-value">${p.wins}</span></div>
             <div class="stat-item"><span class="stat-label">K/D</span><span class="stat-value hl">${p.kd}</span></div>
@@ -1152,6 +1178,7 @@
             <div class="stat-item"><span class="stat-label">Weitest. Kill</span><span class="stat-value">${p.longestKill}m</span></div>
             <div class="stat-item"><span class="stat-label">Headshots</span><span class="stat-value">${p.headshotKills}<span class="stat-sub"> (${p.headshotPct}%)</span></span></div>
             <div class="stat-item"><span class="stat-label">Revives</span><span class="stat-value">${p.revives}</span></div>
+            <div class="stat-item"><span class="stat-label">Knockdowns</span><span class="stat-value">${p.knockdowns}</span></div>
           </div>` + ft(s.generatedAt, "PUBG API");
       }
 
@@ -1187,25 +1214,25 @@
       // PUBG Rekorde
       if (s.type.startsWith("pubg.records.")) {
         return hd(`PUBG · ${esc(p.player)}`, "Persönliche Rekorde") +
-          `<div class="stat-grid" style="grid-template-columns:repeat(2,1fr)">
-            <div class="stat-item">
-              <span class="stat-label">Meiste Kills</span>
-              <span class="stat-value hl">${p.mostKills}</span>
-              <span class="stat-sub">${esc(p.mostKillsDate)} · ${esc(p.mostKillsMap)}</span>
+          `<div class="record-list">
+            <div class="record-row">
+              <span class="record-label">Meiste Kills</span>
+              <span class="record-value hl">${p.mostKills}</span>
+              <span class="record-meta">${esc(p.mostKillsDate)} · ${esc(p.mostKillsMap)}</span>
             </div>
-            <div class="stat-item">
-              <span class="stat-label">Höchster Schaden</span>
-              <span class="stat-value hl">${p.highestDamage}</span>
-              <span class="stat-sub">${esc(p.highestDamageDate)} · ${esc(p.highestDamageMap)}</span>
+            <div class="record-row">
+              <span class="record-label">Höchster Schaden</span>
+              <span class="record-value hl">${p.highestDamage}</span>
+              <span class="record-meta">${esc(p.highestDamageDate)} · ${esc(p.highestDamageMap)}</span>
             </div>
-            <div class="stat-item">
-              <span class="stat-label">Weitester Kill</span>
-              <span class="stat-value">${p.longestKill}m</span>
-              <span class="stat-sub">${esc(p.longestKillDate)}</span>
+            <div class="record-row">
+              <span class="record-label">Weitester Kill</span>
+              <span class="record-value">${p.longestKill}m</span>
+              <span class="record-meta">${esc(p.longestKillDate)}</span>
             </div>
-            <div class="stat-item">
-              <span class="stat-label">Lifetime Wins</span>
-              <span class="stat-value">${p.lifetimeWins}</span>
+            <div class="record-row">
+              <span class="record-label">Lifetime Wins</span>
+              <span class="record-value">${p.lifetimeWins}</span>
             </div>
           </div>` + ft(s.generatedAt, "PUBG API");
       }

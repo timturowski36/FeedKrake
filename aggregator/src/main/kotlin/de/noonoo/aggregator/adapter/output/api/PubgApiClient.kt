@@ -12,9 +12,11 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.int
@@ -47,15 +49,40 @@ class PubgApiClient(
         header(HttpHeaders.Accept, "application/vnd.api+json")
     }
 
+    // Führt einen rate-limitierten GET-Request aus und wiederholt bei 429 mit Backoff (max. 3 Versuche).
+    private suspend fun getWithBackoff(url: String, withAuth: Boolean = true): HttpResponse? {
+        var attempt = 0
+        while (attempt < 3) {
+            return try {
+                val resp = pubgHttpClient.get(url) {
+                    if (withAuth) pubgHeaders()
+                    else header(HttpHeaders.Accept, "application/vnd.api+json")
+                }
+                if (resp.status.value == 429) {
+                    val waitMs = 60_000L * (attempt + 1)
+                    log.warn { "[PUBG] 429 Rate Limit – warte ${waitMs / 1000}s (Versuch ${attempt + 1}/3)" }
+                    delay(waitMs)
+                    attempt++
+                    continue
+                }
+                resp
+            } catch (e: Exception) {
+                log.warn { "[PUBG] HTTP-Fehler: ${e.message}" }
+                return null
+            }
+        }
+        log.warn { "[PUBG] $url nach 3 Versuchen aufgegeben." }
+        return null
+    }
+
     override suspend fun fetchPlayersByName(names: List<String>, platform: String): List<PubgPlayer> {
         return try {
             val namesCsv = names.joinToString(",")
-            // Percent-encode brackets; use dedicated client without ContentNegotiation
             val url = "$baseUrl/shards/$platform/players?filter%5BplayerNames%5D=$namesCsv"
-            val httpResponse = pubgHttpClient.get(url) { pubgHeaders() }
-            val body = httpResponse.bodyAsText()
-            if (!httpResponse.status.isSuccess()) {
-                log.warn { "[PUBG] fetchPlayersByName HTTP ${httpResponse.status.value}: ${body.take(200)}" }
+            val resp = getWithBackoff(url) ?: return emptyList()
+            val body = resp.bodyAsText()
+            if (!resp.status.isSuccess()) {
+                log.warn { "[PUBG] fetchPlayersByName HTTP ${resp.status.value}: ${body.take(200)}" }
                 return emptyList()
             }
             pubgJson.decodeFromString<PlayersResponse>(body).data.map { it.toDomain() }
@@ -68,10 +95,10 @@ class PubgApiClient(
     override suspend fun fetchPlayerById(accountId: String, platform: String): PubgPlayer? {
         return try {
             val url = "$baseUrl/shards/$platform/players?filter%5BplayerIds%5D=$accountId"
-            val httpResponse = pubgHttpClient.get(url) { pubgHeaders() }
-            val body = httpResponse.bodyAsText()
-            if (!httpResponse.status.isSuccess()) {
-                log.warn { "[PUBG] fetchPlayerById HTTP ${httpResponse.status.value}: ${body.take(200)}" }
+            val resp = getWithBackoff(url) ?: return null
+            val body = resp.bodyAsText()
+            if (!resp.status.isSuccess()) {
+                log.warn { "[PUBG] fetchPlayerById HTTP ${resp.status.value}: ${body.take(200)}" }
                 return null
             }
             pubgJson.decodeFromString<PlayersResponse>(body).data.firstOrNull()?.toDomain()
@@ -83,11 +110,12 @@ class PubgApiClient(
 
     override suspend fun fetchMatchDetails(matchId: String, platform: String): Pair<PubgMatch, List<PubgMatchParticipant>>? {
         return try {
-            val httpResponse = pubgHttpClient.get("$baseUrl/shards/$platform/matches/$matchId") {
+            // Match-Endpoint ist nicht rate-limitiert – kein Auth-Header nötig
+            val resp = pubgHttpClient.get("$baseUrl/shards/$platform/matches/$matchId") {
                 header(HttpHeaders.Accept, "application/vnd.api+json")
             }
-            if (!httpResponse.status.isSuccess()) return null
-            val response = pubgJson.decodeFromString<JsonObject>(httpResponse.bodyAsText())
+            if (!resp.status.isSuccess()) return null
+            val response = pubgJson.decodeFromString<JsonObject>(resp.bodyAsText())
             parseMatchResponse(matchId, response)
         } catch (e: Exception) {
             null
@@ -96,13 +124,94 @@ class PubgApiClient(
 
     override suspend fun fetchLifetimeStats(accountId: String, platform: String): List<PubgSeasonStats> {
         return try {
-            val httpResponse = pubgHttpClient.get(
-                "$baseUrl/shards/$platform/players/$accountId/seasons/lifetime"
-            ) { pubgHeaders() }
-            if (!httpResponse.status.isSuccess()) return emptyList()
-            pubgJson.decodeFromString<LifetimeStatsResponse>(httpResponse.bodyAsText()).toSeasonStats(accountId, platform)
+            val resp = getWithBackoff("$baseUrl/shards/$platform/players/$accountId/seasons/lifetime")
+                ?: return emptyList()
+            if (!resp.status.isSuccess()) return emptyList()
+            pubgJson.decodeFromString<LifetimeStatsResponse>(resp.bodyAsText()).toSeasonStats(accountId, platform)
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    override suspend fun fetchCurrentSeasonId(platform: String): String? {
+        return try {
+            val resp = getWithBackoff("$baseUrl/shards/$platform/seasons") ?: return null
+            if (!resp.status.isSuccess()) return null
+            val root = pubgJson.decodeFromString<JsonObject>(resp.bodyAsText())
+            root["data"]?.jsonArray
+                ?.mapNotNull { it.jsonObject }
+                ?.firstOrNull { entry ->
+                    entry["attributes"]?.jsonObject
+                        ?.get("isCurrentSeason")?.jsonPrimitive?.booleanOrNull == true
+                }
+                ?.get("id")?.jsonPrimitive?.content
+        } catch (e: Exception) {
+            log.warn { "[PUBG] fetchCurrentSeasonId fehlgeschlagen: ${e.message}" }
+            null
+        }
+    }
+
+    override suspend fun fetchSeasonStats(
+        accountId: String,
+        seasonId: String,
+        platform: String
+    ): Pair<List<PubgSeasonStats>, List<String>>? {
+        return try {
+            val url = "$baseUrl/shards/$platform/players/$accountId/seasons/$seasonId"
+            val resp = getWithBackoff(url) ?: return null
+            if (!resp.status.isSuccess()) return null
+            val root = pubgJson.decodeFromString<JsonObject>(resp.bodyAsText())
+            val data = root["data"]?.jsonObject ?: return null
+
+            // Stats aus attributes.gameModeStats
+            val attrs = data["attributes"]?.jsonObject ?: return null
+            val gameModeStats = pubgJson.decodeFromString<LifetimeAttributes>(attrs.toString())
+            val stats = gameModeStats.gameModeStats.entries
+                .filter { it.value.roundsPlayed > 0 }
+                .map { (mode, s) ->
+                    PubgSeasonStats(
+                        accountId = accountId,
+                        platform = platform,
+                        seasonId = seasonId,
+                        gameMode = mode,
+                        kills = s.kills,
+                        assists = s.assists,
+                        dbnos = s.dBNOs,
+                        damageDealt = s.damageDealt,
+                        wins = s.wins,
+                        top10s = s.top10s,
+                        roundsPlayed = s.roundsPlayed,
+                        losses = s.losses,
+                        headshotKills = s.headshotKills,
+                        longestKill = s.longestKill,
+                        roundMostKills = s.roundMostKills,
+                        walkDistance = s.walkDistance,
+                        rideDistance = s.rideDistance,
+                        boosts = s.boosts,
+                        heals = s.heals,
+                        revives = s.revives,
+                        teamKills = s.teamKills,
+                        fetchedAt = LocalDateTime.now()
+                    )
+                }
+
+            // Match-IDs aus allen relationships.matches* zusammenführen
+            val relationships = data["relationships"]?.jsonObject ?: return Pair(stats, emptyList())
+            val matchIds = listOf(
+                "matchesSolo", "matchesSoloFPP",
+                "matchesDuo", "matchesDuoFPP",
+                "matchesSquad", "matchesSquadFPP"
+            ).flatMap { key ->
+                relationships[key]?.jsonObject
+                    ?.get("data")?.jsonArray
+                    ?.mapNotNull { it.jsonObject["id"]?.jsonPrimitive?.content }
+                    ?: emptyList()
+            }.distinct()
+
+            Pair(stats, matchIds)
+        } catch (e: Exception) {
+            log.warn { "[PUBG] fetchSeasonStats ($accountId) fehlgeschlagen: ${e.message}" }
+            null
         }
     }
 

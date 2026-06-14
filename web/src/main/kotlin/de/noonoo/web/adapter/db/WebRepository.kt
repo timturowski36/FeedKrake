@@ -379,7 +379,7 @@ class WebRepository(private val dataSource: DataSource, private val pubgPlayers:
               (SELECT COALESCE(SUM(ss.wins), 0)
                FROM pubg_season_stats ss
                JOIN pubg_players pl ON pl.account_id = ss.account_id
-               WHERE pl.name = p.player_name
+               WHERE pl.name = ?
                  AND ss.season_id = 'lifetime')                               AS lifetime_wins
             FROM pubg_match_participants p
             JOIN pubg_matches m ON p.match_id = m.match_id
@@ -387,7 +387,7 @@ class WebRepository(private val dataSource: DataSource, private val pubgPlayers:
         """.trimIndent()
         dataSource.connection.use { conn ->
             conn.prepareStatement(sql).use { stmt ->
-                repeat(6) { stmt.setString(it + 1, player) }
+                repeat(7) { stmt.setString(it + 1, player) }
                 stmt.executeQuery().use { rs ->
                     if (!rs.next()) return@withContext null
                     val mostKills = rs.getInt("most_kills")

@@ -16,6 +16,8 @@ interface PubgRepository {
     fun saveParticipants(participants: List<PubgMatchParticipant>)
     fun saveSeasonStats(stats: List<PubgSeasonStats>)
     fun findKnownMatchIds(matchIds: List<String>): Set<String>
+    fun getCachedMeta(key: String): Pair<String, java.time.Instant>?
+    fun saveMeta(key: String, value: String)
 
     // ── Query ─────────────────────────────────────────────────────────────────
     fun findPlayerByName(name: String): PubgPlayer?

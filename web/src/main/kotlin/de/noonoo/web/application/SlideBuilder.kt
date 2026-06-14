@@ -39,8 +39,15 @@ private val PUBG_SLUG_TO_MODULE = mapOf(
     "chrissi1970"    to Module.PUBG_CHRISSI1970
 )
 private val MAP_ABBR = mapOf(
-    "Erangel" to "Era", "Vikendi" to "Vik", "Taego" to "Tae",
-    "Rondo" to "Ron", "Miramar" to "Mir", "Sanhok" to "San", "Karakin" to "Kar"
+    "Baltic_Main" to "Era", "DihorOtok_Main" to "Vik", "Tiger_Main" to "Tae",
+    "Kiki_Main" to "Ron", "Desert_Main" to "Mir", "Chimera_Main" to "San",
+    "Savage_Main" to "San", "Karakin" to "Kar", "Neon_Main" to "Des"
+)
+
+private val MAP_NAMES = mapOf(
+    "Baltic_Main" to "Erangel", "DihorOtok_Main" to "Vikendi", "Tiger_Main" to "Taego",
+    "Kiki_Main" to "Rondo", "Desert_Main" to "Miramar", "Chimera_Main" to "Sanhok",
+    "Savage_Main" to "Sanhok", "Karakin" to "Karakin", "Neon_Main" to "Deston"
 )
 
 private val WM_MODULES = setOf(
@@ -702,10 +709,10 @@ class SlideBuilder(private val repo: WebRepository) {
                         put("player", player)
                         put("mostKills", rec.mostKills)
                         put("mostKillsDate", rec.mostKillsDate)
-                        put("mostKillsMap", rec.mostKillsMap)
+                        put("mostKillsMap", MAP_NAMES[rec.mostKillsMap] ?: rec.mostKillsMap)
                         put("highestDamage", rec.highestDamage.toInt())
                         put("highestDamageDate", rec.highestDamageDate)
-                        put("highestDamageMap", rec.highestDamageMap)
+                        put("highestDamageMap", MAP_NAMES[rec.highestDamageMap] ?: rec.highestDamageMap)
                         put("longestKill", rec.longestKill.toInt())
                         put("longestKillDate", rec.longestKillDate)
                         put("lifetimeWins", rec.lifetimeWins)

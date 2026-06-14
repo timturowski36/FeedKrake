@@ -10,6 +10,7 @@ import de.noonoo.core.domain.model.PubgSeasonStats
 import de.noonoo.core.domain.port.output.PubgRepository
 import java.sql.ResultSet
 import java.sql.Timestamp
+import java.time.Instant
 import java.time.LocalDateTime
 import javax.sql.DataSource
 
@@ -382,6 +383,34 @@ class PostgresPubgRepository(private val dataSource: DataSource) : PubgRepositor
                     }
                     results
                 }
+            }
+        }
+    }
+
+    override fun getCachedMeta(key: String): Pair<String, Instant>? {
+        val sql = "SELECT value, updated_at FROM pubg_meta WHERE key = ?"
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, key)
+                stmt.executeQuery().use { rs ->
+                    if (rs.next()) Pair(rs.getString("value"), rs.getTimestamp("updated_at").toInstant())
+                    else null
+                }
+            }
+        }
+    }
+
+    override fun saveMeta(key: String, value: String) {
+        val sql = """
+            INSERT INTO pubg_meta (key, value, updated_at)
+            VALUES (?, ?, NOW())
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+        """.trimIndent()
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, key)
+                stmt.setString(2, value)
+                stmt.executeUpdate()
             }
         }
     }

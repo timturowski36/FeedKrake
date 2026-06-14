@@ -15,7 +15,7 @@ modules:
     accountIds:
       - "account.af4b877b95df46a3804d38d8be1d3225"
     schedule:
-      fetchIntervalMinutes: 30
+      fetchIntervalMinutes: 5
     outputs:
       # Tagesstatistik – täglich um 09:00
       - type: discord

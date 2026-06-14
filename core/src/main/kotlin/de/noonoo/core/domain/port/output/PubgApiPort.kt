@@ -10,4 +10,6 @@ interface PubgApiPort {
     suspend fun fetchPlayerById(accountId: String, platform: String): PubgPlayer?
     suspend fun fetchMatchDetails(matchId: String, platform: String): Pair<PubgMatch, List<PubgMatchParticipant>>?
     suspend fun fetchLifetimeStats(accountId: String, platform: String): List<PubgSeasonStats>
+    suspend fun fetchCurrentSeasonId(platform: String): String?
+    suspend fun fetchSeasonStats(accountId: String, seasonId: String, platform: String): Pair<List<PubgSeasonStats>, List<String>>?
 }

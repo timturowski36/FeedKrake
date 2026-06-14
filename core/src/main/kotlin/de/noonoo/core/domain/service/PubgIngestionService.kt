@@ -5,66 +5,131 @@ import de.noonoo.core.domain.port.output.PubgApiPort
 import de.noonoo.core.domain.port.output.PubgRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.Instant
 
 private val log = KotlinLogging.logger {}
 
 // PUBG API rate limit: 10 requests/minute for player and season endpoints.
 // Match endpoints are unlimited. We wait 6 s between rate-limited calls to stay safe.
 private const val RATE_LIMIT_DELAY_MS = 6_000L
+private const val SEASON_ID_KEY = "current_season_id"
+private val SEASON_ID_TTL = Duration.ofHours(24)
+private val LIFETIME_STATS_TTL = Duration.ofMinutes(60)
 
 class PubgIngestionService(
     private val apiPort: PubgApiPort,
     private val repository: PubgRepository
 ) : FetchPubgDataUseCase {
 
+    // In-memory timestamp: wann Lifetime-Stats zuletzt abgerufen wurden
+    @Volatile private var lastLifetimeRefreshAt: Instant = Instant.EPOCH
+
     override suspend fun fetchAndStore(playerNames: List<String>, platform: String, accountIds: List<String>) {
-        val allPlayers = mutableListOf<de.noonoo.core.domain.model.PubgPlayer>()
+        // ── 1. Season-ID ermitteln (gecacht, täglich erneuern) ────────────────
+        val seasonId = resolveSeasonId(platform) ?: run {
+            log.warn { "[PUBG] Season-ID nicht verfügbar – Abbruch." }
+            return
+        }
 
-        // Fetch by account ID directly (more reliable, bypasses name lookup)
-        accountIds.forEachIndexed { index, accountId ->
+        // ── 2. Alle Account-IDs auflösen ──────────────────────────────────────
+        // Config-AccountIDs direkt übernehmen; Namenbasierte aus DB oder API holen
+        val allAccountIds = resolveAllAccountIds(playerNames, platform, accountIds)
+        if (allAccountIds.isEmpty()) {
+            log.warn { "[PUBG] Keine Account-IDs verfügbar – Abbruch." }
+            return
+        }
+
+        // ── 3. Season-Stats + Match-IDs (jeder Aufruf) ───────────────────────
+        val allMatchIds = mutableSetOf<String>()
+        allAccountIds.forEachIndexed { index, accountId ->
             if (index > 0) delay(RATE_LIMIT_DELAY_MS)
-            val player = apiPort.fetchPlayerById(accountId, platform)
-            if (player != null) {
-                log.info { "[PUBG] Spieler per ID gefunden: ${player.name} ($accountId)" }
-                allPlayers += player
+            val result = apiPort.fetchSeasonStats(accountId, seasonId, platform)
+            if (result != null) {
+                val (stats, matchIds) = result
+                if (stats.isNotEmpty()) repository.saveSeasonStats(stats)
+                allMatchIds += matchIds
+                log.info { "[PUBG] Season-Stats $accountId: ${stats.size} Modi, ${matchIds.size} Matches" }
             } else {
-                log.warn { "[PUBG] Kein Spieler gefunden für Account-ID: $accountId" }
+                log.warn { "[PUBG] Season-Stats für $accountId nicht verfügbar." }
             }
         }
 
-        // Fetch remaining by name (only names not already covered by account IDs)
-        val coveredNames = allPlayers.map { it.name.lowercase() }.toSet()
-        val remainingNames = playerNames.filter { it.lowercase() !in coveredNames }
-        remainingNames.chunked(10).forEachIndexed { index, batch ->
-            if (index > 0 || allPlayers.isNotEmpty()) delay(RATE_LIMIT_DELAY_MS)
-            val found = apiPort.fetchPlayersByName(batch, platform)
-            log.info { "[PUBG] Name-Lookup '$batch': ${found.size} Spieler gefunden" }
-            allPlayers += found
-        }
-
-        if (allPlayers.isEmpty()) return
-
-        repository.savePlayers(allPlayers)
-
-        // Match endpoints are exempt from rate limiting
-        val allMatchIds = allPlayers.flatMap { it.recentMatchIds }.distinct()
-        val knownMatchIds = repository.findKnownMatchIds(allMatchIds)
-        val newMatchIds = allMatchIds.filter { it !in knownMatchIds }
-
-        for (matchId in newMatchIds) {
-            val result = apiPort.fetchMatchDetails(matchId, platform) ?: continue
-            val (match, participants) = result
-            repository.saveMatch(match)
-            repository.saveParticipants(participants)
-        }
-
-        // Lifetime stats endpoint counts against the rate limit (1 call per player)
-        allPlayers.forEachIndexed { index, player ->
-            if (index > 0) delay(RATE_LIMIT_DELAY_MS)
-            val stats = apiPort.fetchLifetimeStats(player.accountId, platform)
-            if (stats.isNotEmpty()) {
-                repository.saveSeasonStats(stats)
+        // ── 4. Match-Details für neue Matches ────────────────────────────────
+        if (allMatchIds.isNotEmpty()) {
+            val knownIds = repository.findKnownMatchIds(allMatchIds.toList())
+            val newMatchIds = allMatchIds - knownIds
+            log.info { "[PUBG] ${newMatchIds.size} neue Matches von ${allMatchIds.size} gesamt." }
+            for (matchId in newMatchIds) {
+                val result = apiPort.fetchMatchDetails(matchId, platform) ?: continue
+                val (match, participants) = result
+                repository.saveMatch(match)
+                repository.saveParticipants(participants)
             }
         }
+
+        // ── 5. Lifetime-Stats (nur alle 60 Min) ──────────────────────────────
+        val lifetimeStale = Duration.between(lastLifetimeRefreshAt, Instant.now()) > LIFETIME_STATS_TTL
+        if (lifetimeStale) {
+            log.info { "[PUBG] Starte Lifetime-Stats-Refresh (${allAccountIds.size} Spieler)..." }
+            allAccountIds.forEachIndexed { index, accountId ->
+                if (index > 0) delay(RATE_LIMIT_DELAY_MS)
+                val stats = apiPort.fetchLifetimeStats(accountId, platform)
+                if (stats.isNotEmpty()) {
+                    repository.saveSeasonStats(stats)
+                    log.info { "[PUBG] Lifetime-Stats $accountId: ${stats.size} Modi gespeichert." }
+                }
+            }
+            lastLifetimeRefreshAt = Instant.now()
+            log.info { "[PUBG] Lifetime-Stats-Refresh abgeschlossen." }
+        }
+    }
+
+    private suspend fun resolveAllAccountIds(
+        playerNames: List<String>,
+        platform: String,
+        configAccountIds: List<String>
+    ): List<String> {
+        val result = mutableListOf<String>()
+        result += configAccountIds
+
+        if (playerNames.isEmpty()) return result
+
+        // Bekannte IDs aus DB laden
+        val fromDb = playerNames.mapNotNull { name ->
+            repository.findPlayerByName(name)?.also { player ->
+                result += player.accountId
+            }
+        }
+        val resolvedNames = fromDb.map { it.name.lowercase() }.toSet()
+
+        // Unbekannte Spieler per API holen
+        val missingNames = playerNames.filter { it.lowercase() !in resolvedNames }
+        if (missingNames.isNotEmpty()) {
+            missingNames.chunked(10).forEachIndexed { index, batch ->
+                if (index > 0 || result.isNotEmpty()) delay(RATE_LIMIT_DELAY_MS)
+                val players = apiPort.fetchPlayersByName(batch, platform)
+                repository.savePlayers(players)
+                result += players.map { it.accountId }
+                log.info { "[PUBG] Player-Lookup '$batch': ${players.size} Spieler gefunden" }
+            }
+        }
+
+        return result.distinct()
+    }
+
+    private suspend fun resolveSeasonId(platform: String): String? {
+        val cached = repository.getCachedMeta(SEASON_ID_KEY)
+        if (cached != null && Duration.between(cached.second, Instant.now()) < SEASON_ID_TTL) {
+            log.info { "[PUBG] Season-ID aus Cache: ${cached.first}" }
+            return cached.first
+        }
+        log.info { "[PUBG] Rufe aktuelle Season-ID ab..." }
+        val seasonId = apiPort.fetchCurrentSeasonId(platform)
+        if (seasonId != null) {
+            repository.saveMeta(SEASON_ID_KEY, seasonId)
+            log.info { "[PUBG] Season-ID: $seasonId" }
+        }
+        return seasonId
     }
 }
