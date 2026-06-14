@@ -521,12 +521,47 @@
     @media (min-width: 2560px) {
       :root { --text-heading: 2.8rem; --text-body: 1.2rem; --text-data: 1.1rem; }
     }
+
+    /* ── Auto-Button ────────────────────────────────────────────────────── */
+    .auto-btn {
+      background: none; border: 1px solid var(--color-border);
+      color: var(--color-text-secondary); font-size: var(--text-label);
+      font-family: var(--font-mono); padding: var(--space-1) var(--space-4);
+      border-radius: var(--space-2); cursor: pointer; transition: all 0.2s;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .auto-btn:hover { border-color: var(--color-accent); color: var(--color-text-primary); }
+    .auto-btn.active {
+      background: var(--color-accent-dim); border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    /* ── Subpage-Navigation ─────────────────────────────────────────────── */
+    .page-nav {
+      display: flex; align-items: center; justify-content: center; gap: var(--space-6);
+      position: fixed; bottom: var(--space-4); left: 50%; transform: translateX(-50%);
+      z-index: 100; background: rgba(20,20,20,0.85); border: 1px solid var(--color-border);
+      border-radius: 32px; padding: var(--space-2) var(--space-6);
+      backdrop-filter: blur(8px);
+    }
+    .page-nav.hidden { display: none; }
+    .page-nav-btn {
+      background: none; border: none; color: var(--color-text-primary);
+      font-size: 1.5rem; cursor: pointer; padding: var(--space-1) var(--space-3);
+      border-radius: 50%; transition: background 0.2s; line-height: 1;
+    }
+    .page-nav-btn:hover { background: rgba(255,255,255,0.1); }
+    .page-nav-btn:disabled { opacity: 0.2; cursor: default; }
+    .page-indicator {
+      color: var(--color-text-secondary); font-size: var(--text-label);
+      font-family: var(--font-mono); min-width: 36px; text-align: center;
+    }
   </style>
 </head>
 <body>
   <header id="module-bar">
     <div class="modules" id="modules-container"></div>
-    <button id="skip-btn" title="Nächster Slide">▶ weiter</button>
+    <button id="auto-btn" class="auto-btn" title="Slideshow starten/stoppen">Auto ▶</button>
   </header>
 
   <div id="empty-hint" hidden>
@@ -538,6 +573,12 @@
     <h1 class="slide-title">Lädt…</h1>
   </main>
   <div id="status">verbinde</div>
+
+  <div id="pageNav" class="page-nav hidden">
+    <button id="prevPage" class="page-nav-btn" aria-label="Zurück">&#8592;</button>
+    <span id="pageIndicator" class="page-indicator"></span>
+    <button id="nextPage" class="page-nav-btn" aria-label="Weiter">&#8594;</button>
+  </div>
 
   <script>
     // ── Menü-Struktur ─────────────────────────────────────────────────────────
@@ -575,6 +616,20 @@
       ]}
     ];
 
+    // ── Sub-Page-Konfiguration (welche Slide-Types gehören zu welchem Modul-Slug) ─
+    const MODULE_SUBPAGES = {
+      'wm-gruppen':    ['wm.standings.0','wm.standings.1','wm.standings.2',
+                        'wm.standings.3','wm.standings.4','wm.standings.5'],
+      'wm-deutschland':['wm.de.next','wm.de.last'],
+      'bundesliga-1':  ['football.bl1','football.bl1.scorers'],
+      'bundesliga-2':  ['football.bl2','football.bl2.scorers'],
+    };
+    ['brotrustgaming','alxndr-d','libaty','philipnc','einfachden','chrissi1970'].forEach(p => {
+      MODULE_SUBPAGES[`pubg-${p}`] = [
+        `pubg.weekly.${p}`,`pubg.daily.${p}`,`pubg.recent.${p}`,`pubg.records.${p}`
+      ];
+    });
+
     const ALL_MODULES = MENU.flatMap(g => g.children ? g.children.map(c => c.slug) : [g.slug]);
     const DEFAULT_MODULES = new Set([
       "wm-naechste-spiele","wm-letzte-ergebnisse","wm-gruppen","wm-deutschland","wm-torschuetzen",
@@ -587,7 +642,6 @@
 
     const slideEl   = document.getElementById("slide");
     const statusEl  = document.getElementById("status");
-    const skipBtn   = document.getElementById("skip-btn");
     const emptyHint = document.getElementById("empty-hint");
     const sessionId = crypto.randomUUID();
 
@@ -613,6 +667,64 @@
 
     let selection = loadSelection();
     let emptyTimer = null;
+
+    // ── Subpage-Navigation ────────────────────────────────────────────────
+    let currentModuleSlug = null;
+    let currentSlideType  = null;
+
+    function moduleEnumToSlug(moduleEnum) {
+      return moduleEnum.toLowerCase().replace(/_/g, '-');
+    }
+    function gotoChild(slug) {
+      fetch(`/goto?sid=${sessionId}&slug=${encodeURIComponent(slug)}`, { method: 'POST' }).catch(() => {});
+    }
+    function gotoType(type) {
+      fetch(`/goto?sid=${sessionId}&type=${encodeURIComponent(type)}`, { method: 'POST' }).catch(() => {});
+    }
+    function updatePageNav() {
+      const pageNav   = document.getElementById('pageNav');
+      const prevBtn   = document.getElementById('prevPage');
+      const nextBtn   = document.getElementById('nextPage');
+      const indicator = document.getElementById('pageIndicator');
+      const subpages  = MODULE_SUBPAGES[currentModuleSlug] ?? [];
+      if (subpages.length <= 1) { pageNav.classList.add('hidden'); return; }
+      pageNav.classList.remove('hidden');
+      const idx = subpages.indexOf(currentSlideType);
+      prevBtn.disabled = idx <= 0;
+      nextBtn.disabled = idx >= subpages.length - 1 || idx === -1;
+      indicator.textContent = idx >= 0 ? `${idx + 1} / ${subpages.length}` : '';
+    }
+    document.getElementById('prevPage').addEventListener('click', () => {
+      const subpages = MODULE_SUBPAGES[currentModuleSlug] ?? [];
+      const idx = subpages.indexOf(currentSlideType);
+      if (idx > 0) gotoType(subpages[idx - 1]);
+    });
+    document.getElementById('nextPage').addEventListener('click', () => {
+      const subpages = MODULE_SUBPAGES[currentModuleSlug] ?? [];
+      const idx = subpages.indexOf(currentSlideType);
+      if (idx < subpages.length - 1) gotoType(subpages[idx + 1]);
+    });
+
+    // ── Auto-Slideshow ────────────────────────────────────────────────────
+    let autoTimer = null;
+    const AUTO_INTERVAL_MS = 30_000;
+    function sendSkip() {
+      fetch(`/skip?sid=${sessionId}`, { method: 'POST' }).catch(() => {});
+    }
+    function startAuto() {
+      const btn = document.getElementById('auto-btn');
+      btn.classList.add('active'); btn.textContent = 'Auto ⏸';
+      sendSkip();
+      autoTimer = setInterval(sendSkip, AUTO_INTERVAL_MS);
+    }
+    function stopAuto() {
+      clearInterval(autoTimer); autoTimer = null;
+      const btn = document.getElementById('auto-btn');
+      btn.classList.remove('active'); btn.textContent = 'Auto ▶';
+    }
+    document.getElementById('auto-btn').addEventListener('click', () => {
+      autoTimer ? stopAuto() : startAuto();
+    });
 
     // ── Module-Bar ────────────────────────────────────────────────────────────
 
@@ -667,7 +779,7 @@
       }
     }
 
-    function applyChange() { persistSelection(selection); buildModuleBar(); attachHoverDropdowns(); reconnect(); }
+    function applyChange() { persistSelection(selection); buildModuleBar(); attachHoverDropdowns(); reconnect(); updatePageNav(); }
 
     // ── Dropdown: Hover mit Schließverzögerung ────────────────────────────────
     // mouseenter/mouseleave + 150ms Delay verhindert, dass das Dropdown
@@ -695,6 +807,7 @@
         const m = sub.dataset.module;
         selection.has(m) ? selection.delete(m) : selection.add(m);
         applyChange();
+        gotoChild(m);
         return;
       }
       // Touch-Fallback: Parent-Button öffnet/schließt Dropdown per Klick
@@ -719,14 +832,6 @@
         document.querySelectorAll(".module-group.open").forEach(g => g.classList.remove("open"));
     });
 
-    // ── Skip ──────────────────────────────────────────────────────────────────
-
-    skipBtn.addEventListener("click", () => {
-      fetch(`/skip?sid=${sessionId}`, { method: "POST" }).catch(() => {});
-      skipBtn.disabled = true;
-      setTimeout(() => { skipBtn.disabled = false; }, 1500);
-    });
-
     // ── SSE ───────────────────────────────────────────────────────────────────
 
     let es = null;
@@ -742,6 +847,9 @@
           setTimeout(() => { slideEl.innerHTML = renderSlide(data); slideEl.style.opacity = "1"; }, 200);
         }
         statusEl.textContent = new Date().toLocaleTimeString("de-DE");
+        currentModuleSlug = moduleEnumToSlug(data.module);
+        currentSlideType  = data.type;
+        updatePageNav();
       });
       es.onerror = () => { statusEl.textContent = "getrennt"; };
       es.onopen  = () => { statusEl.textContent = "verbunden"; };

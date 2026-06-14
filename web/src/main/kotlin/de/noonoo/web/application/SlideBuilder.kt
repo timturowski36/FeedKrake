@@ -139,6 +139,24 @@ class SlideBuilder(private val repo: WebRepository) {
         return null
     }
 
+    /** Baut genau diesen Rotation-Slot (für Sub-Page-Pfeilnavigation). Index wird nicht vorgerückt. */
+    suspend fun buildOfType(type: String): Slide? = runCatching { tryBuild(type) }.getOrNull()
+
+    /** Erster verfügbarer Slide für ein konkretes Module (für /goto-Navigation). */
+    suspend fun buildForModule(module: Module): Slide? {
+        for (i in 0 until rotation.size) {
+            val current = (index + i) % rotation.size
+            val type = rotation[current]
+            if (moduleFor(type) != module) continue
+            val slide = runCatching { tryBuild(type) }.getOrNull()
+            if (slide != null) {
+                index = (current + 1) % rotation.size
+                return slide
+            }
+        }
+        return null
+    }
+
     /** Nächster passender Slide für die Module — treibt den globalen Index voran. */
     suspend fun buildNextFor(modules: Set<Module>): Slide? {
         val live = runCatching { tryBuild("wm.live") }.getOrNull()
