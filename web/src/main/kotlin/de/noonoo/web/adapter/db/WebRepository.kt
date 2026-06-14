@@ -636,6 +636,7 @@ class WebRepository(private val dataSource: DataSource, private val pubgPlayers:
             LEFT JOIN wm_teams h ON f.home_team_id = h.id
             LEFT JOIN wm_teams a ON f.away_team_id = a.id
             WHERE f.status NOT IN ('FT', 'AET', 'PEN', 'CANC', 'PST')
+              AND NOT (f.status = 'NS' AND f.kickoff_utc < NOW() - INTERVAL '150 minutes')
             ORDER BY f.kickoff_utc
             LIMIT ?
         """.trimIndent()

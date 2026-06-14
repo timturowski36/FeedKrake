@@ -9,7 +9,11 @@ import de.noonoo.core.domain.model.WcTopScorer
 import java.time.Instant
 
 fun EspnStatusType.toWcStatus(period: Int): WcFixtureStatus = when (name) {
-    "STATUS_SCHEDULED"   -> WcFixtureStatus.NS
+    "STATUS_SCHEDULED"   -> when (state) {
+        "post" -> WcFixtureStatus.FT    // ESPN-API-Lag: Spiel beendet, Status noch nicht aktualisiert
+        "in"   -> if (period <= 1) WcFixtureStatus.FIRST_HALF else WcFixtureStatus.SECOND_HALF
+        else   -> WcFixtureStatus.NS
+    }
     "STATUS_IN_PROGRESS" -> if (period <= 1) WcFixtureStatus.FIRST_HALF else WcFixtureStatus.SECOND_HALF
     "STATUS_HALFTIME"    -> WcFixtureStatus.HT
     "STATUS_FINAL"       -> WcFixtureStatus.FT
@@ -18,7 +22,7 @@ fun EspnStatusType.toWcStatus(period: Int): WcFixtureStatus = when (name) {
     "STATUS_FINAL_PEN"   -> WcFixtureStatus.PEN
     "STATUS_POSTPONED"   -> WcFixtureStatus.PST
     "STATUS_CANCELLED"   -> WcFixtureStatus.CANC
-    else                 -> if (completed) WcFixtureStatus.FT else WcFixtureStatus.NS
+    else                 -> if (completed || state == "post") WcFixtureStatus.FT else WcFixtureStatus.NS
 }
 
 fun EspnEvent.toWcFixture(teamLookup: (String) -> WcTeam?): WcFixture? {
