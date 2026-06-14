@@ -25,7 +25,6 @@ import io.ktor.server.sse.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.sse.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -34,7 +33,6 @@ import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.channels.Channel
 
@@ -81,9 +79,10 @@ fun Application.module(dataSource: HikariDataSource) {
     val builder = SlideBuilder(repo)
     val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
 
-    // sid → Modulauswahl + Skip-Channel (pro SSE-Client)
+    // sid → Modulauswahl + Nav-Channel (pro SSE-Client)
+    // null = normaler Skip, slug-String = goto spezifisches Modul
     val clientModules  = ConcurrentHashMap<String, Set<Module>>()
-    val skipChannels   = ConcurrentHashMap<String, Channel<Unit>>()
+    val navChannels    = ConcurrentHashMap<String, Channel<String?>>()
 
     install(ContentNegotiation) { json(json) }
     install(CallLogging)
@@ -111,9 +110,9 @@ fun Application.module(dataSource: HikariDataSource) {
                     .ifEmpty { Module.entries.toSet() }
             }
 
-            val skipCh = Channel<Unit>(Channel.CONFLATED)
+            val navCh = Channel<String?>(Channel.CONFLATED)
             clientModules[sid] = selectedModules
-            skipChannels[sid]  = skipCh
+            navChannels[sid]   = navCh
             log.info("SSE client verbunden sid=$sid (Module: ${selectedModules.joinToString { it.slug }})")
             heartbeat {
                 period = 20.seconds
@@ -136,12 +135,16 @@ fun Application.module(dataSource: HikariDataSource) {
                 val first = runCatching { builder.buildFor(selectedModules) }.getOrNull() ?: emptySlide()
                 send(ServerSentEvent(event = "slide", data = json.encodeToString(first)))
 
-                // Endlosschleife: 2 Minuten warten (oder Skip-Signal), dann nächsten Slide senden
+                // Endlosschleife: wartet auf Signal (Auto-Skip, /goto slug, /goto type)
                 while (true) {
-                    withTimeoutOrNull(2.minutes) { skipCh.receive() }
-                    val slide = runCatching { builder.buildNextFor(selectedModules) }.getOrNull()
-                        ?: runCatching { builder.buildFor(selectedModules) }.getOrNull()
-                        ?: emptySlide()
+                    val signal = navCh.receive()
+                    val slide: Slide = when {
+                        signal == null        -> runCatching { builder.buildNextFor(selectedModules) }.getOrNull()
+                        '.' in signal         -> runCatching { builder.buildOfType(signal) }.getOrNull()
+                        else                  -> Module.fromSlug(signal)
+                                                    ?.takeIf { it in selectedModules }
+                                                    ?.let { runCatching { builder.buildForModule(it) }.getOrNull() }
+                    } ?: runCatching { builder.buildFor(selectedModules) }.getOrNull() ?: emptySlide()
                     send(ServerSentEvent(event = "slide", data = json.encodeToString(slide)))
                     log.info("Slide → sid=$sid: ${slide.type}")
                 }
@@ -149,16 +152,27 @@ fun Application.module(dataSource: HikariDataSource) {
                 log.debug("SSE client getrennt sid=$sid: ${e.message}")
             } finally {
                 clientModules.remove(sid)
-                skipChannels.remove(sid)
-                skipCh.close()
+                navChannels.remove(sid)
+                navCh.close()
             }
         }
 
         post("/skip") {
             val sid = call.request.queryParameters["sid"]
                 ?: return@post call.respond(HttpStatusCode.BadRequest, "sid missing")
-            skipChannels[sid]?.trySend(Unit)
+            navChannels[sid]?.trySend(null)
             log.debug("Skip-Signal → sid=$sid")
+            call.respond(HttpStatusCode.NoContent)
+        }
+
+        post("/goto") {
+            val sid = call.request.queryParameters["sid"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "sid missing")
+            val target = call.request.queryParameters["slug"]
+                ?: call.request.queryParameters["type"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "slug or type missing")
+            navChannels[sid]?.trySend(target)
+            log.debug("Goto-Signal → sid=$sid target=$target")
             call.respond(HttpStatusCode.NoContent)
         }
     }
