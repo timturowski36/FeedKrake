@@ -83,7 +83,8 @@ fun Application.module(dataSource: HikariDataSource) {
 
     // sid → Modulauswahl + Skip-Channel (pro SSE-Client)
     val clientModules  = ConcurrentHashMap<String, Set<Module>>()
-    val skipChannels   = ConcurrentHashMap<String, Channel<Unit>>()
+    val skipChannels   = ConcurrentHashMap<String, Channel<String?>>()
+    val frozenSessions = ConcurrentHashMap<String, Boolean>()
 
     install(ContentNegotiation) { json(json) }
     install(CallLogging)
@@ -111,7 +112,8 @@ fun Application.module(dataSource: HikariDataSource) {
                     .ifEmpty { Module.entries.toSet() }
             }
 
-            val skipCh = Channel<Unit>(Channel.CONFLATED)
+            val firstType = call.request.queryParameters["first"]?.takeIf { it.isNotBlank() }
+            val skipCh = Channel<String?>(Channel.CONFLATED)
             clientModules[sid] = selectedModules
             skipChannels[sid]  = skipCh
             log.info("SSE client verbunden sid=$sid (Module: ${selectedModules.joinToString { it.slug }})")
@@ -132,16 +134,30 @@ fun Application.module(dataSource: HikariDataSource) {
             )
 
             try {
-                // Ersten Slide sofort senden
-                val first = runCatching { builder.buildFor(selectedModules) }.getOrNull() ?: emptySlide()
-                send(ServerSentEvent(event = "slide", data = json.encodeToString(first)))
-
-                // Endlosschleife: 2 Minuten warten (oder Skip-Signal), dann nächsten Slide senden
-                while (true) {
-                    withTimeoutOrNull(2.minutes) { skipCh.receive() }
-                    val slide = runCatching { builder.buildNextFor(selectedModules) }.getOrNull()
+                // Ersten Slide sofort senden (mit optionalem ?first= Typ)
+                val first = if (firstType != null) {
+                    builder.buildSpecific(firstType)
                         ?: runCatching { builder.buildFor(selectedModules) }.getOrNull()
                         ?: emptySlide()
+                } else {
+                    runCatching { builder.buildFor(selectedModules) }.getOrNull() ?: emptySlide()
+                }
+                send(ServerSentEvent(event = "slide", data = json.encodeToString(first)))
+
+                // Endlosschleife: 2 Minuten warten (oder Skip/Goto-Signal), dann nächsten Slide senden
+                while (true) {
+                    val typeHint = withTimeoutOrNull(2.minutes) { skipCh.receive() }
+                    val frozen = frozenSessions[sid] == true
+                    if (typeHint == null && frozen) continue  // Timeout + Pause: kein Advance
+                    val slide = if (!typeHint.isNullOrEmpty()) {
+                        builder.buildSpecific(typeHint)
+                            ?: runCatching { builder.buildNextFor(selectedModules) }.getOrNull()
+                            ?: emptySlide()
+                    } else {
+                        runCatching { builder.buildNextFor(selectedModules) }.getOrNull()
+                            ?: runCatching { builder.buildFor(selectedModules) }.getOrNull()
+                            ?: emptySlide()
+                    }
                     send(ServerSentEvent(event = "slide", data = json.encodeToString(slide)))
                     log.info("Slide → sid=$sid: ${slide.type}")
                 }
@@ -150,6 +166,7 @@ fun Application.module(dataSource: HikariDataSource) {
             } finally {
                 clientModules.remove(sid)
                 skipChannels.remove(sid)
+                frozenSessions.remove(sid)
                 skipCh.close()
             }
         }
@@ -157,8 +174,34 @@ fun Application.module(dataSource: HikariDataSource) {
         post("/skip") {
             val sid = call.request.queryParameters["sid"]
                 ?: return@post call.respond(HttpStatusCode.BadRequest, "sid missing")
-            skipChannels[sid]?.trySend(Unit)
+            skipChannels[sid]?.trySend(null)
             log.debug("Skip-Signal → sid=$sid")
+            call.respond(HttpStatusCode.NoContent)
+        }
+
+        post("/goto") {
+            val sid  = call.request.queryParameters["sid"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "sid missing")
+            val type = call.request.queryParameters["type"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "type missing")
+            skipChannels[sid]?.trySend(type)
+            log.debug("Goto-Signal → sid=$sid type=$type")
+            call.respond(HttpStatusCode.NoContent)
+        }
+
+        post("/freeze") {
+            val sid = call.request.queryParameters["sid"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "sid missing")
+            frozenSessions[sid] = true
+            log.debug("Freeze → sid=$sid")
+            call.respond(HttpStatusCode.NoContent)
+        }
+
+        post("/thaw") {
+            val sid = call.request.queryParameters["sid"]
+                ?: return@post call.respond(HttpStatusCode.BadRequest, "sid missing")
+            frozenSessions[sid] = false
+            log.debug("Thaw → sid=$sid")
             call.respond(HttpStatusCode.NoContent)
         }
     }

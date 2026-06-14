@@ -139,6 +139,10 @@ class SlideBuilder(private val repo: WebRepository) {
         return null
     }
 
+    /** Baut direkt einen Slide eines bestimmten Typs, ohne den Rotations-Index zu verändern. */
+    suspend fun buildSpecific(type: String): Slide? =
+        runCatching { tryBuild(type) }.getOrNull()
+
     /** Nächster passender Slide für die Module — treibt den globalen Index voran. */
     suspend fun buildNextFor(modules: Set<Module>): Slide? {
         val live = runCatching { tryBuild("wm.live") }.getOrNull()

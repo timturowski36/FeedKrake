@@ -136,6 +136,52 @@
     }
     #skip-btn:hover { color: var(--color-text-primary); }
 
+    /* ── Slideshow-Toggle ───────────────────────────────────────────────────── */
+    .slideshow-control {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-shrink: 0;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--color-border-strong);
+      transition: .25s;
+      border-radius: 22px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background: var(--color-text-secondary);
+      transition: .25s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background: var(--color-accent); }
+    input:checked + .slider:before {
+      background: var(--color-text-primary);
+      transform: translateX(18px);
+    }
+    .toggle-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+
     /* ── Dropdown ───────────────────────────────────────────────────────────── */
     .module-group { position: relative; }
 
@@ -526,12 +572,15 @@
 <body>
   <header id="module-bar">
     <div class="modules" id="modules-container"></div>
+    <div class="slideshow-control">
+      <label class="switch" title="Auto-Slideshow an/aus">
+        <input type="checkbox" id="slideshowToggle" checked>
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label">Auto</span>
+    </div>
     <button id="skip-btn" title="Nächster Slide">▶ weiter</button>
   </header>
-
-  <div id="empty-hint" hidden>
-    Mindestens ein Modul wählen — in 10 s werden alle aktiviert.
-  </div>
 
   <main id="slide">
     <div class="slide-label">noonoo · verbinde</div>
@@ -575,44 +624,60 @@
       ]}
     ];
 
-    const ALL_MODULES = MENU.flatMap(g => g.children ? g.children.map(c => c.slug) : [g.slug]);
-    const DEFAULT_MODULES = new Set([
+    // ── Slug → Slide-Typ Mapping ──────────────────────────────────────────────
+
+    const SLUG_TO_TYPE = {
+      "wm-naechste-spiele":   "wm.fixtures",
+      "wm-letzte-ergebnisse": "wm.results",
+      "wm-gruppen":           "wm.standings.0",
+      "wm-deutschland":       "wm.de.next",
+      "wm-torschuetzen":      "wm.topscorers",
+      "wm-karten":            "wm.karten",
+      "bundesliga-1":         "football.bl1",
+      "bundesliga-2":         "football.bl2",
+      "pubg-brotrustgaming":  "pubg.weekly.brotrustgaming",
+      "pubg-alxndr-d":        "pubg.weekly.alxndr-d",
+      "pubg-libaty":          "pubg.weekly.libaty",
+      "pubg-philipnc":        "pubg.weekly.philipnc",
+      "pubg-einfachden":      "pubg.weekly.einfachden",
+      "pubg-chrissi1970":     "pubg.weekly.chrissi1970",
+      "f1-naechstes-rennen":  "f1.next",
+      "f1-letztes-rennen":    "f1.last.result",
+      "f1-fahrer":            "f1.drivers",
+      "f1-konstrukteure":     "f1.constructors",
+      "news-tagesschau":      "news.tagesschau",
+      "news-heise":           "news.heise"
+    };
+
+    const ALL_SLUGS = MENU.flatMap(g => g.children ? g.children.map(c => c.slug) : [g.slug]);
+    const DEFAULT_SLUGS = new Set([
       "wm-naechste-spiele","wm-letzte-ergebnisse","wm-gruppen","wm-deutschland","wm-torschuetzen",
       "bundesliga-1","bundesliga-2","pubg-philipnc",
       "f1-naechstes-rennen","f1-letztes-rennen","f1-fahrer","f1-konstrukteure",
       "news-tagesschau","news-heise"
     ]);
     const STORAGE_KEY = "noonoo.modules";
-    const EMPTY_FALLBACK_MS = 10_000;
-
-    const slideEl   = document.getElementById("slide");
-    const statusEl  = document.getElementById("status");
-    const skipBtn   = document.getElementById("skip-btn");
-    const emptyHint = document.getElementById("empty-hint");
-    const sessionId = crypto.randomUUID();
-
-    // ── Auswahl ───────────────────────────────────────────────────────────────
 
     function loadSelection() {
-      const p = new URL(location.href).searchParams.get("modules");
-      if (p !== null) return parseModuleList(p);
-      try { const s = localStorage.getItem(STORAGE_KEY); if (s) return parseModuleList(s); } catch {}
-      return new Set(DEFAULT_MODULES);
-    }
-    function parseModuleList(str) {
-      const set = new Set(str.split(",").map(s => s.trim().toLowerCase()).filter(s => ALL_MODULES.includes(s)));
-      return set.size > 0 ? set : new Set(DEFAULT_MODULES);
+      try {
+        const s = localStorage.getItem(STORAGE_KEY);
+        if (s) {
+          const set = new Set(s.split(",").filter(x => ALL_SLUGS.includes(x)));
+          if (set.size > 0) return set;
+        }
+      } catch {}
+      return new Set(DEFAULT_SLUGS);
     }
     function persistSelection(sel) {
-      const list = [...sel].sort().join(",");
-      const url = new URL(location.href);
-      sel.size === ALL_MODULES.length ? url.searchParams.delete("modules") : url.searchParams.set("modules", list);
-      history.replaceState(null, "", url.toString());
-      try { localStorage.setItem(STORAGE_KEY, list); } catch {}
+      try { localStorage.setItem(STORAGE_KEY, [...sel].sort().join(",")); } catch {}
     }
 
     let selection = loadSelection();
-    let emptyTimer = null;
+
+    const slideEl  = document.getElementById("slide");
+    const statusEl = document.getElementById("status");
+    const skipBtn  = document.getElementById("skip-btn");
+    const sessionId = crypto.randomUUID();
 
     // ── Module-Bar ────────────────────────────────────────────────────────────
 
@@ -656,18 +721,26 @@
           c.appendChild(btn);
         }
       });
-
-      if (selection.size === 0) {
-        emptyHint.hidden = false;
-        clearTimeout(emptyTimer);
-        emptyTimer = setTimeout(() => { selection = new Set(DEFAULT_MODULES); applyChange(); }, EMPTY_FALLBACK_MS);
-      } else {
-        emptyHint.hidden = true;
-        clearTimeout(emptyTimer);
-      }
     }
 
-    function applyChange() { persistSelection(selection); buildModuleBar(); attachHoverDropdowns(); reconnect(); }
+    function updateSelectionButtons() {
+      document.querySelectorAll(".sub-btn").forEach(btn => {
+        btn.setAttribute("aria-pressed", selection.has(btn.dataset.module) ? "true" : "false");
+      });
+      document.querySelectorAll(".module-btn[data-group]").forEach(btn => {
+        const group = MENU.find(g => g.key === btn.dataset.group);
+        if (!group?.children) return;
+        const all  = group.children.every(ch => selection.has(ch.slug));
+        const some = group.children.some(ch => selection.has(ch.slug));
+        btn.setAttribute("aria-pressed", all ? "true" : some ? "mixed" : "false");
+      });
+    }
+
+    // ── Navigation ────────────────────────────────────────────────────────────
+
+    function gotoSlide(type) {
+      fetch(`/goto?sid=${sessionId}&type=${encodeURIComponent(type)}`, { method: "POST" }).catch(() => {});
+    }
 
     // ── Dropdown: Hover mit Schließverzögerung ────────────────────────────────
     // mouseenter/mouseleave + 150ms Delay verhindert, dass das Dropdown
@@ -693,8 +766,12 @@
       const sub = e.target.closest(".sub-btn");
       if (sub) {
         const m = sub.dataset.module;
-        selection.has(m) ? selection.delete(m) : selection.add(m);
-        applyChange();
+        const wasSelected = selection.has(m);
+        wasSelected ? selection.delete(m) : selection.add(m);
+        persistSelection(selection);
+        updateSelectionButtons();
+        scheduleReconnect(!wasSelected ? SLUG_TO_TYPE[m] : null);
+        document.querySelectorAll(".module-group.open").forEach(g => g.classList.remove("open"));
         return;
       }
       // Touch-Fallback: Parent-Button öffnet/schließt Dropdown per Klick
@@ -709,8 +786,11 @@
       const direct = e.target.closest(".module-btn[data-module]");
       if (direct) {
         const m = direct.dataset.module;
-        selection.has(m) ? selection.delete(m) : selection.add(m);
-        applyChange();
+        const wasSelected = selection.has(m);
+        wasSelected ? selection.delete(m) : selection.add(m);
+        persistSelection(selection);
+        updateSelectionButtons();
+        scheduleReconnect(!wasSelected ? SLUG_TO_TYPE[m] : null);
       }
     });
 
@@ -727,12 +807,24 @@
       setTimeout(() => { skipBtn.disabled = false; }, 1500);
     });
 
+    // ── Slideshow-Toggle ──────────────────────────────────────────────────────
+
+    document.getElementById("slideshowToggle").addEventListener("change", e => {
+      fetch(`/${e.target.checked ? "thaw" : "freeze"}?sid=${sessionId}`, { method: "POST" }).catch(() => {});
+    });
+
     // ── SSE ───────────────────────────────────────────────────────────────────
 
     let es = null;
-    function connectStream() {
+    let reconnectTimer = null;
+    let pendingFirst   = null;
+
+    function doReconnect(firstType) {
+      if (es) { es.close(); es = null; }
       const mods = [...selection].sort().join(",");
-      es = new EventSource(`/ambient?sid=${sessionId}&modules=${encodeURIComponent(mods)}`);
+      let url = `/ambient?sid=${sessionId}&modules=${encodeURIComponent(mods)}`;
+      if (firstType) url += `&first=${encodeURIComponent(firstType)}`;
+      es = new EventSource(url);
       es.addEventListener("slide", ev => {
         const data = JSON.parse(ev.data);
         if (document.startViewTransition) {
@@ -746,11 +838,18 @@
       es.onerror = () => { statusEl.textContent = "getrennt"; };
       es.onopen  = () => { statusEl.textContent = "verbunden"; };
     }
-    function reconnect() {
-      if (es) { es.close(); es = null; }
-      if (selection.size === 0) { slideEl.innerHTML = `<div class="slide-label">noonoo</div><h1 class="slide-title">Keine Module</h1>`; statusEl.textContent = "pausiert"; return; }
-      connectStream();
+
+    function scheduleReconnect(firstType) {
+      if (firstType) pendingFirst = firstType;
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => {
+        const ft = pendingFirst;
+        pendingFirst = null;
+        doReconnect(ft);
+      }, 400);
     }
+
+    function reconnect() { doReconnect(null); }
 
     // ── Render-Hilfsfunktionen ────────────────────────────────────────────────
 
