@@ -82,24 +82,28 @@ CREATE TABLE IF NOT EXISTS pubg_day_summary (
 );
 
 -- Rückfüllung pubg_day_summary aus bestehenden Daten
+WITH official_matches AS (
+    SELECT
+        m.match_id,
+        (m.created_at AT TIME ZONE 'Europe/Berlin')::date AS day
+    FROM pubg_matches m
+    WHERE m.match_type = 'official'
+)
 INSERT INTO pubg_day_summary (day, players_played, total_matches, total_kills_all_players, chicken_dinners, best_placement_of_day)
 SELECT
-    (m.created_at AT TIME ZONE 'Europe/Berlin')::date       AS day,
+    om.day                                                   AS day,
     ARRAY(
         SELECT DISTINCT p2.player_name
         FROM pubg_match_participants p2
-        JOIN pubg_matches m2 ON p2.match_id = m2.match_id
-        WHERE (m2.created_at AT TIME ZONE 'Europe/Berlin')::date
-              = (m.created_at AT TIME ZONE 'Europe/Berlin')::date
-          AND m2.match_type = 'official'
+        JOIN official_matches om2 ON om2.match_id = p2.match_id
+        WHERE om2.day = om.day
         ORDER BY p2.player_name
     )                                                        AS players_played,
-    COUNT(DISTINCT m.match_id)                               AS total_matches,
+    COUNT(DISTINCT om.match_id)                              AS total_matches,
     COALESCE(SUM(p.kills), 0)                                AS total_kills_all_players,
     COUNT(CASE WHEN p.win_place = 1 THEN 1 END)             AS chicken_dinners,
     MIN(p.win_place)                                         AS best_placement_of_day
-FROM pubg_matches m
-JOIN pubg_match_participants p ON p.match_id = m.match_id
-WHERE m.match_type = 'official'
-GROUP BY (m.created_at AT TIME ZONE 'Europe/Berlin')::date
+FROM official_matches om
+JOIN pubg_match_participants p ON p.match_id = om.match_id
+GROUP BY om.day
 ON CONFLICT (day) DO NOTHING;
