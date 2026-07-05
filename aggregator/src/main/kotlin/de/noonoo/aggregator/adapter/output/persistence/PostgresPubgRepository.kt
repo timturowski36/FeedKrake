@@ -820,4 +820,80 @@ class PostgresPubgRepository(private val dataSource: DataSource) : PubgRepositor
         }
     }
 }
+
+    override fun findParticipationsForPlayerAndDay(playerId: String, day: LocalDate): List<PubgParticipation> {
+        val sql = """
+            SELECT match_id, player_id, player_name, match_start, day, game_mode, map_name,
+                   kills, assists, dbnos, headshot_kills, damage_dealt, longest_kill,
+                   time_survived, win_place, roster_rank, revives, boosts, heals, kill_streaks,
+                   walk_distance, ride_distance, swim_distance, weapons_acquired,
+                   road_kills, vehicle_destroys, team_kills, death_type
+            FROM pubg_participation WHERE player_id = ? AND day = ?
+        """.trimIndent()
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, playerId)
+                stmt.setObject(2, day)
+                stmt.executeQuery().use { rs ->
+                    val result = mutableListOf<PubgParticipation>()
+                    while (rs.next()) result += rs.toParticipation()
+                    result
+                }
+            }
+        }
+    }
+
+    override fun findParticipationsForPlayerInRange(playerId: String, from: LocalDate, to: LocalDate): List<PubgParticipation> {
+        val sql = """
+            SELECT match_id, player_id, player_name, match_start, day, game_mode, map_name,
+                   kills, assists, dbnos, headshot_kills, damage_dealt, longest_kill,
+                   time_survived, win_place, roster_rank, revives, boosts, heals, kill_streaks,
+                   walk_distance, ride_distance, swim_distance, weapons_acquired,
+                   road_kills, vehicle_destroys, team_kills, death_type
+            FROM pubg_participation WHERE player_id = ? AND day >= ? AND day < ? ORDER BY match_start
+        """.trimIndent()
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, playerId)
+                stmt.setObject(2, from)
+                stmt.setObject(3, to)
+                stmt.executeQuery().use { rs ->
+                    val result = mutableListOf<PubgParticipation>()
+                    while (rs.next()) result += rs.toParticipation()
+                    result
+                }
+            }
+        }
+    }
+
+    private fun ResultSet.toParticipation() = PubgParticipation(
+        matchId = getString("match_id"),
+        playerId = getString("player_id"),
+        playerName = getString("player_name"),
+        matchStart = getTimestamp("match_start").toInstant(),
+        day = getDate("day").toLocalDate(),
+        gameMode = getString("game_mode"),
+        mapName = getString("map_name"),
+        kills = getInt("kills"),
+        assists = getInt("assists"),
+        dbnos = getInt("dbnos"),
+        headshotKills = getInt("headshot_kills"),
+        damageDealt = getDouble("damage_dealt"),
+        longestKill = getDouble("longest_kill"),
+        timeSurvived = getInt("time_survived"),
+        winPlace = getInt("win_place"),
+        rosterRank = getInt("roster_rank"),
+        revives = getInt("revives"),
+        boosts = getInt("boosts"),
+        heals = getInt("heals"),
+        killStreaks = getInt("kill_streaks"),
+        walkDistance = getDouble("walk_distance"),
+        rideDistance = getDouble("ride_distance"),
+        swimDistance = getDouble("swim_distance"),
+        weaponsAcquired = getInt("weapons_acquired"),
+        roadKills = getInt("road_kills"),
+        vehicleDestroys = getInt("vehicle_destroys"),
+        teamKills = getInt("team_kills"),
+        deathType = getString("death_type")
+    )
 }

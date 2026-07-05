@@ -71,6 +71,12 @@ data class WeatherDetailDto(
 )
 
 @Serializable
+data class PubgPlayerDetailDto(
+    val weekStats: de.noonoo.web.adapter.db.DetailPubgWeekStatsRow?,
+    val records: de.noonoo.web.adapter.db.DetailPubgRecordsRow?
+)
+
+@Serializable
 data class WeekResponse(
     val week: String,
     val prevWeek: String,
@@ -375,6 +381,18 @@ class CalendarService(
             sunrise = wd.sunrise.toString().substring(0, 5),
             sunset = wd.sunset.toString().substring(0, 5),
             hours = hours
+        )
+    }
+
+    // ── PUBG-Spielerdetail (dritte Ebene des PUBG-Drawers) ──────────────────────
+
+    /** Wochenstatistik (ISO-Woche um [referenceDay]) + persönliche Rekorde eines Spielers. */
+    fun pubgPlayerDetail(playerId: String, referenceDay: LocalDate): PubgPlayerDetailDto {
+        val weekStart = referenceDay.with(java.time.DayOfWeek.MONDAY)
+        val weekEnd = weekStart.plusDays(7)
+        return PubgPlayerDetailDto(
+            weekStats = details.pubgPlayerWeekStats(playerId, weekStart, weekEnd),
+            records = details.pubgPlayerRecords(playerId)
         )
     }
 

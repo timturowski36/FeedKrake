@@ -21,5 +21,8 @@ data class PubgMatchParticipant(
     val weaponsAcquired: Int,
     val killPlace: Int,
     val killStreaks: Int,
-    val longestKill: Double
+    val longestKill: Double,
+    val roadKills: Int = 0,
+    val vehicleDestroys: Int = 0,
+    val teamKills: Int = 0
 )

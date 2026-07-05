@@ -270,7 +270,10 @@ class PubgApiClient(
             weaponsAcquired = stats["weaponsAcquired"]?.jsonPrimitive?.intOrNull ?: 0,
             killPlace = stats["killPlace"]?.jsonPrimitive?.intOrNull ?: 0,
             killStreaks = stats["killStreaks"]?.jsonPrimitive?.intOrNull ?: 0,
-            longestKill = stats["longestKill"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+            longestKill = stats["longestKill"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
+            roadKills = stats["roadKills"]?.jsonPrimitive?.intOrNull ?: 0,
+            vehicleDestroys = stats["vehicleDestroys"]?.jsonPrimitive?.intOrNull ?: 0,
+            teamKills = stats["teamKills"]?.jsonPrimitive?.intOrNull ?: 0
         )
     }
 

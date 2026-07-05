@@ -45,4 +45,7 @@ interface PubgRepository {
     fun findDaySummary(day: LocalDate): PubgDaySummary?
     fun findPlayerDayStats(day: LocalDate): List<PubgPlayerDayStats>
     fun findPlayerRecords(playerId: String): PubgPlayerRecords?
+    fun findParticipationsForPlayerAndDay(playerId: String, day: LocalDate): List<PubgParticipation>
+    /** Wochenstatistik: alle Teilnahmen eines Spielers zwischen from (inkl.) und to (exkl.). */
+    fun findParticipationsForPlayerInRange(playerId: String, from: LocalDate, to: LocalDate): List<PubgParticipation>
 }

@@ -150,6 +150,10 @@
     th { color: var(--color-text-muted); font-weight: 500; text-transform: uppercase; font-size: 0.6rem; letter-spacing: 0.06em; }
     td.num, th.num { text-align: right; }
     tr.hl td { color: var(--color-accent); }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover td { color: var(--color-accent); }
+    .back-link { display: inline-block; font-size: 0.72rem; color: var(--color-text-secondary); margin-bottom: 0.5rem; text-decoration: none; }
+    .back-link:hover { color: var(--color-accent); }
     .evt-line { display: flex; gap: 0.6rem; font-size: 0.75rem; padding: 0.25rem 0; border-bottom: 1px solid var(--color-border); }
     .evt-line .min { color: var(--color-text-muted); min-width: 3ch; }
     .ics-link { display: inline-block; margin-top: 1rem; }
@@ -478,15 +482,65 @@
         html += `<h3>Konstrukteurswertung</h3><table><tr><th>#</th><th>Team</th><th class="num">Pkt</th></tr>` +
           det.constructorStandings.slice(0, 10).map(s => `<tr><td>${s.position}</td><td>${esc(s.name)}</td><td class="num">${s.points}</td></tr>`).join("") + "</table>";
       }
+      let pubgDay = null;
       if (det.pubgStats) {
-        html += `<h3>Match-Statistik</h3><table><tr><th>Spieler</th><th class="num">Platz</th><th class="num">Kills</th><th class="num">Dmg</th><th class="num">Überlebt</th></tr>` +
-          det.pubgStats.map(s => `<tr><td>${esc(s.player)}</td><td class="num">#${s.placement}</td><td class="num">${s.kills}</td><td class="num">${s.damage}</td><td class="num">${s.survivedMinutes}min</td></tr>`).join("") + "</table>";
+        pubgDay = ev?.startTime ? new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date(ev.startTime)) : null;
+        html += `<h3>Tagesstatistik</h3><table><tr><th>Spieler</th><th class="num">Platz</th><th class="num">Kills</th><th class="num">Dmg</th><th class="num">Überlebt</th></tr>` +
+          det.pubgStats.map(s => `<tr${s.playerId ? ` class="clickable" data-player-id="${esc(s.playerId)}" data-player-name="${esc(s.player)}"` : ""}><td>${esc(s.player)}</td><td class="num">#${s.placement}</td><td class="num">${s.kills}</td><td class="num">${s.damage}</td><td class="num">${s.survivedMinutes}min</td></tr>`).join("") + "</table>";
+        if (pubgDay) html += `<p style="font-size:0.72rem;color:var(--color-text-muted);margin-top:0.25rem">Spieler antippen für Wochenstatistik &amp; Rekorde</p>`;
       }
       if (!html) html = `<p style="color:var(--color-text-muted);font-size:0.8rem">Für dieses Event liegen keine Detaildaten vor.</p>`;
       html += `<a class="ics-link hdr-btn" href="/api/events/${id}.ics">📅 In Kalender speichern</a>`;
       body.innerHTML = html;
+      if (pubgDay) {
+        body.querySelectorAll("tr[data-player-id]").forEach(row =>
+          row.addEventListener("click", () => openPubgPlayerDetail(row.dataset.playerId, row.dataset.playerName, pubgDay, html)));
+      }
       document.getElementById("drawer").classList.add("open");
       document.getElementById("drawer-backdrop").classList.add("open");
+    }
+
+    // ── PUBG-Spielerdetail (dritte Drawer-Ebene: Wochenstatistik + Rekorde) ──
+    async function openPubgPlayerDetail(playerId, playerName, day, dayHtml) {
+      const res = await fetch(`/api/pubg/player/${encodeURIComponent(playerId)}?day=${encodeURIComponent(day)}`);
+      if (!res.ok) return;
+      const det = await res.json();
+      const body = document.getElementById("drawer-body");
+      document.getElementById("drawer-title").textContent = playerName;
+      let html = `<a class="back-link" href="#" id="pubg-back">← Zurück zur Tagesübersicht</a>`;
+      const w = det.weekStats;
+      if (w) {
+        html += `<h3>Wochenstatistik</h3><table>
+          <tr><td>Matches</td><td class="num">${w.matchesPlayed}</td></tr>
+          <tr><td>Siege</td><td class="num">${w.wins}</td></tr>
+          <tr><td>Top 10</td><td class="num">${w.top10}</td></tr>
+          <tr><td>Kills gesamt</td><td class="num">${w.totalKills}</td></tr>
+          <tr><td>Assists gesamt</td><td class="num">${w.totalAssists}</td></tr>
+          <tr><td>Ø Schaden/Match</td><td class="num">${w.avgDamagePerMatch.toFixed(0)}</td></tr>
+          <tr><td>Beste Tagesausbeute</td><td class="num">${w.bestDayKills} Kills</td></tr>
+        </table>`;
+      }
+      const r = det.records;
+      if (r) {
+        html += `<h3>Persönliche Rekorde</h3><table>
+          <tr><td>Meiste Kills (Match)</td><td class="num">${r.mostKillsInMatch}</td></tr>
+          <tr><td>Weitester Kill</td><td class="num">${r.longestKillEver.toFixed(0)}m</td></tr>
+          <tr><td>Längstes Überleben</td><td class="num">${Math.round(r.longestSurvivalEver / 60)}min</td></tr>
+          <tr><td>Meister Schaden (Match)</td><td class="num">${r.mostDamageInMatch.toFixed(0)}</td></tr>
+          <tr><td>Chicken Dinners</td><td class="num">${r.totalChickenDinners}</td></tr>
+          <tr><td>Meiste Assists (Match)</td><td class="num">${r.mostAssistsInMatch}</td></tr>
+          <tr><td>Beste Kill-Streak</td><td class="num">${r.bestKillStreak}</td></tr>
+        </table>`;
+      }
+      if (!w && !r) html += `<p style="color:var(--color-text-muted);font-size:0.8rem">Keine Daten für diesen Spieler.</p>`;
+      body.innerHTML = html;
+      document.getElementById("pubg-back").addEventListener("click", e => {
+        e.preventDefault();
+        body.innerHTML = dayHtml;
+        document.getElementById("drawer-title").textContent = "PUBG";
+        body.querySelectorAll("tr[data-player-id]").forEach(row =>
+          row.addEventListener("click", () => openPubgPlayerDetail(row.dataset.playerId, row.dataset.playerName, day, dayHtml)));
+      });
     }
 
     function closeDrawer() {

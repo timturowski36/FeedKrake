@@ -69,6 +69,7 @@ import de.noonoo.core.domain.service.HandballStatisticsIngestionService
 import de.noonoo.core.domain.service.HandballStatisticsQueryService
 import de.noonoo.core.domain.service.IngestionService
 import de.noonoo.core.domain.service.NewsIngestionService
+import de.noonoo.core.domain.service.PubgAggregationService
 import de.noonoo.core.domain.service.PubgIngestionService
 import de.noonoo.core.domain.service.PubgQueryService
 import de.noonoo.core.domain.service.QueryService
@@ -231,7 +232,8 @@ val appModule = module {
     single<FetchDataUseCase> { IngestionService(get(), get()) }
     single<QueryDataUseCase> { QueryService(get(), get()) }
     single<FetchNewsUseCase> { NewsIngestionService(get(), get()) }
-    single<FetchPubgDataUseCase> { PubgIngestionService(get(), get()) }
+    single { PubgAggregationService(get()) }
+    single<FetchPubgDataUseCase> { PubgIngestionService(get(), get(), get()) }
     single<QueryPubgDataUseCase> { PubgQueryService(get()) }
 
     // ── KI-Analyse ────────────────────────────────────────────────────────────

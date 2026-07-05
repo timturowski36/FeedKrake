@@ -19,7 +19,8 @@ private val LIFETIME_STATS_TTL = Duration.ofMinutes(60)
 
 class PubgIngestionService(
     private val apiPort: PubgApiPort,
-    private val repository: PubgRepository
+    private val repository: PubgRepository,
+    private val aggregationService: PubgAggregationService
 ) : FetchPubgDataUseCase {
 
     // In-memory timestamp: wann Lifetime-Stats zuletzt abgerufen wurden
@@ -65,6 +66,7 @@ class PubgIngestionService(
                 val (match, participants) = result
                 repository.saveMatch(match)
                 repository.saveParticipants(participants)
+                aggregationService.ingest(match, participants)
             }
         }
 

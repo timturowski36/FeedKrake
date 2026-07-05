@@ -163,6 +163,17 @@ fun Route.calendarRoutes(service: CalendarService, icsHost: String) {
         call.respond(detail)
     }
 
+    // ── PUBG-Spielerdetail ────────────────────────────────────────────────────
+
+    get("/api/pubg/player/{playerId}") {
+        val playerId = call.parameters["playerId"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+        val dateStr = call.request.queryParameters["day"]
+            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Parameter 'day' fehlt"))
+        val day = runCatching { LocalDate.parse(dateStr) }.getOrNull()
+            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Ungültiges Datum"))
+        call.respond(service.pubgPlayerDetail(playerId, day))
+    }
+
     // ── News-Ticker ───────────────────────────────────────────────────────────
 
     get("/api/news") {

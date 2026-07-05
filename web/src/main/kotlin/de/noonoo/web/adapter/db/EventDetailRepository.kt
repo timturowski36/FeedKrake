@@ -30,8 +30,22 @@ data class DetailF1StandingRow(val position: Int, val name: String, val team: St
 
 @Serializable
 data class DetailPubgStatRow(
-    val player: String, val placement: Int, val kills: Int, val assists: Int,
-    val damage: Int, val survivedMinutes: Int, val longestKill: Int
+    val player: String, val playerId: String? = null, val placement: Int, val kills: Int,
+    val assists: Int, val damage: Int, val survivedMinutes: Int, val longestKill: Int
+)
+
+@Serializable
+data class DetailPubgWeekStatsRow(
+    val matchesPlayed: Int, val wins: Int, val top10: Int,
+    val totalKills: Int, val totalAssists: Int, val avgDamagePerMatch: Double,
+    val bestDayKills: Int, val bestPlacement: Int
+)
+
+@Serializable
+data class DetailPubgRecordsRow(
+    val mostKillsInMatch: Int, val longestKillEver: Double, val longestSurvivalEver: Int,
+    val mostDamageInMatch: Double, val totalChickenDinners: Int,
+    val mostAssistsInMatch: Int, val bestKillStreak: Int, val highestDbnosInMatch: Int
 )
 
 /**
@@ -199,7 +213,7 @@ class EventDetailRepository(private val dataSource: DataSource) {
     fun pubgMatchStats(matchId: String): List<DetailPubgStatRow> =
         query(
             """
-            SELECT p.player_name, p.win_place, p.kills, p.assists, p.damage_dealt, p.time_survived, p.longest_kill
+            SELECT p.player_name, p.account_id, p.win_place, p.kills, p.assists, p.damage_dealt, p.time_survived, p.longest_kill
             FROM pubg_match_participants p
             JOIN pubg_players pl ON pl.account_id = p.account_id
             WHERE p.match_id = ? ORDER BY p.win_place, p.kills DESC
@@ -208,6 +222,7 @@ class EventDetailRepository(private val dataSource: DataSource) {
         ) {
             DetailPubgStatRow(
                 player = it.getString("player_name") ?: "?",
+                playerId = it.getString("account_id"),
                 placement = it.getInt("win_place"), kills = it.getInt("kills"),
                 assists = it.getInt("assists"), damage = it.getDouble("damage_dealt").toInt(),
                 survivedMinutes = (it.getDouble("time_survived") / 60).toInt(),
@@ -215,35 +230,70 @@ class EventDetailRepository(private val dataSource: DataSource) {
             )
         }
 
-    /** Über alle Matches eines Tages aggregierte Pro-Spieler-Stats (für gebündelte PUBG-Tages-Events). */
+    /** Tagesstatistik-Panel aus dem Aggregationsmodell (Tagesdetail-Ebene des PUBG-Drawers). */
     fun pubgDayStats(day: java.time.LocalDate): List<DetailPubgStatRow> =
         query(
             """
-            SELECT p.player_name,
-                   MIN(p.win_place)                 AS win_place,
-                   SUM(p.kills)                      AS kills,
-                   SUM(p.assists)                     AS assists,
-                   SUM(p.damage_dealt)                AS damage_dealt,
-                   SUM(p.time_survived)                AS time_survived,
-                   MAX(p.longest_kill)                  AS longest_kill
-            FROM pubg_match_participants p
-            JOIN pubg_matches m ON m.match_id = p.match_id
-            JOIN pubg_players pl ON pl.account_id = p.account_id
-            WHERE m.match_type = 'official'
-              AND (m.created_at AT TIME ZONE 'Europe/Berlin')::date = ?
-            GROUP BY p.player_name
-            ORDER BY win_place, kills DESC
+            SELECT player_name, player_id, best_placement, total_kills, total_assists,
+                   total_damage, time_played_seconds, longest_kill_day
+            FROM pubg_player_day_stats
+            WHERE day = ?
+            ORDER BY best_placement, total_kills DESC
             """.trimIndent(),
             { it.setObject(1, day) }
         ) {
             DetailPubgStatRow(
                 player = it.getString("player_name") ?: "?",
-                placement = it.getInt("win_place"), kills = it.getInt("kills"),
-                assists = it.getInt("assists"), damage = it.getDouble("damage_dealt").toInt(),
-                survivedMinutes = (it.getDouble("time_survived") / 60).toInt(),
-                longestKill = it.getDouble("longest_kill").toInt()
+                playerId = it.getString("player_id"),
+                placement = it.getInt("best_placement"), kills = it.getInt("total_kills"),
+                assists = it.getInt("total_assists"), damage = it.getDouble("total_damage").toInt(),
+                survivedMinutes = (it.getInt("time_played_seconds") / 60),
+                longestKill = it.getDouble("longest_kill_day").toInt()
             )
         }
+
+    /** Spielerdetail-Ebene: Wochenstatistik (ISO-Woche um [day]) aus pubg_player_day_stats. */
+    fun pubgPlayerWeekStats(playerId: String, weekStart: java.time.LocalDate, weekEndExclusive: java.time.LocalDate): DetailPubgWeekStatsRow? =
+        query(
+            """
+            SELECT COALESCE(SUM(matches_played), 0)                AS matches_played,
+                   COALESCE(SUM(wins), 0)                           AS wins,
+                   COALESCE(SUM(top10), 0)                          AS top10,
+                   COALESCE(SUM(total_kills), 0)                    AS total_kills,
+                   COALESCE(SUM(total_assists), 0)                  AS total_assists,
+                   COALESCE(AVG(avg_damage_per_match), 0)           AS avg_damage_per_match,
+                   COALESCE(MAX(total_kills), 0)                    AS best_day_kills,
+                   COALESCE(MIN(best_placement), 99)                AS best_placement
+            FROM pubg_player_day_stats
+            WHERE player_id = ? AND day >= ? AND day < ?
+            """.trimIndent(),
+            { it.setString(1, playerId); it.setObject(2, weekStart); it.setObject(3, weekEndExclusive) }
+        ) {
+            DetailPubgWeekStatsRow(
+                matchesPlayed = it.getInt("matches_played"), wins = it.getInt("wins"), top10 = it.getInt("top10"),
+                totalKills = it.getInt("total_kills"), totalAssists = it.getInt("total_assists"),
+                avgDamagePerMatch = it.getDouble("avg_damage_per_match"),
+                bestDayKills = it.getInt("best_day_kills"), bestPlacement = it.getInt("best_placement")
+            )
+        }.firstOrNull()
+
+    /** Spielerdetail-Ebene: persönliche Rekorde (monoton, aus pubg_player_records). */
+    fun pubgPlayerRecords(playerId: String): DetailPubgRecordsRow? =
+        query(
+            """
+            SELECT most_kills_in_match, longest_kill_ever, longest_survival_ever, most_damage_in_match,
+                   total_chicken_dinners, most_assists_in_match, best_kill_streak, highest_dbnos_in_match
+            FROM pubg_player_records WHERE player_id = ?
+            """.trimIndent(),
+            { it.setString(1, playerId) }
+        ) {
+            DetailPubgRecordsRow(
+                mostKillsInMatch = it.getInt("most_kills_in_match"), longestKillEver = it.getDouble("longest_kill_ever"),
+                longestSurvivalEver = it.getInt("longest_survival_ever"), mostDamageInMatch = it.getDouble("most_damage_in_match"),
+                totalChickenDinners = it.getInt("total_chicken_dinners"), mostAssistsInMatch = it.getInt("most_assists_in_match"),
+                bestKillStreak = it.getInt("best_kill_streak"), highestDbnosInMatch = it.getInt("highest_dbnos_in_match")
+            )
+        }.firstOrNull()
 
     // ── Helper ────────────────────────────────────────────────────────────────
 

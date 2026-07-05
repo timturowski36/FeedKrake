@@ -5,6 +5,8 @@ import de.noonoo.aggregator.adapter.input.discord.AnalyseCommandListener
 import de.noonoo.aggregator.adapter.input.discord.DiscordBotStarter
 import de.noonoo.aggregator.adapter.input.discord.PubgCommandListener
 import de.noonoo.aggregator.adapter.input.scheduler.IngestionScheduler
+import de.noonoo.core.domain.port.output.PubgRepository
+import de.noonoo.core.domain.service.PubgAggregationService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.runBlocking
 import org.koin.core.context.startKoin
@@ -18,6 +20,13 @@ fun main(): Unit = runBlocking {
     startKoin {
         modules(appModule)
     }
+
+    runCatching {
+        val pubgRepository = getKoin().get<PubgRepository>()
+        val aggregationService = getKoin().get<PubgAggregationService>()
+        aggregationService.backfillFromLegacy(pubgRepository.findMatchesWithParticipants())
+        log.info { "[PUBG] Aggregationsmodell-Backfill abgeschlossen." }
+    }.onFailure { log.error(it) { "[PUBG] Aggregationsmodell-Backfill fehlgeschlagen: ${it.message}" } }
 
     val scheduler = getKoin().get<IngestionScheduler>()
     scheduler.start()
