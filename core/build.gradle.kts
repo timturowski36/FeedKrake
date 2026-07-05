@@ -8,4 +8,10 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlin.logging)
     implementation(libs.logback)
+
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
