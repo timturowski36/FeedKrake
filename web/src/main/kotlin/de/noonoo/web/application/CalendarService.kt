@@ -4,14 +4,18 @@ import de.noonoo.core.domain.model.Event
 import de.noonoo.core.domain.model.IsoWeek
 import de.noonoo.core.domain.model.ModuleType
 import de.noonoo.core.domain.model.SeasonStatus
+import de.noonoo.core.domain.model.WeatherCategory
+import de.noonoo.core.domain.model.WeatherLocation
 import de.noonoo.web.adapter.db.CalendarRepository
 import de.noonoo.web.adapter.db.CatalogOption
 import de.noonoo.web.adapter.db.EventDetailRepository
 import de.noonoo.web.adapter.db.Selection
 import de.noonoo.web.adapter.db.StoredConfig
+import de.noonoo.web.adapter.db.WebWeatherRepository
 import kotlinx.serialization.Serializable
 import java.security.SecureRandom
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 
 private val BERLIN = ZoneId.of("Europe/Berlin")
@@ -29,6 +33,44 @@ data class SeasonInfo(
 )
 
 @Serializable
+data class WeatherDayDto(
+    val symbol: String,
+    val label: String,
+    val tempMax: Int,
+    val tempMin: Int,
+    val precipProbMax: Int,
+    val precipSumMm: Double,
+    val windMaxKmh: Double,
+    val sunrise: String,
+    val sunset: String
+)
+
+@Serializable
+data class WeatherHourDto(
+    val hour: Int,
+    val temp: Double,
+    val precipProbability: Int,
+    val precipMm: Double,
+    val symbol: String,
+    val windKmh: Double
+)
+
+@Serializable
+data class WeatherDetailDto(
+    val location: String,
+    val date: String,
+    val symbol: String,
+    val label: String,
+    val tempMax: Int,
+    val tempMin: Int,
+    val precipSumMm: Double,
+    val windMaxKmh: Double,
+    val sunrise: String,
+    val sunset: String,
+    val hours: List<WeatherHourDto>
+)
+
+@Serializable
 data class WeekResponse(
     val week: String,
     val prevWeek: String,
@@ -36,7 +78,9 @@ data class WeekResponse(
     val days: List<String>,
     val events: List<Event>,
     val seasons: List<SeasonInfo>,
-    val code: String? = null
+    val code: String? = null,
+    val weather: Map<String, WeatherDayDto> = emptyMap(),
+    val weatherLocation: String? = null
 )
 
 @Serializable
@@ -73,7 +117,8 @@ data class EventDetailsResponse(
 
 class CalendarService(
     private val repo: CalendarRepository,
-    private val details: EventDetailRepository
+    private val details: EventDetailRepository,
+    private val weatherRepo: WebWeatherRepository? = null
 ) {
 
     // ── Wochenansicht ─────────────────────────────────────────────────────────
@@ -84,6 +129,33 @@ class CalendarService(
         val modules = config?.let { selectedModules(it) }
         val events = repo.findEvents(from, to, modules)
             .filter { config == null || matchesSelections(it, config.selections) }
+
+        val weatherLocation = config?.selections
+            ?.firstOrNull { it.module == ModuleType.WEATHER.slug }
+            ?.refs?.firstOrNull()
+            ?.let { WeatherLocation.fromName(it) }
+        val weatherMap: Map<String, WeatherDayDto> = if (weatherLocation != null && weatherRepo != null) {
+            val monday = week.monday()
+            val days = (0..6L).map { monday.plusDays(it) }
+            val weatherDays = weatherRepo.findDaysInRange(weatherLocation, days.first(), days.last())
+                .associateBy { it.day }
+            days.mapNotNull { day ->
+                val wd = weatherDays[day] ?: return@mapNotNull null
+                val cat = WeatherCategory.fromWmo(wd.weatherCode)
+                day.toString() to WeatherDayDto(
+                    symbol = cat.symbol,
+                    label = cat.label,
+                    tempMax = wd.tempMax.toInt(),
+                    tempMin = wd.tempMin.toInt(),
+                    precipProbMax = wd.precipProbabilityMax,
+                    precipSumMm = wd.precipSumMm,
+                    windMaxKmh = wd.windMaxKmh,
+                    sunrise = wd.sunrise.toString().substring(0, 5),
+                    sunset = wd.sunset.toString().substring(0, 5)
+                )
+            }.toMap()
+        } else emptyMap()
+
         return WeekResponse(
             week = week.label,
             prevWeek = week.plusWeeks(-1).label,
@@ -91,7 +163,9 @@ class CalendarService(
             days = (0..6L).map { week.monday().plusDays(it).toString() },
             events = events,
             seasons = seasonInfos(),
-            code = config?.code
+            code = config?.code,
+            weather = weatherMap,
+            weatherLocation = weatherLocation?.name
         )
     }
 
@@ -155,7 +229,12 @@ class CalendarService(
             CatalogModule(ModuleType.HANDBALL.slug, ModuleType.HANDBALL.label, repo.handballTeams(), true),
             CatalogModule(ModuleType.WORLD_CUP.slug, ModuleType.WORLD_CUP.label, repo.wmTeams(), true),
             CatalogModule(ModuleType.F1.slug, ModuleType.F1.label, emptyList(), false),
-            CatalogModule(ModuleType.PUBG.slug, ModuleType.PUBG.label, repo.pubgPlayers(), true)
+            CatalogModule(ModuleType.PUBG.slug, ModuleType.PUBG.label, repo.pubgPlayers(), true),
+            CatalogModule(
+                ModuleType.WEATHER.slug, ModuleType.WEATHER.label,
+                WeatherLocation.entries.map { CatalogOption(it.name, it.displayName) },
+                selectableRefs = true
+            )
         )
     )
 
@@ -167,6 +246,14 @@ class CalendarService(
     fun createConfig(selections: List<Selection>): ConfigResponse {
         val valid = selections.filter { ModuleType.fromSlug(it.module) != null }
         require(valid.isNotEmpty()) { "Keine gültige Modulauswahl." }
+        val weatherSelections = valid.filter { it.module == ModuleType.WEATHER.slug }
+        require(weatherSelections.size <= 1) { "Maximal ein Wetterort pro Konfiguration." }
+        if (weatherSelections.size == 1) {
+            val refs = weatherSelections[0].refs
+            require(refs.size == 1 && WeatherLocation.fromName(refs[0]) != null) {
+                "Ungültiger Wetterort. Erlaubt: ${WeatherLocation.entries.map { it.name }}"
+            }
+        }
         repeat(20) {
             val code = randomCode()
             if (repo.insertConfig(code, valid)) return ConfigResponse(code, valid)
@@ -245,8 +332,45 @@ class CalendarService(
                     pubgStats = details.pubgMatchStats(matchId).ifEmpty { null }
                 )
             }
-            ModuleType.NEWS -> base
+            ModuleType.NEWS, ModuleType.WEATHER -> base
         }
+    }
+
+    // ── Wetter-Detail ─────────────────────────────────────────────────────────
+
+    fun weatherDetail(location: WeatherLocation, day: LocalDate): WeatherDetailDto? {
+        val repo = weatherRepo ?: return null
+        val wd = repo.findDay(location, day) ?: return null
+        val cat = WeatherCategory.fromWmo(wd.weatherCode)
+        val hours = repo.findHoursOfDay(location, day)
+            .filter {
+                val h = it.timestamp.atZone(java.time.ZoneId.of("Europe/Berlin")).hour
+                h in 6..23
+            }
+            .map {
+                val h = it.timestamp.atZone(java.time.ZoneId.of("Europe/Berlin")).hour
+                WeatherHourDto(
+                    hour = h,
+                    temp = it.temp,
+                    precipProbability = it.precipProbability,
+                    precipMm = it.precipMm,
+                    symbol = WeatherCategory.fromWmo(it.weatherCode).symbol,
+                    windKmh = it.windKmh
+                )
+            }
+        return WeatherDetailDto(
+            location = location.displayName,
+            date = day.toString(),
+            symbol = cat.symbol,
+            label = cat.label,
+            tempMax = wd.tempMax.toInt(),
+            tempMin = wd.tempMin.toInt(),
+            precipSumMm = wd.precipSumMm,
+            windMaxKmh = wd.windMaxKmh,
+            sunrise = wd.sunrise.toString().substring(0, 5),
+            sunset = wd.sunset.toString().substring(0, 5),
+            hours = hours
+        )
     }
 
     companion object {

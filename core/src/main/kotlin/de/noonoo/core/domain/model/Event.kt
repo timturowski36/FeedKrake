@@ -24,7 +24,8 @@ enum class ModuleType(val slug: String, val label: String) {
     PUBG("pubg", "PUBG"),
     F1("f1", "Formel 1"),
     WORLD_CUP("wm", "WM 2026"),
-    NEWS("news", "News");
+    NEWS("news", "News"),
+    WEATHER("weather", "Wetter");
 
     companion object {
         fun fromSlug(slug: String): ModuleType? = entries.firstOrNull { it.slug == slug.lowercase() }
