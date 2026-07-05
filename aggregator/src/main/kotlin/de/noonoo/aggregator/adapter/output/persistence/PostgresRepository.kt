@@ -168,6 +168,34 @@ class PostgresRepository(private val dataSource: DataSource) : MatchRepository {
         }
     }
 
+    override fun findAllMatches(league: String, season: Int): List<Match> {
+        val sql = "SELECT * FROM matches WHERE league = ? AND season = ? ORDER BY kickoff_at"
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setString(1, league)
+                stmt.setInt(2, season)
+                stmt.executeQuery().use { rs ->
+                    val results = mutableListOf<Match>()
+                    while (rs.next()) results.add(rs.toMatch())
+                    results
+                }
+            }
+        }
+    }
+
+    override fun findAllTeams(): List<Team> {
+        val sql = "SELECT * FROM teams"
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.executeQuery().use { rs ->
+                    val results = mutableListOf<Team>()
+                    while (rs.next()) results.add(rs.toTeam())
+                    results
+                }
+            }
+        }
+    }
+
     override fun findFinishedMatchesByMatchday(league: String, season: Int, matchday: Int): List<Match> {
         val sql = "SELECT * FROM matches WHERE league = ? AND season = ? AND matchday = ? AND is_finished = true"
         return dataSource.connection.use { conn ->

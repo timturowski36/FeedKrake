@@ -186,6 +186,35 @@ val appModule = module {
     single<FetchWorldCupDataUseCase> { WorldCupIngestionService(get(), get()) }
     single<QueryWorldCupDataUseCase> { WorldCupQueryService(get()) }
 
+    // ── Adapter: Events (Wochenkalender) ──────────────────────────────────────
+    single<de.noonoo.core.domain.port.output.EventRepository> {
+        de.noonoo.aggregator.adapter.output.persistence.PostgresEventRepository(get())
+    }
+    single {
+        val enabled = get<AppConfig>().modules.filter { it.enabled }
+        de.noonoo.core.domain.service.EventProjectionService(
+            sources = de.noonoo.core.domain.service.ProjectionSources(
+                footballLeagues = enabled.filter { it.type == "football" }.mapNotNull { m ->
+                    val league = m.config["league"] ?: return@mapNotNull null
+                    val season = m.config["season"]?.toIntOrNull() ?: return@mapNotNull null
+                    league to season
+                },
+                handballLeagueIds = enabled
+                    .filter { it.type == "handball" || it.type == "handball_statistics" }
+                    .mapNotNull { it.config["leagueId"] },
+                pubgEnabled = enabled.any { it.type == "pubg" },
+                f1Enabled = enabled.any { it.type == "formula1" },
+                worldCupEnabled = enabled.any { it.type == "worldcup" }
+            ),
+            matchRepository = get(),
+            handballRepository = get(),
+            pubgRepository = get(),
+            f1Repository = get(),
+            wcRepository = get(),
+            eventRepository = get()
+        )
+    }
+
     // ── Adapter: Output ───────────────────────────────────────────────────────
     single<NotificationPort> { DiscordSender(get()) }
 
@@ -237,7 +266,8 @@ val appModule = module {
             newsRepository = get(),
             handballRepository = get(),
             notificationPort = get(),
-            webhookChannels = get()
+            webhookChannels = get(),
+            eventProjectionService = get()
         )
     }
 }

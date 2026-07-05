@@ -21,6 +21,8 @@ interface PubgRepository {
 
     // ── Query ─────────────────────────────────────────────────────────────────
     fun findPlayerByName(name: String): PubgPlayer?
+    /** Alle Matches mit den jeweils getrackten Teilnehmern – für die Event-Projektion. */
+    fun findMatchesWithParticipants(): List<Pair<PubgMatch, List<PubgMatchParticipant>>>
     fun findPeriodStats(accountId: String, from: LocalDateTime, to: LocalDateTime): PubgPeriodStats
     fun findPersonalRecords(accountId: String): PubgPersonalRecords
     fun findRecentMatches(accountId: String, limit: Int): List<Pair<PubgMatch, PubgMatchParticipant>>

@@ -154,6 +154,27 @@ class PostgresBundesligaRepository(private val dataSource: DataSource) : MatchRe
             }
         }
 
+    override fun findAllMatches(league: String, season: Int): List<Match> =
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT * FROM matches WHERE league = ? AND season = ? ORDER BY kickoff_at"
+            ).use { stmt ->
+                stmt.setString(1, league); stmt.setInt(2, season)
+                stmt.executeQuery().use { rs ->
+                    buildList { while (rs.next()) add(rs.toMatch()) }
+                }
+            }
+        }
+
+    override fun findAllTeams(): List<Team> =
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("SELECT * FROM teams").use { stmt ->
+                stmt.executeQuery().use { rs ->
+                    buildList { while (rs.next()) add(rs.toTeam()) }
+                }
+            }
+        }
+
     override fun findFinishedMatchesByMatchday(league: String, season: Int, matchday: Int): List<Match> =
         dataSource.connection.use { conn ->
             conn.prepareStatement(

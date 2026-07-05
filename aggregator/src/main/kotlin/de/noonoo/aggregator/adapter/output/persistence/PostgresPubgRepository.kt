@@ -352,6 +352,32 @@ class PostgresPubgRepository(private val dataSource: DataSource) : PubgRepositor
         }
     }
 
+    override fun findMatchesWithParticipants(): List<Pair<PubgMatch, List<PubgMatchParticipant>>> {
+        val sql = """
+            SELECT m.match_id, m.map_name, m.game_mode, m.duration, m.created_at,
+                   m.match_type, m.shard_id, m.fetched_at,
+                   p.account_id, p.player_name, p.kills, p.assists, p.dbnos,
+                   p.damage_dealt, p.headshot_kills, p.win_place, p.death_type,
+                   p.time_survived, p.walk_distance, p.ride_distance, p.swim_distance,
+                   p.boosts, p.heals, p.revives, p.weapons_acquired,
+                   p.kill_place, p.kill_streaks, p.longest_kill
+            FROM pubg_matches m
+            JOIN pubg_match_participants p ON m.match_id = p.match_id
+            JOIN pubg_players pl ON pl.account_id = p.account_id
+            ORDER BY m.created_at DESC
+        """.trimIndent()
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.executeQuery().use { rs ->
+                    val rows = mutableListOf<Pair<PubgMatch, PubgMatchParticipant>>()
+                    while (rs.next()) rows.add(rs.toMatchWithParticipant())
+                    rows.groupBy({ it.first.matchId }, { it })
+                        .map { (_, entries) -> entries.first().first to entries.map { it.second } }
+                }
+            }
+        }
+    }
+
     override fun findMapStats(accountId: String): List<PubgMapStat> {
         val sql = """
             SELECT

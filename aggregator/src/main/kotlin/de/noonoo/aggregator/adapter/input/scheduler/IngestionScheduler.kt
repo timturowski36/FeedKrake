@@ -52,11 +52,13 @@ class IngestionScheduler(
     private val newsRepository: NewsRepository,
     private val handballRepository: HandballRepository,
     private val notificationPort: NotificationPort,
-    private val webhookChannels: Map<String, String>
+    private val webhookChannels: Map<String, String>,
+    private val eventProjectionService: de.noonoo.core.domain.service.EventProjectionService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun start() {
+        startEventProjection()
         modules.filter { it.enabled }.forEach { module ->
             when (module.type) {
                 "football"             -> startFootballIngestion(module)
@@ -75,6 +77,26 @@ class IngestionScheduler(
     fun stop() {
         scope.cancel()
         wmPollingScheduler.stop()
+    }
+
+    // ── Event-Projektion (Wochenkalender) ─────────────────────────────────────
+
+    /**
+     * Projiziert die Bestandsdaten aller Module periodisch in die events-Tabelle.
+     * Erster Lauf direkt beim Start (übernimmt die komplette Historie), danach
+     * alle 2 Minuten – schnell genug für Live-Ergebnisse der sichtbaren Woche.
+     */
+    private fun startEventProjection() {
+        scope.launch {
+            while (isActive) {
+                try {
+                    eventProjectionService.projectAll()
+                } catch (e: Exception) {
+                    log.error(e) { "Fehler bei der Event-Projektion: ${e.message}" }
+                }
+                delay(2 * 60_000L)
+            }
+        }
     }
 
     // ── Ingestion ─────────────────────────────────────────────────────────────

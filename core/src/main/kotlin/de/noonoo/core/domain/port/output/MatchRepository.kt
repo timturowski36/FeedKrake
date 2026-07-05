@@ -11,6 +11,8 @@ interface MatchRepository {
     fun saveStandings(standings: List<Standing>)
 
     fun findMatchesByMatchday(league: String, season: Int, matchday: Int): List<Match>
+    fun findAllMatches(league: String, season: Int): List<Match>
+    fun findAllTeams(): List<Team>
     fun findFinishedMatchesByMatchday(league: String, season: Int, matchday: Int): List<Match>
     fun findStandings(league: String, season: Int): List<Standing>
     fun findTeamById(id: Int): Team?
