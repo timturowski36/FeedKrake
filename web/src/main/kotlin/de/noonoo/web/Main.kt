@@ -77,7 +77,13 @@ fun Application.module(dataSource: HikariDataSource) {
     log.info("PUBG-Filter: ${if (pubgPlayers.isEmpty()) "alle Spieler" else pubgPlayers.joinToString()}")
     val repo = WebRepository(dataSource, pubgPlayers)
     val builder = SlideBuilder(repo)
-    val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
+    val calendarService = de.noonoo.web.application.CalendarService(
+        de.noonoo.web.adapter.db.CalendarRepository(dataSource),
+        de.noonoo.web.adapter.db.EventDetailRepository(dataSource)
+    )
+    val icsHost = dotenv { ignoreIfMissing = true }.get("DOMAIN", "noonoo-channel.duckdns.org")
+        .removePrefix("https://").removePrefix("http://").trimEnd('/')
+    val json = Json { ignoreUnknownKeys = true; prettyPrint = false; encodeDefaults = true }
 
     // sid → Modulauswahl + Nav-Channel (pro SSE-Client)
     // null = normaler Skip, slug-String = goto spezifisches Modul
@@ -97,6 +103,8 @@ fun Application.module(dataSource: HikariDataSource) {
         get("/health") {
             call.respondText("ok")
         }
+
+        calendarRoutes(calendarService, icsHost)
 
         sse("/ambient") {
             val sid = call.request.queryParameters["sid"] ?: UUID.randomUUID().toString()
