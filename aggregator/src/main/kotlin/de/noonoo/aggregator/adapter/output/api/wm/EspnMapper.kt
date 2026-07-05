@@ -71,26 +71,53 @@ fun List<EspnStandingEntry>.toWcStandings(teamLookup: (String) -> WcTeam?): List
 
 fun List<Pair<Int, EspnDetail>>.aggregateTopScorersFromDetails(teamLookup: (String) -> WcTeam?): List<WcTopScorer> {
     val now = Instant.now()
-    return filter { (_, d) -> d.scoringPlay && !d.ownGoal }
+    val goalEvents = filter { (_, d) -> d.scoringPlay && !d.ownGoal }
+
+    val goalsByPlayer = goalEvents
         .groupBy { (_, d) -> d.athletesInvolved.firstOrNull()?.displayName ?: "" }
         .filter { it.key.isNotBlank() }
-        .map { (player, entries) ->
-            val teamId = entries.firstOrNull()?.second?.team?.id ?: ""
-            val team = teamLookup(teamId)
-            Triple(player, team, entries.size)
+        .mapValues { (_, entries) -> entries.size }
+
+    val assistsByPlayer = goalEvents
+        .filter { (_, d) -> d.athletesInvolved.size >= 2 }
+        .groupBy { (_, d) -> d.athletesInvolved[1].displayName }
+        .filter { it.key.isNotBlank() }
+        .mapValues { (_, entries) -> entries.size }
+
+    val playerTeams = mutableMapOf<String, WcTeam?>()
+    goalEvents.forEach { (_, d) ->
+        val scorer = d.athletesInvolved.firstOrNull()?.displayName ?: return@forEach
+        if (scorer !in playerTeams) {
+            playerTeams[scorer] = teamLookup(d.team?.id ?: "")
         }
-        .sortedByDescending { it.third }
-        .mapIndexed { idx, (player, team, goals) ->
-            WcTopScorer(
-                rank       = idx + 1,
-                playerName = player,
-                teamId     = team?.id ?: 0,
-                teamName   = team?.name ?: "",
-                goals      = goals,
-                assists    = 0,
-                fetchedAt  = now
-            )
+        if (d.athletesInvolved.size >= 2) {
+            val assister = d.athletesInvolved[1].displayName
+            if (assister.isNotBlank() && assister !in playerTeams) {
+                playerTeams[assister] = teamLookup(d.team?.id ?: "")
+            }
         }
+    }
+
+    val allPlayers = (goalsByPlayer.keys + assistsByPlayer.keys).distinct()
+    return allPlayers.map { player ->
+        val goals = goalsByPlayer[player] ?: 0
+        val assists = assistsByPlayer[player] ?: 0
+        val team = playerTeams[player]
+        Triple(player, team, goals to assists)
+    }
+    .sortedWith(compareByDescending<Triple<String, WcTeam?, Pair<Int, Int>>> { it.third.first }
+        .thenByDescending { it.third.second })
+    .mapIndexed { idx, (player, team, ga) ->
+        WcTopScorer(
+            rank       = idx + 1,
+            playerName = player,
+            teamId     = team?.id ?: 0,
+            teamName   = team?.name ?: "",
+            goals      = ga.first,
+            assists    = ga.second,
+            fetchedAt  = now
+        )
+    }
 }
 
 fun List<Pair<Int, EspnDetail>>.aggregateCardEventsFromDetails(teamLookup: (String) -> WcTeam?): List<WcEvent> {
@@ -116,26 +143,55 @@ fun List<Pair<Int, EspnDetail>>.aggregateCardEventsFromDetails(teamLookup: (Stri
 
 fun List<Pair<Int, EspnKeyEvent>>.aggregateTopScorersFromKeyEvents(teamLookup: (String) -> WcTeam?): List<WcTopScorer> {
     val now = Instant.now()
-    return filter { (_, e) -> e.scoringPlay && e.type?.type != "own-goal" }
+    val goalEvents = filter { (_, e) -> e.scoringPlay && e.type?.type != "own-goal" }
+
+    val goalsByPlayer = goalEvents
         .groupBy { (_, e) -> e.participants.firstOrNull()?.athlete?.displayName ?: "" }
         .filter { it.key.isNotBlank() }
-        .map { (player, entries) ->
-            val espnId = entries.firstOrNull()?.second?.team?.id ?: ""
-            val team = EspnTeamSeed.byEspnId(espnId)?.let { EspnTeamSeed.toWcTeam(it) }
-            Triple(player, team, entries.size)
+        .mapValues { (_, entries) -> entries.size }
+
+    val assistsByPlayer = goalEvents
+        .filter { (_, e) -> e.participants.size >= 2 }
+        .groupBy { (_, e) -> e.participants[1].athlete.displayName }
+        .filter { it.key.isNotBlank() }
+        .mapValues { (_, entries) -> entries.size }
+
+    val playerTeams = mutableMapOf<String, WcTeam?>()
+    goalEvents.forEach { (_, e) ->
+        val scorer = e.participants.firstOrNull()?.athlete?.displayName ?: return@forEach
+        if (scorer !in playerTeams) {
+            val espnId = e.team?.id ?: ""
+            playerTeams[scorer] = EspnTeamSeed.byEspnId(espnId)?.let { EspnTeamSeed.toWcTeam(it) }
         }
-        .sortedByDescending { it.third }
-        .mapIndexed { idx, (player, team, goals) ->
-            WcTopScorer(
-                rank       = idx + 1,
-                playerName = player,
-                teamId     = team?.id ?: 0,
-                teamName   = team?.name ?: "",
-                goals      = goals,
-                assists    = 0,
-                fetchedAt  = now
-            )
+        if (e.participants.size >= 2) {
+            val assister = e.participants[1].athlete.displayName
+            if (assister.isNotBlank() && assister !in playerTeams) {
+                val espnId = e.team?.id ?: ""
+                playerTeams[assister] = EspnTeamSeed.byEspnId(espnId)?.let { EspnTeamSeed.toWcTeam(it) }
+            }
         }
+    }
+
+    val allPlayers = (goalsByPlayer.keys + assistsByPlayer.keys).distinct()
+    return allPlayers.map { player ->
+        val goals = goalsByPlayer[player] ?: 0
+        val assists = assistsByPlayer[player] ?: 0
+        val team = playerTeams[player]
+        Triple(player, team, goals to assists)
+    }
+    .sortedWith(compareByDescending<Triple<String, WcTeam?, Pair<Int, Int>>> { it.third.first }
+        .thenByDescending { it.third.second })
+    .mapIndexed { idx, (player, team, ga) ->
+        WcTopScorer(
+            rank       = idx + 1,
+            playerName = player,
+            teamId     = team?.id ?: 0,
+            teamName   = team?.name ?: "",
+            goals      = ga.first,
+            assists    = ga.second,
+            fetchedAt  = now
+        )
+    }
 }
 
 fun List<Pair<Int, EspnKeyEvent>>.aggregateCardEventsFromKeyEvents(teamLookup: (String) -> WcTeam?): List<WcEvent> {
