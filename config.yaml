@@ -73,7 +73,7 @@ modules:
     source: openligadb
     config:
       league: bl1
-      season: "2025"
+      season: "2026"
     schedule:
       fetchIntervalMinutes: 60
     outputs: []
@@ -84,7 +84,7 @@ modules:
     source: openligadb
     config:
       league: bl2
-      season: "2025"
+      season: "2026"
     schedule:
       fetchIntervalMinutes: 60
     outputs: []
