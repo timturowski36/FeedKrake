@@ -43,6 +43,30 @@ class WebWeatherRepository(private val dataSource: DataSource) {
             }
         }
 
+    /** Juengste gespeicherte Stunden-Vorhersage bis [now] — Naeherung fuer "jetzt" (Ticket 9.5), da
+     *  die aktuelle Temperatur nicht separat persistiert wird (stuendliches Polling reicht dafuer aus). */
+    fun findCurrentHour(location: WeatherLocation, now: Instant): WeatherHour? =
+        dataSource.connection.use { conn ->
+            conn.prepareStatement(
+                "SELECT * FROM weather_hour WHERE location = ? AND ts <= ? ORDER BY ts DESC LIMIT 1"
+            ).use { stmt ->
+                stmt.setString(1, location.name)
+                stmt.setTimestamp(2, Timestamp.from(now))
+                stmt.executeQuery().use { rs ->
+                    if (!rs.next()) return@use null
+                    WeatherHour(
+                        location = location,
+                        timestamp = rs.getTimestamp("ts").toInstant(),
+                        temp = rs.getDouble("temp"),
+                        precipProbability = rs.getInt("precip_probability"),
+                        precipMm = rs.getDouble("precip_mm"),
+                        weatherCode = rs.getInt("weather_code"),
+                        windKmh = rs.getDouble("wind_kmh")
+                    )
+                }
+            }
+        }
+
     fun findHoursOfDay(location: WeatherLocation, day: LocalDate): List<WeatherHour> {
         val dayStart = day.atStartOfDay(BERLIN).toInstant()
         val dayEnd = day.plusDays(1).atStartOfDay(BERLIN).toInstant()

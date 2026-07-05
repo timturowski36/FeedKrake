@@ -42,6 +42,17 @@ class F1IngestionService(
             repository.saveStandings(constructorStandings)
             log.info { "[F1] ${constructorStandings.size} Konstrukteurswertungs-Einträge gespeichert." }
         }
+
+        // PRE-Panel-Grid: sobald das Qualifying der naechsten Rennrunde gelaufen ist, einmalig nachladen.
+        val nextRace = repository.getNextRace(LocalDate.now())
+        if (nextRace != null && nextRace.qualiDate != null && !nextRace.qualiDate.isAfter(LocalDate.now())) {
+            delay(300)
+            val qualifying = apiPort.fetchQualifyingResults(nextRace.season, nextRace.round)
+            if (qualifying.isNotEmpty()) {
+                repository.saveRaceResults(qualifying)
+                log.info { "[F1] ${qualifying.size} Qualifying-Ergebnisse für Runde ${nextRace.round} gespeichert." }
+            }
+        }
     }
 
     override suspend fun fetchPreviousYearResults() {

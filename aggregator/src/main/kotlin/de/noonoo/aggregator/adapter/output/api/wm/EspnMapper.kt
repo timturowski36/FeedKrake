@@ -173,17 +173,22 @@ fun List<Pair<Int, EspnKeyEvent>>.aggregateTopScorersFromKeyEvents(teamLookup: (
     }
 
     val allPlayers = (goalsByPlayer.keys + assistsByPlayer.keys).distinct()
-    return allPlayers.map { player ->
+    val sorted = allPlayers.map { player ->
         val goals = goalsByPlayer[player] ?: 0
         val assists = assistsByPlayer[player] ?: 0
         val team = playerTeams[player]
         Triple(player, team, goals to assists)
-    }
-    .sortedWith(compareByDescending<Triple<String, WcTeam?, Pair<Int, Int>>> { it.third.first }
+    }.sortedWith(compareByDescending<Triple<String, WcTeam?, Pair<Int, Int>>> { it.third.first }
         .thenByDescending { it.third.second })
-    .mapIndexed { idx, (player, team, ga) ->
+
+    // Torschützenkönig(e): Ties bei Toren teilen sich denselben Rang (1224-Zählweise).
+    var lastGoals: Int? = null
+    var lastRank = 0
+    return sorted.mapIndexed { idx, (player, team, ga) ->
+        val rank = if (ga.first == lastGoals) lastRank else (idx + 1).also { lastRank = it }
+        lastGoals = ga.first
         WcTopScorer(
-            rank       = idx + 1,
+            rank       = rank,
             playerName = player,
             teamId     = team?.id ?: 0,
             teamName   = team?.name ?: "",
@@ -194,25 +199,29 @@ fun List<Pair<Int, EspnKeyEvent>>.aggregateTopScorersFromKeyEvents(teamLookup: (
     }
 }
 
+/** Karten UND Tore (Name+Minute) für den Spielverlauf-Panel des WM-Drawers (Ticket 3.1/3.2). */
 fun List<Pair<Int, EspnKeyEvent>>.aggregateCardEventsFromKeyEvents(teamLookup: (String) -> WcTeam?): List<WcEvent> {
     val now = Instant.now()
     return mapNotNull { (fixtureId, event) ->
-        val typeType = event.type?.type ?: return@mapNotNull null
-        val eventType = when (typeType) {
-            "yellow-red-card" -> "YELLOW_RED"
-            "red-card"        -> "RED"
-            "yellow-card"     -> "YELLOW"
-            else              -> return@mapNotNull null
+        val typeType = event.type?.type
+        val eventType = when {
+            typeType == "yellow-red-card"                  -> "YELLOW_RED"
+            typeType == "red-card"                          -> "RED"
+            typeType == "yellow-card"                       -> "YELLOW"
+            event.scoringPlay && typeType == "own-goal"     -> "OWN_GOAL"
+            event.scoringPlay                               -> "GOAL"
+            else                                             -> return@mapNotNull null
         }
         val espnId = event.team?.id ?: ""
         val teamName = EspnTeamSeed.byEspnId(espnId)?.name
+        val detail = if (eventType == "GOAL" && event.penaltyKick) "Elfmeter" else event.type?.text
         WcEvent(
             fixtureId  = fixtureId,
             eventType  = eventType,
             playerName = event.participants.firstOrNull()?.athlete?.displayName,
             teamName   = teamName,
             minute     = event.clock?.displayValue?.substringBefore("'")?.trimEnd('+')?.toIntOrNull(),
-            detail     = event.type?.text,
+            detail     = detail,
             fetchedAt  = now
         )
     }

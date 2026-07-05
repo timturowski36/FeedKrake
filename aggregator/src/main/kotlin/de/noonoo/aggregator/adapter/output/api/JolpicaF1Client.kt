@@ -8,7 +8,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
-import kotlinx.coroutines.delay
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -23,12 +22,16 @@ private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     private val baseUrl = "https://api.jolpi.ca/ergast/f1"
+    private val rateLimiter = JolpicaRateLimiter()
+
+    private suspend inline fun <reified T> jolpicaGet(url: String): T =
+        withJolpicaRetry(rateLimiter) { httpClient.get(url).body() }
 
     // ── API: Rennkalender ─────────────────────────────────────────────────────
 
     override suspend fun fetchCurrentSchedule(): List<F1Race> {
         return try {
-            val response: ScheduleResponse = httpClient.get("$baseUrl/current.json").body()
+            val response: ScheduleResponse = jolpicaGet("$baseUrl/current.json")
             response.mrData.raceTable.races.map { it.toF1Race() }
         } catch (e: Exception) {
             log.error(e) { "[F1] Fehler beim Abruf des Rennkalenders: ${e.message}" }
@@ -40,7 +43,7 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     override suspend fun fetchLastRaceResults(): List<F1RaceResult> {
         return try {
-            val response: RaceResultResponse = httpClient.get("$baseUrl/current/last/results.json").body()
+            val response: RaceResultResponse = jolpicaGet("$baseUrl/current/last/results.json")
             val race = response.mrData.raceTable.races.firstOrNull() ?: return emptyList()
             race.results.orEmpty().map { it.toF1RaceResult(race) }
         } catch (e: Exception) {
@@ -49,11 +52,24 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
         }
     }
 
+    // ── API: Qualifying-Ergebnis ──────────────────────────────────────────────
+
+    override suspend fun fetchQualifyingResults(season: Int, round: Int): List<F1RaceResult> {
+        return try {
+            val response: QualifyingResponse = jolpicaGet("$baseUrl/$season/$round/qualifying.json")
+            val race = response.mrData.raceTable.races.firstOrNull() ?: return emptyList()
+            race.qualifyingResults.orEmpty().map { it.toF1RaceResult(race) }
+        } catch (e: Exception) {
+            log.warn { "[F1] Kein Qualifying-Ergebnis fuer $season/$round: ${e.message}" }
+            emptyList()
+        }
+    }
+
     // ── API: Fahrerwertung ────────────────────────────────────────────────────
 
     override suspend fun fetchDriverStandings(): List<F1Standing> {
         return try {
-            val response: DriverStandingsResponse = httpClient.get("$baseUrl/current/driverStandings.json").body()
+            val response: DriverStandingsResponse = jolpicaGet("$baseUrl/current/driverStandings.json")
             val list = response.mrData.standingsTable.standingsLists.firstOrNull() ?: return emptyList()
             val round = list.round.toIntOrNull() ?: 0
             val season = list.season.toIntOrNull() ?: 0
@@ -80,7 +96,7 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     override suspend fun fetchConstructorStandings(): List<F1Standing> {
         return try {
-            val response: ConstructorStandingsResponse = httpClient.get("$baseUrl/current/constructorStandings.json").body()
+            val response: ConstructorStandingsResponse = jolpicaGet("$baseUrl/current/constructorStandings.json")
             val list = response.mrData.standingsTable.standingsLists.firstOrNull() ?: return emptyList()
             val round = list.round.toIntOrNull() ?: 0
             val season = list.season.toIntOrNull() ?: 0
@@ -107,8 +123,7 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     override suspend fun fetchRaceResultByCircuit(season: Int, circuitId: String): List<F1RaceResult> {
         return try {
-            delay(300)
-            val response: RaceResultResponse = httpClient.get("$baseUrl/$season/circuits/$circuitId/results.json").body()
+            val response: RaceResultResponse = jolpicaGet("$baseUrl/$season/circuits/$circuitId/results.json")
             val race = response.mrData.raceTable.races.firstOrNull() ?: return emptyList()
             race.results.orEmpty().map { it.toF1RaceResult(race) }
         } catch (e: Exception) {
@@ -157,6 +172,28 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
         fastestLap = fastestLap?.rank == "1",
         resultType = "race"
     )
+
+    // status traegt hier die beste erreichte Q-Zeit (Q3 > Q2 > Q1) statt eines Renn-Status,
+    // da F1RaceResult kein eigenes Lap-Time-Feld hat und result_type="qualifying" dieselbe
+    // Tabelle wiederverwendet (kein Schema-Change noetig).
+    private fun QualifyingResultDto.toF1RaceResult(race: QualifyingRaceDto): F1RaceResult = F1RaceResult(
+        season = race.season.toIntOrNull() ?: 0,
+        round = race.round.toIntOrNull() ?: 0,
+        circuitId = race.circuit.circuitId,
+        position = position.toIntOrNull(),
+        positionText = position,
+        driverId = driver.driverId,
+        driverCode = driver.code ?: driver.driverId.take(3).uppercase(),
+        driverName = "${driver.givenName} ${driver.familyName}",
+        constructorId = constructor.constructorId,
+        constructorName = constructor.name,
+        grid = 0,
+        laps = 0,
+        status = q3 ?: q2 ?: q1 ?: "-",
+        points = 0.0,
+        fastestLap = false,
+        resultType = "qualifying"
+    )
 }
 
 // ── JSON DTOs ─────────────────────────────────────────────────────────────────
@@ -174,6 +211,39 @@ private data class ScheduleMrData(
 @Serializable
 private data class RaceResultResponse(
     @SerialName("MRData") val mrData: RaceResultMrData
+)
+
+@Serializable
+private data class QualifyingResponse(
+    @SerialName("MRData") val mrData: QualifyingMrData
+)
+
+@Serializable
+private data class QualifyingMrData(
+    @SerialName("RaceTable") val raceTable: QualifyingTable
+)
+
+@Serializable
+private data class QualifyingTable(
+    @SerialName("Races") val races: List<QualifyingRaceDto> = emptyList()
+)
+
+@Serializable
+private data class QualifyingRaceDto(
+    val season: String,
+    val round: String,
+    @SerialName("Circuit") val circuit: CircuitDto,
+    @SerialName("QualifyingResults") val qualifyingResults: List<QualifyingResultDto>? = null
+)
+
+@Serializable
+private data class QualifyingResultDto(
+    val position: String,
+    @SerialName("Driver") val driver: DriverDto,
+    @SerialName("Constructor") val constructor: ConstructorDto,
+    @SerialName("Q1") val q1: String? = null,
+    @SerialName("Q2") val q2: String? = null,
+    @SerialName("Q3") val q3: String? = null
 )
 
 @Serializable

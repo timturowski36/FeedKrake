@@ -27,6 +27,9 @@ dependencies {
     implementation(libs.kaml)
     implementation(libs.logback)
     implementation(libs.kotlin.logging)
+
+    testImplementation(kotlin("test"))
+    testImplementation(libs.ktor.client.mock)
 }
 
 application {
@@ -35,4 +38,8 @@ application {
 
 tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

@@ -26,7 +26,22 @@ data class DetailH2hRow(val date: String, val home: String, val away: String, va
 data class DetailScorerRow(val rank: Int, val player: String, val team: String, val goals: Int, val assists: Int? = null)
 
 @Serializable
+data class DetailNationGoalsRow(val rank: Int, val team: String, val goals: Int)
+
+@Serializable
 data class DetailF1StandingRow(val position: Int, val name: String, val team: String?, val points: Double, val wins: Int)
+
+@Serializable
+data class DetailF1RaceResultRow(
+    val position: Int?, val positionText: String, val driverName: String,
+    val constructorName: String, val status: String, val points: Double, val fastestLap: Boolean
+)
+
+@Serializable
+data class DetailF1PreviousWinnerRow(val driverName: String, val constructorName: String, val season: Int)
+
+@Serializable
+data class DetailF1CircuitInfoRow(val circuitName: String, val country: String, val locality: String)
 
 @Serializable
 data class DetailPubgStatRow(
@@ -191,6 +206,34 @@ class EventDetailRepository(private val dataSource: DataSource) {
             )
         }
 
+    /** Nation mit den meisten Turnier-Toren (Ticket 3.3), aus den abgeschlossenen Fixture-Ergebnissen. */
+    fun wmNationGoals(limit: Int = 10): List<DetailNationGoalsRow> =
+        query(
+            """
+            SELECT t.name,
+                   COALESCE(SUM(CASE WHEN f.home_team_id = t.id THEN f.home_score END), 0)
+                 + COALESCE(SUM(CASE WHEN f.away_team_id = t.id THEN f.away_score END), 0) AS goals
+            FROM wm_teams t
+            JOIN wm_fixtures f ON f.home_team_id = t.id OR f.away_team_id = t.id
+            WHERE f.home_score IS NOT NULL AND f.away_score IS NOT NULL
+            GROUP BY t.id, t.name
+            HAVING COALESCE(SUM(CASE WHEN f.home_team_id = t.id THEN f.home_score END), 0)
+                 + COALESCE(SUM(CASE WHEN f.away_team_id = t.id THEN f.away_score END), 0) > 0
+            ORDER BY goals DESC
+            LIMIT ?
+            """.trimIndent(),
+            { it.setInt(1, limit) }
+        ) { it.getString("name") to it.getInt("goals") }
+            .let { rows ->
+                var lastGoals: Int? = null
+                var lastRank = 0
+                rows.mapIndexed { idx, (name, goals) ->
+                    val rank = if (goals == lastGoals) lastRank else (idx + 1).also { lastRank = it }
+                    lastGoals = goals
+                    DetailNationGoalsRow(rank = rank, team = name, goals = goals)
+                }
+            }
+
     // ── F1 ────────────────────────────────────────────────────────────────────
 
     fun f1Standings(type: String): List<DetailF1StandingRow> =
@@ -207,6 +250,62 @@ class EventDetailRepository(private val dataSource: DataSource) {
                 team = it.getString("constructor_name"), points = it.getDouble("points"), wins = it.getInt("wins")
             )
         }
+
+    fun f1RaceResults(season: Int, round: Int): List<DetailF1RaceResultRow> =
+        f1ResultsByType(season, round, "race")
+
+    fun f1QualifyingResults(season: Int, round: Int): List<DetailF1RaceResultRow> =
+        f1ResultsByType(season, round, "qualifying")
+
+    private fun f1ResultsByType(season: Int, round: Int, resultType: String): List<DetailF1RaceResultRow> =
+        query(
+            """
+            SELECT position, position_text, driver_name, constructor_name, status, points, fastest_lap
+            FROM f1_race_results
+            WHERE season = ? AND round = ? AND result_type = ?
+            ORDER BY COALESCE(position, 99)
+            """.trimIndent(),
+            { it.setInt(1, season); it.setInt(2, round); it.setString(3, resultType) }
+        ) {
+            DetailF1RaceResultRow(
+                position = it.getObject("position") as? Int,
+                positionText = it.getString("position_text"),
+                driverName = it.getString("driver_name"),
+                constructorName = it.getString("constructor_name"),
+                status = it.getString("status"),
+                points = it.getDouble("points"),
+                fastestLap = it.getBoolean("fastest_lap")
+            )
+        }
+
+    /** Vorjahressieger an der Strecke des naechsten Rennens (PRE-Panel, Ticket 4.2). */
+    fun f1PreviousWinner(circuitId: String, previousSeason: Int): DetailF1PreviousWinnerRow? =
+        query(
+            """
+            SELECT driver_name, constructor_name FROM f1_race_results
+            WHERE circuit_id = ? AND season = ? AND position = 1 AND result_type = 'race'
+            LIMIT 1
+            """.trimIndent(),
+            { it.setString(1, circuitId); it.setInt(2, previousSeason) }
+        ) {
+            DetailF1PreviousWinnerRow(
+                driverName = it.getString("driver_name"),
+                constructorName = it.getString("constructor_name"),
+                season = previousSeason
+            )
+        }.firstOrNull()
+
+    fun f1CircuitInfo(season: Int, round: Int): DetailF1CircuitInfoRow? =
+        query(
+            "SELECT circuit_name, country, locality FROM f1_races WHERE season = ? AND round = ?",
+            { it.setInt(1, season); it.setInt(2, round) }
+        ) {
+            DetailF1CircuitInfoRow(
+                circuitName = it.getString("circuit_name"),
+                country = it.getString("country"),
+                locality = it.getString("locality")
+            )
+        }.firstOrNull()
 
     // ── PUBG ──────────────────────────────────────────────────────────────────
 

@@ -10,4 +10,5 @@ interface F1ApiPort {
     suspend fun fetchDriverStandings(): List<F1Standing>
     suspend fun fetchConstructorStandings(): List<F1Standing>
     suspend fun fetchRaceResultByCircuit(season: Int, circuitId: String): List<F1RaceResult>
+    suspend fun fetchQualifyingResults(season: Int, round: Int): List<F1RaceResult>
 }

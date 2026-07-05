@@ -1,6 +1,7 @@
 package de.noonoo.web.application
 
 import de.noonoo.core.domain.model.Event
+import de.noonoo.core.domain.model.EventStatus
 import de.noonoo.core.domain.model.IsoWeek
 import de.noonoo.core.domain.model.ModuleType
 import de.noonoo.core.domain.model.SeasonStatus
@@ -42,7 +43,9 @@ data class WeatherDayDto(
     val precipSumMm: Double,
     val windMaxKmh: Double,
     val sunrise: String,
-    val sunset: String
+    val sunset: String,
+    /** Nur fuer den heutigen Tag gesetzt (Ticket 9.5: "jetzt X°"-Anzeige). */
+    val currentTemp: Int? = null
 )
 
 @Serializable
@@ -112,12 +115,19 @@ data class EventDetailsResponse(
     val module: String,
     val title: String,
     val capabilities: List<String>,
+    /** PRE/LIVE/POST, aus Event.status abgeleitet (Ticket 5.1) — steuert die Tab-Auswahl im Frontend. */
+    val phase: String = "PRE",
     val standings: List<de.noonoo.web.adapter.db.DetailStandingRow>? = null,
     val matchEvents: List<de.noonoo.web.adapter.db.DetailMatchEventRow>? = null,
     val headToHead: List<de.noonoo.web.adapter.db.DetailH2hRow>? = null,
     val topScorers: List<de.noonoo.web.adapter.db.DetailScorerRow>? = null,
+    val nationGoals: List<de.noonoo.web.adapter.db.DetailNationGoalsRow>? = null,
     val driverStandings: List<de.noonoo.web.adapter.db.DetailF1StandingRow>? = null,
     val constructorStandings: List<de.noonoo.web.adapter.db.DetailF1StandingRow>? = null,
+    val raceResults: List<de.noonoo.web.adapter.db.DetailF1RaceResultRow>? = null,
+    val qualifyingResults: List<de.noonoo.web.adapter.db.DetailF1RaceResultRow>? = null,
+    val previousWinner: de.noonoo.web.adapter.db.DetailF1PreviousWinnerRow? = null,
+    val circuitInfo: de.noonoo.web.adapter.db.DetailF1CircuitInfoRow? = null,
     val pubgStats: List<de.noonoo.web.adapter.db.DetailPubgStatRow>? = null
 )
 
@@ -140,6 +150,7 @@ class CalendarService(
             ?.firstOrNull { it.module == ModuleType.WEATHER.slug }
             ?.refs?.firstOrNull()
             ?.let { WeatherLocation.fromName(it) }
+        val today = Instant.now().atZone(BERLIN).toLocalDate()
         val weatherMap: Map<String, WeatherDayDto> = if (weatherLocation != null && weatherRepo != null) {
             val monday = week.monday()
             val days = (0..6L).map { monday.plusDays(it) }
@@ -148,6 +159,7 @@ class CalendarService(
             days.mapNotNull { day ->
                 val wd = weatherDays[day] ?: return@mapNotNull null
                 val cat = WeatherCategory.fromWmo(wd.weatherCode)
+                val currentTemp = if (day == today) weatherRepo.findCurrentHour(weatherLocation, Instant.now())?.temp?.toInt() else null
                 day.toString() to WeatherDayDto(
                     symbol = cat.symbol,
                     label = cat.label,
@@ -157,7 +169,8 @@ class CalendarService(
                     precipSumMm = wd.precipSumMm,
                     windMaxKmh = wd.windMaxKmh,
                     sunrise = wd.sunrise.toString().substring(0, 5),
-                    sunset = wd.sunset.toString().substring(0, 5)
+                    sunset = wd.sunset.toString().substring(0, 5),
+                    currentTemp = currentTemp
                 )
             }.toMap()
         } else emptyMap()
@@ -272,12 +285,21 @@ class CalendarService(
     private fun randomCode(): String =
         (1..4).map { CODE_ALPHABET[random.nextInt(CODE_ALPHABET.length)] }.joinToString("")
 
+    // ── Event-Phase (Ticket 5.1: PRE/LIVE/POST, steuert Tab-Auswahl im Frontend) ──
+
+    private fun phaseOf(status: EventStatus): String = when (status) {
+        EventStatus.LIVE -> "LIVE"
+        EventStatus.FINISHED -> "POST"
+        EventStatus.SCHEDULED, EventStatus.POSTPONED, EventStatus.CANCELLED -> "PRE"
+    }
+
     // ── Event-Details (nur, was die Quelle wirklich hergibt) ──────────────────
 
     fun eventDetails(event: Event): EventDetailsResponse {
         val base = EventDetailsResponse(
             eventId = event.id, module = event.moduleType.slug,
-            title = event.title, capabilities = emptyList()
+            title = event.title, capabilities = emptyList(),
+            phase = phaseOf(event.status)
         )
         return when (event.moduleType) {
             // OpenLigaDB: Tabelle, Torschützen, H2H – KEINE Karten/Assists/Aufstellungen (nicht im Schema)
@@ -319,18 +341,44 @@ class CalendarService(
                     capabilities = listOfNotNull(
                         "TABLE".takeIf { standings.isNotEmpty() },
                         "MATCH_EVENTS".takeIf { matchEvents.isNotEmpty() },
-                        "TOP_SCORERS"
+                        "TOP_SCORERS",
+                        "NATION_GOALS"
                     ),
                     standings = standings.ifEmpty { null },
                     matchEvents = matchEvents.ifEmpty { null },
-                    topScorers = details.wmTopScorers().ifEmpty { null }
+                    topScorers = details.wmTopScorers().ifEmpty { null },
+                    nationGoals = details.wmNationGoals().ifEmpty { null }
                 )
             }
-            ModuleType.F1 -> base.copy(
-                capabilities = listOf("DRIVER_STANDINGS", "CONSTRUCTOR_STANDINGS"),
-                driverStandings = details.f1Standings("driver").ifEmpty { null },
-                constructorStandings = details.f1Standings("constructor").ifEmpty { null }
-            )
+            // Jolpica: session ("fp1"/"qualifying"/"sprint"/"race") + round + Saison aus competitionId ("f1:{season}")
+            ModuleType.F1 -> {
+                val season = event.competitionId.removePrefix("f1:").toIntOrNull()
+                val round = event.metadata["round"]?.toIntOrNull()
+                val session = event.metadata["session"]
+                val raceResults = if (session == "race" && event.status == EventStatus.FINISHED && season != null && round != null)
+                    details.f1RaceResults(season, round).ifEmpty { null } else null
+                val qualifyingResults = if (session == "qualifying" && event.status == EventStatus.FINISHED && season != null && round != null)
+                    details.f1QualifyingResults(season, round).ifEmpty { null } else null
+                val showPreInfo = session == "race" && event.status == EventStatus.SCHEDULED && season != null && round != null
+                val previousWinner = if (showPreInfo) {
+                    event.metadata["circuitId"]?.let { details.f1PreviousWinner(it, season - 1) }
+                } else null
+                val circuitInfo = if (showPreInfo) details.f1CircuitInfo(season, round) else null
+                base.copy(
+                    capabilities = listOfNotNull(
+                        "RACE_RESULT".takeIf { raceResults != null },
+                        "QUALIFYING_RESULT".takeIf { qualifyingResults != null },
+                        "PRE_INFO".takeIf { previousWinner != null || circuitInfo != null },
+                        "DRIVER_STANDINGS", "CONSTRUCTOR_STANDINGS"
+                    ),
+                    raceResults = raceResults,
+                    qualifyingResults = qualifyingResults,
+                    previousWinner = previousWinner,
+                    circuitInfo = circuitInfo,
+                    driverStandings = details.f1Standings("driver").ifEmpty { null },
+                    constructorStandings = details.f1Standings("constructor").ifEmpty { null }
+                )
+            }
             ModuleType.PUBG -> {
                 val rest = event.externalId.removePrefix("pubg:")
                 val stats = if (rest.startsWith("day:")) {

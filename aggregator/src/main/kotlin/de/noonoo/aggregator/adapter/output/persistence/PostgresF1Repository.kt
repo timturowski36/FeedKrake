@@ -234,6 +234,32 @@ class PostgresF1Repository(private val dataSource: DataSource) : F1Repository {
         }
     }
 
+    override fun getRaceResultsFor(season: Int, round: Int): List<F1RaceResult> =
+        queryResultsByRound(season, round, "race")
+
+    override fun getQualifyingResultsFor(season: Int, round: Int): List<F1RaceResult> =
+        queryResultsByRound(season, round, "qualifying")
+
+    private fun queryResultsByRound(season: Int, round: Int, resultType: String): List<F1RaceResult> {
+        val sql = """
+            SELECT * FROM f1_race_results
+            WHERE season = ? AND round = ? AND result_type = ?
+            ORDER BY COALESCE(position, 99) ASC
+        """.trimIndent()
+        return dataSource.connection.use { conn ->
+            conn.prepareStatement(sql).use { stmt ->
+                stmt.setInt(1, season)
+                stmt.setInt(2, round)
+                stmt.setString(3, resultType)
+                stmt.executeQuery().use { rs ->
+                    val result = mutableListOf<F1RaceResult>()
+                    while (rs.next()) result += rs.toF1RaceResult()
+                    result
+                }
+            }
+        }
+    }
+
     override fun hasPreviousYearResults(season: Int): Boolean {
         val sql = "SELECT COUNT(*) FROM f1_race_results WHERE season = ?"
         return dataSource.connection.use { conn ->

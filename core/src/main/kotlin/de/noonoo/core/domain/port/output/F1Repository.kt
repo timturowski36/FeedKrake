@@ -16,4 +16,6 @@ interface F1Repository {
     fun getWinnerOnCircuit(season: Int, circuitId: String): F1RaceResult?
     fun getCurrentSeasonRaces(): List<F1Race>
     fun hasPreviousYearResults(season: Int): Boolean
+    fun getRaceResultsFor(season: Int, round: Int): List<F1RaceResult>
+    fun getQualifyingResultsFor(season: Int, round: Int): List<F1RaceResult>
 }
