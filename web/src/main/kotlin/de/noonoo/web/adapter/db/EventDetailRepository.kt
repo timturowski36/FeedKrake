@@ -215,6 +215,36 @@ class EventDetailRepository(private val dataSource: DataSource) {
             )
         }
 
+    /** Über alle Matches eines Tages aggregierte Pro-Spieler-Stats (für gebündelte PUBG-Tages-Events). */
+    fun pubgDayStats(day: java.time.LocalDate): List<DetailPubgStatRow> =
+        query(
+            """
+            SELECT p.player_name,
+                   MIN(p.win_place)                 AS win_place,
+                   SUM(p.kills)                      AS kills,
+                   SUM(p.assists)                     AS assists,
+                   SUM(p.damage_dealt)                AS damage_dealt,
+                   SUM(p.time_survived)                AS time_survived,
+                   MAX(p.longest_kill)                  AS longest_kill
+            FROM pubg_match_participants p
+            JOIN pubg_matches m ON m.match_id = p.match_id
+            JOIN pubg_players pl ON pl.account_id = p.account_id
+            WHERE m.match_type = 'official'
+              AND (m.created_at AT TIME ZONE 'Europe/Berlin')::date = ?
+            GROUP BY p.player_name
+            ORDER BY win_place, kills DESC
+            """.trimIndent(),
+            { it.setObject(1, day) }
+        ) {
+            DetailPubgStatRow(
+                player = it.getString("player_name") ?: "?",
+                placement = it.getInt("win_place"), kills = it.getInt("kills"),
+                assists = it.getInt("assists"), damage = it.getDouble("damage_dealt").toInt(),
+                survivedMinutes = (it.getDouble("time_survived") / 60).toInt(),
+                longestKill = it.getDouble("longest_kill").toInt()
+            )
+        }
+
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private fun <T> query(sql: String, bind: (java.sql.PreparedStatement) -> Unit, map: (ResultSet) -> T): List<T> =

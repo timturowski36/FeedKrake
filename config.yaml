@@ -144,6 +144,7 @@ modules:
 features:
   ambientEnabled: false
   pubgBundled: true
+  redesignEnabled: false
 
 outputs:
   discord:

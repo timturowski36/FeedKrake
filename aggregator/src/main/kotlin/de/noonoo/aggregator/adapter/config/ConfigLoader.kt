@@ -8,7 +8,8 @@ import java.io.File
 @Serializable
 data class FeaturesConfig(
     val ambientEnabled: Boolean = false,
-    val pubgBundled: Boolean = true
+    val pubgBundled: Boolean = true,
+    val redesignEnabled: Boolean = false
 )
 
 @Serializable

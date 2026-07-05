@@ -326,10 +326,15 @@ class CalendarService(
                 constructorStandings = details.f1Standings("constructor").ifEmpty { null }
             )
             ModuleType.PUBG -> {
-                val matchId = event.externalId.removePrefix("pubg:")
+                val rest = event.externalId.removePrefix("pubg:")
+                val stats = if (rest.startsWith("day:")) {
+                    details.pubgDayStats(java.time.LocalDate.parse(rest.removePrefix("day:")))
+                } else {
+                    details.pubgMatchStats(rest)
+                }
                 base.copy(
                     capabilities = listOf("MATCH_STATS"),
-                    pubgStats = details.pubgMatchStats(matchId).ifEmpty { null }
+                    pubgStats = stats.ifEmpty { null }
                 )
             }
             ModuleType.NEWS, ModuleType.WEATHER -> base
