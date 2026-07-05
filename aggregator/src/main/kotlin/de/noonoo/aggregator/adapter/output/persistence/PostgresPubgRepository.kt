@@ -1,16 +1,21 @@
 package de.noonoo.aggregator.adapter.output.persistence
 
+import de.noonoo.core.domain.model.PubgDaySummary
 import de.noonoo.core.domain.model.PubgMapStat
 import de.noonoo.core.domain.model.PubgMatch
 import de.noonoo.core.domain.model.PubgMatchParticipant
+import de.noonoo.core.domain.model.PubgParticipation
 import de.noonoo.core.domain.model.PubgPeriodStats
 import de.noonoo.core.domain.model.PubgPersonalRecords
 import de.noonoo.core.domain.model.PubgPlayer
+import de.noonoo.core.domain.model.PubgPlayerDayStats
+import de.noonoo.core.domain.model.PubgPlayerRecords
 import de.noonoo.core.domain.model.PubgSeasonStats
 import de.noonoo.core.domain.port.output.PubgRepository
 import java.sql.ResultSet
 import java.sql.Timestamp
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.sql.DataSource
 
@@ -530,4 +535,289 @@ class PostgresPubgRepository(private val dataSource: DataSource) : PubgRepositor
         teamKills = getInt("team_kills"),
         fetchedAt = getTimestamp("fetched_at").toLocalDateTime()
     )
+
+    // ── Aggregationsmodell ────────────────────────────────────────────────────
+
+    override fun upsertParticipation(p: PubgParticipation) {
+    dataSource.connection.use { conn ->
+        val sql = """
+            INSERT INTO pubg_participation
+                (match_id, player_id, player_name, match_start, day, game_mode, map_name,
+                 kills, assists, dbnos, headshot_kills, damage_dealt, longest_kill,
+                 time_survived, win_place, roster_rank, revives, boosts, heals, kill_streaks,
+                 walk_distance, ride_distance, swim_distance, weapons_acquired,
+                 road_kills, vehicle_destroys, team_kills, death_type)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT (match_id, player_id) DO NOTHING
+        """.trimIndent()
+        conn.prepareStatement(sql).use { stmt ->
+            stmt.setString(1, p.matchId)
+            stmt.setString(2, p.playerId)
+            stmt.setString(3, p.playerName)
+            stmt.setTimestamp(4, Timestamp.from(p.matchStart))
+            stmt.setObject(5, p.day)
+            stmt.setString(6, p.gameMode)
+            stmt.setString(7, p.mapName)
+            stmt.setInt(8, p.kills)
+            stmt.setInt(9, p.assists)
+            stmt.setInt(10, p.dbnos)
+            stmt.setInt(11, p.headshotKills)
+            stmt.setDouble(12, p.damageDealt)
+            stmt.setDouble(13, p.longestKill)
+            stmt.setInt(14, p.timeSurvived)
+            stmt.setInt(15, p.winPlace)
+            stmt.setInt(16, p.rosterRank)
+            stmt.setInt(17, p.revives)
+            stmt.setInt(18, p.boosts)
+            stmt.setInt(19, p.heals)
+            stmt.setInt(20, p.killStreaks)
+            stmt.setDouble(21, p.walkDistance)
+            stmt.setDouble(22, p.rideDistance)
+            stmt.setDouble(23, p.swimDistance)
+            stmt.setInt(24, p.weaponsAcquired)
+            stmt.setInt(25, p.roadKills)
+            stmt.setInt(26, p.vehicleDestroys)
+            stmt.setInt(27, p.teamKills)
+            stmt.setString(28, p.deathType)
+            stmt.executeUpdate()
+        }
+    }
+}
+
+    override fun upsertPlayerDayStats(stats: PubgPlayerDayStats) {
+    dataSource.connection.use { conn ->
+        val sql = """
+            INSERT INTO pubg_player_day_stats
+                (day, player_id, player_name, matches_played, wins, top10,
+                 total_kills, total_assists, total_damage, total_dbnos, headshot_kills,
+                 best_placement, longest_kill_day, longest_survival_day,
+                 time_played_seconds, avg_damage_per_match)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT (day, player_id) DO UPDATE SET
+                player_name          = EXCLUDED.player_name,
+                matches_played       = EXCLUDED.matches_played,
+                wins                 = EXCLUDED.wins,
+                top10                = EXCLUDED.top10,
+                total_kills          = EXCLUDED.total_kills,
+                total_assists        = EXCLUDED.total_assists,
+                total_damage         = EXCLUDED.total_damage,
+                total_dbnos          = EXCLUDED.total_dbnos,
+                headshot_kills       = EXCLUDED.headshot_kills,
+                best_placement       = EXCLUDED.best_placement,
+                longest_kill_day     = EXCLUDED.longest_kill_day,
+                longest_survival_day = EXCLUDED.longest_survival_day,
+                time_played_seconds  = EXCLUDED.time_played_seconds,
+                avg_damage_per_match = EXCLUDED.avg_damage_per_match
+        """.trimIndent()
+        conn.prepareStatement(sql).use { stmt ->
+            stmt.setObject(1, stats.day)
+            stmt.setString(2, stats.playerId)
+            stmt.setString(3, stats.playerName)
+            stmt.setInt(4, stats.matchesPlayed)
+            stmt.setInt(5, stats.wins)
+            stmt.setInt(6, stats.top10)
+            stmt.setInt(7, stats.totalKills)
+            stmt.setInt(8, stats.totalAssists)
+            stmt.setDouble(9, stats.totalDamage)
+            stmt.setInt(10, stats.totalDbnos)
+            stmt.setInt(11, stats.headshotKills)
+            stmt.setInt(12, stats.bestPlacement)
+            stmt.setDouble(13, stats.longestKillDay)
+            stmt.setInt(14, stats.longestSurvivalDay)
+            stmt.setInt(15, stats.timePlayedSeconds)
+            stmt.setDouble(16, stats.avgDamagePerMatch)
+            stmt.executeUpdate()
+        }
+    }
+}
+
+    override fun upsertPlayerRecords(records: PubgPlayerRecords) {
+    dataSource.connection.use { conn ->
+        val sql = """
+            INSERT INTO pubg_player_records
+                (player_id, player_name, most_kills_in_match, most_kills_match_id,
+                 longest_kill_ever, longest_kill_match_id, longest_survival_ever,
+                 longest_survival_match_id, most_damage_in_match, most_damage_match_id,
+                 total_chicken_dinners, most_assists_in_match, best_kill_streak,
+                 highest_dbnos_in_match, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT (player_id) DO UPDATE SET
+                player_name               = EXCLUDED.player_name,
+                most_kills_in_match       = GREATEST(pubg_player_records.most_kills_in_match, EXCLUDED.most_kills_in_match),
+                most_kills_match_id       = CASE WHEN EXCLUDED.most_kills_in_match >= pubg_player_records.most_kills_in_match
+                                                 THEN EXCLUDED.most_kills_match_id ELSE pubg_player_records.most_kills_match_id END,
+                longest_kill_ever         = GREATEST(pubg_player_records.longest_kill_ever, EXCLUDED.longest_kill_ever),
+                longest_kill_match_id     = CASE WHEN EXCLUDED.longest_kill_ever >= pubg_player_records.longest_kill_ever
+                                                 THEN EXCLUDED.longest_kill_match_id ELSE pubg_player_records.longest_kill_match_id END,
+                longest_survival_ever     = GREATEST(pubg_player_records.longest_survival_ever, EXCLUDED.longest_survival_ever),
+                longest_survival_match_id = CASE WHEN EXCLUDED.longest_survival_ever >= pubg_player_records.longest_survival_ever
+                                                 THEN EXCLUDED.longest_survival_match_id ELSE pubg_player_records.longest_survival_match_id END,
+                most_damage_in_match      = GREATEST(pubg_player_records.most_damage_in_match, EXCLUDED.most_damage_in_match),
+                most_damage_match_id      = CASE WHEN EXCLUDED.most_damage_in_match >= pubg_player_records.most_damage_in_match
+                                                 THEN EXCLUDED.most_damage_match_id ELSE pubg_player_records.most_damage_match_id END,
+                total_chicken_dinners     = pubg_player_records.total_chicken_dinners + EXCLUDED.total_chicken_dinners,
+                most_assists_in_match     = GREATEST(pubg_player_records.most_assists_in_match, EXCLUDED.most_assists_in_match),
+                best_kill_streak          = GREATEST(pubg_player_records.best_kill_streak, EXCLUDED.best_kill_streak),
+                highest_dbnos_in_match    = GREATEST(pubg_player_records.highest_dbnos_in_match, EXCLUDED.highest_dbnos_in_match),
+                updated_at                = EXCLUDED.updated_at
+        """.trimIndent()
+        conn.prepareStatement(sql).use { stmt ->
+            stmt.setString(1, records.playerId)
+            stmt.setString(2, records.playerName)
+            stmt.setInt(3, records.mostKillsInMatch)
+            stmt.setString(4, records.mostKillsMatchId)
+            stmt.setDouble(5, records.longestKillEver)
+            stmt.setString(6, records.longestKillMatchId)
+            stmt.setInt(7, records.longestSurvivalEver)
+            stmt.setString(8, records.longestSurvivalMatchId)
+            stmt.setDouble(9, records.mostDamageInMatch)
+            stmt.setString(10, records.mostDamageMatchId)
+            stmt.setInt(11, records.totalChickenDinners)
+            stmt.setInt(12, records.mostAssistsInMatch)
+            stmt.setInt(13, records.bestKillStreak)
+            stmt.setInt(14, records.highestDbnosInMatch)
+            stmt.setTimestamp(15, Timestamp.from(records.updatedAt))
+            stmt.executeUpdate()
+        }
+    }
+}
+
+    override fun upsertDaySummary(summary: PubgDaySummary) {
+    dataSource.connection.use { conn ->
+        val sql = """
+            INSERT INTO pubg_day_summary
+                (day, players_played, total_matches, total_kills_all_players,
+                 chicken_dinners, best_placement_of_day)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (day) DO UPDATE SET
+                players_played          = EXCLUDED.players_played,
+                total_matches           = EXCLUDED.total_matches,
+                total_kills_all_players = EXCLUDED.total_kills_all_players,
+                chicken_dinners         = EXCLUDED.chicken_dinners,
+                best_placement_of_day   = EXCLUDED.best_placement_of_day
+        """.trimIndent()
+        conn.prepareStatement(sql).use { stmt ->
+            stmt.setObject(1, summary.day)
+            stmt.setArray(2, conn.createArrayOf("text", summary.playersPlayed.toTypedArray()))
+            stmt.setInt(3, summary.totalMatches)
+            stmt.setInt(4, summary.totalKillsAllPlayers)
+            stmt.setInt(5, summary.chickenDinners)
+            stmt.setInt(6, summary.bestPlacementOfDay)
+            stmt.executeUpdate()
+        }
+    }
+}
+
+    override fun findDaySummaries(): List<PubgDaySummary> {
+    val sql = "SELECT day, players_played, total_matches, total_kills_all_players, chicken_dinners, best_placement_of_day FROM pubg_day_summary ORDER BY day DESC"
+    return dataSource.connection.use { conn ->
+        conn.prepareStatement(sql).use { stmt ->
+            stmt.executeQuery().use { rs ->
+                val result = mutableListOf<PubgDaySummary>()
+                while (rs.next()) result += PubgDaySummary(
+                    day = rs.getDate("day").toLocalDate(),
+                    playersPlayed = (rs.getArray("players_played").array as Array<*>).map { it.toString() },
+                    totalMatches = rs.getInt("total_matches"),
+                    totalKillsAllPlayers = rs.getInt("total_kills_all_players"),
+                    chickenDinners = rs.getInt("chicken_dinners"),
+                    bestPlacementOfDay = rs.getInt("best_placement_of_day")
+                )
+                result
+            }
+        }
+    }
+}
+
+    override fun findDaySummary(day: LocalDate): PubgDaySummary? {
+    val sql = "SELECT day, players_played, total_matches, total_kills_all_players, chicken_dinners, best_placement_of_day FROM pubg_day_summary WHERE day = ?"
+    return dataSource.connection.use { conn ->
+        conn.prepareStatement(sql).use { stmt ->
+            stmt.setObject(1, day)
+            stmt.executeQuery().use { rs ->
+                if (!rs.next()) return@use null
+                PubgDaySummary(
+                    day = rs.getDate("day").toLocalDate(),
+                    playersPlayed = (rs.getArray("players_played").array as Array<*>).map { it.toString() },
+                    totalMatches = rs.getInt("total_matches"),
+                    totalKillsAllPlayers = rs.getInt("total_kills_all_players"),
+                    chickenDinners = rs.getInt("chicken_dinners"),
+                    bestPlacementOfDay = rs.getInt("best_placement_of_day")
+                )
+            }
+        }
+    }
+}
+
+    override fun findPlayerDayStats(day: LocalDate): List<PubgPlayerDayStats> {
+    val sql = """
+        SELECT day, player_id, player_name, matches_played, wins, top10,
+               total_kills, total_assists, total_damage, total_dbnos, headshot_kills,
+               best_placement, longest_kill_day, longest_survival_day,
+               time_played_seconds, avg_damage_per_match
+        FROM pubg_player_day_stats WHERE day = ? ORDER BY total_kills DESC
+    """.trimIndent()
+    return dataSource.connection.use { conn ->
+        conn.prepareStatement(sql).use { stmt ->
+            stmt.setObject(1, day)
+            stmt.executeQuery().use { rs ->
+                val result = mutableListOf<PubgPlayerDayStats>()
+                while (rs.next()) result += PubgPlayerDayStats(
+                    day = rs.getDate("day").toLocalDate(),
+                    playerId = rs.getString("player_id"),
+                    playerName = rs.getString("player_name"),
+                    matchesPlayed = rs.getInt("matches_played"),
+                    wins = rs.getInt("wins"),
+                    top10 = rs.getInt("top10"),
+                    totalKills = rs.getInt("total_kills"),
+                    totalAssists = rs.getInt("total_assists"),
+                    totalDamage = rs.getDouble("total_damage"),
+                    totalDbnos = rs.getInt("total_dbnos"),
+                    headshotKills = rs.getInt("headshot_kills"),
+                    bestPlacement = rs.getInt("best_placement"),
+                    longestKillDay = rs.getDouble("longest_kill_day"),
+                    longestSurvivalDay = rs.getInt("longest_survival_day"),
+                    timePlayedSeconds = rs.getInt("time_played_seconds"),
+                    avgDamagePerMatch = rs.getDouble("avg_damage_per_match")
+                )
+                result
+            }
+        }
+    }
+}
+
+    override fun findPlayerRecords(playerId: String): PubgPlayerRecords? {
+    val sql = """
+        SELECT player_id, player_name, most_kills_in_match, most_kills_match_id,
+               longest_kill_ever, longest_kill_match_id, longest_survival_ever,
+               longest_survival_match_id, most_damage_in_match, most_damage_match_id,
+               total_chicken_dinners, most_assists_in_match, best_kill_streak,
+               highest_dbnos_in_match, updated_at
+        FROM pubg_player_records WHERE player_id = ?
+    """.trimIndent()
+    return dataSource.connection.use { conn ->
+        conn.prepareStatement(sql).use { stmt ->
+            stmt.setString(1, playerId)
+            stmt.executeQuery().use { rs ->
+                if (!rs.next()) return@use null
+                PubgPlayerRecords(
+                    playerId = rs.getString("player_id"),
+                    playerName = rs.getString("player_name"),
+                    mostKillsInMatch = rs.getInt("most_kills_in_match"),
+                    mostKillsMatchId = rs.getString("most_kills_match_id"),
+                    longestKillEver = rs.getDouble("longest_kill_ever"),
+                    longestKillMatchId = rs.getString("longest_kill_match_id"),
+                    longestSurvivalEver = rs.getInt("longest_survival_ever"),
+                    longestSurvivalMatchId = rs.getString("longest_survival_match_id"),
+                    mostDamageInMatch = rs.getDouble("most_damage_in_match"),
+                    mostDamageMatchId = rs.getString("most_damage_match_id"),
+                    totalChickenDinners = rs.getInt("total_chicken_dinners"),
+                    mostAssistsInMatch = rs.getInt("most_assists_in_match"),
+                    bestKillStreak = rs.getInt("best_kill_streak"),
+                    highestDbnosInMatch = rs.getInt("highest_dbnos_in_match"),
+                    updatedAt = rs.getTimestamp("updated_at").toInstant()
+                )
+            }
+        }
+    }
+}
 }

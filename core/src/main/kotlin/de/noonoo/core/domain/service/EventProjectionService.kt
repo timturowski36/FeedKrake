@@ -1,5 +1,6 @@
 package de.noonoo.core.domain.service
 
+import de.noonoo.core.domain.model.PubgDaySummary
 import de.noonoo.core.domain.port.output.EventRepository
 import de.noonoo.core.domain.port.output.F1Repository
 import de.noonoo.core.domain.port.output.HandballRepository
@@ -8,14 +9,18 @@ import de.noonoo.core.domain.port.output.PubgRepository
 import de.noonoo.core.domain.port.output.WcRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 private val log = KotlinLogging.logger {}
+private val PROJECTION_BERLIN = ZoneId.of("Europe/Berlin")
 
 /** Welche Quellen projiziert werden – aus der config.yaml des Aggregators abgeleitet. */
 data class ProjectionSources(
     val footballLeagues: List<Pair<String, Int>>,   // (league, season), z. B. ("bl1", 2025)
     val handballLeagueIds: List<String>,
     val pubgEnabled: Boolean,
+    val pubgBundled: Boolean = true,
     val f1Enabled: Boolean,
     val worldCupEnabled: Boolean
 )
@@ -72,10 +77,33 @@ class EventProjectionService(
     private fun projectPubg(now: Instant) {
         if (!sources.pubgEnabled) return
         runCatching {
-            val events = pubgRepository.findMatchesWithParticipants()
-                .map { (match, participants) -> PubgEventMapper.map(match, participants, now) }
-            eventRepository.upsertAll(events)
-            log.debug { "Events projiziert: PUBG → ${events.size}" }
+            if (sources.pubgBundled) {
+                // Ein Event pro Spieltag: Matches nach Berlin-Datum gruppieren, Summaries bilden und upserten
+                val matchPairs = pubgRepository.findMatchesWithParticipants()
+                val byDay = matchPairs.groupBy { (match, _) ->
+                    match.createdAt.toInstant(ZoneOffset.UTC).atZone(PROJECTION_BERLIN).toLocalDate()
+                }
+                val summaries = byDay.map { (day, pairs) ->
+                    val allParticipants = pairs.flatMap { it.second }
+                    PubgDaySummary(
+                        day = day,
+                        playersPlayed = allParticipants.map { it.playerName }.distinct().sorted(),
+                        totalMatches = pairs.map { it.first.matchId }.distinct().size,
+                        totalKillsAllPlayers = allParticipants.sumOf { it.kills },
+                        chickenDinners = allParticipants.count { it.winPlace == 1 },
+                        bestPlacementOfDay = allParticipants.minOfOrNull { it.winPlace } ?: 0
+                    )
+                }
+                summaries.forEach { pubgRepository.upsertDaySummary(it) }
+                val events = summaries.map { PubgDayEventMapper.map(it, now) }
+                eventRepository.upsertAll(events)
+                log.debug { "Events projiziert: PUBG (bundled) → ${events.size} Tage" }
+            } else {
+                val events = pubgRepository.findMatchesWithParticipants()
+                    .map { (match, participants) -> PubgEventMapper.map(match, participants, now) }
+                eventRepository.upsertAll(events)
+                log.debug { "Events projiziert: PUBG → ${events.size}" }
+            }
         }.onFailure { log.error(it) { "Event-Projektion PUBG fehlgeschlagen: ${it.message}" } }
     }
 

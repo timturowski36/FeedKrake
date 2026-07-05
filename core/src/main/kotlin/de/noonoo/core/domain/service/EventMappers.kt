@@ -7,6 +7,7 @@ import de.noonoo.core.domain.model.HandballMatch
 import de.noonoo.core.domain.model.Match
 import de.noonoo.core.domain.model.ModuleType
 import de.noonoo.core.domain.model.Participant
+import de.noonoo.core.domain.model.PubgDaySummary
 import de.noonoo.core.domain.model.PubgMatch
 import de.noonoo.core.domain.model.PubgMatchParticipant
 import de.noonoo.core.domain.model.Team
@@ -273,3 +274,32 @@ object WorldCupEventMapper {
 
 private fun isWithinLiveWindow(start: Instant, now: Instant, duration: Duration): Boolean =
     !now.isBefore(start) && now.isBefore(start.plus(duration))
+
+/** PubgDaySummary → ein Event pro Spieltag (pubgBundled=true). externalId = "pubg:day:{date}". */
+object PubgDayEventMapper {
+    fun map(summary: PubgDaySummary, now: Instant = Instant.now()): Event {
+        val startOfDay = summary.day.atStartOfDay(BERLIN).toInstant()
+        val endOfDay = summary.day.plusDays(1).atStartOfDay(BERLIN).toInstant()
+        val matchLabel = if (summary.totalMatches == 1) "Match" else "Matches"
+        val playerCount = summary.playersPlayed.size
+        val playerLabel = if (playerCount == 1) "Spieler" else "Spieler"
+        return event(
+            externalId = "pubg:day:${summary.day}",
+            moduleType = ModuleType.PUBG,
+            competitionId = "pubg",
+            title = "PUBG — ${summary.totalMatches} $matchLabel, $playerCount $playerLabel",
+            startTime = startOfDay,
+            endTime = endOfDay,
+            status = EventStatus.FINISHED,
+            participants = summary.playersPlayed.map { Participant(name = it) },
+            metadata = buildMap {
+                put("totalMatches", summary.totalMatches.toString())
+                put("chickenDinners", summary.chickenDinners.toString())
+                put("bestPlacement", summary.bestPlacementOfDay.toString())
+                put("totalKills", summary.totalKillsAllPlayers.toString())
+                put("bundled", "true")
+            },
+            now = now
+        )
+    }
+}

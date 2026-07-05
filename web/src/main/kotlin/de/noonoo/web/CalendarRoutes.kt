@@ -1,9 +1,11 @@
 package de.noonoo.web
 
 import de.noonoo.core.domain.model.IsoWeek
+import de.noonoo.core.domain.model.WeatherLocation
 import de.noonoo.core.domain.service.IcsService
 import de.noonoo.web.application.CalendarService
 import de.noonoo.web.application.ConfigRequest
+import java.time.LocalDate
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -143,6 +145,22 @@ fun Route.calendarRoutes(service: CalendarService, icsHost: String) {
             ?: return@get call.respond(HttpStatusCode.NotFound)
         val ics = IcsService(icsHost).calendar(service.feedEvents(config), "NooNoo Kalender ($code)")
         call.respondText(ics, ContentType.parse("text/calendar; charset=utf-8"))
+    }
+
+    // ── Wetter-Detail ─────────────────────────────────────────────────────────
+
+    get("/api/weather/{location}/{date}") {
+        val locationName = call.parameters["location"]
+            ?: return@get call.respond(HttpStatusCode.BadRequest)
+        val dateStr = call.parameters["date"]
+            ?: return@get call.respond(HttpStatusCode.BadRequest)
+        val location = WeatherLocation.fromName(locationName)
+            ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Unbekannter Ort"))
+        val day = runCatching { LocalDate.parse(dateStr) }.getOrNull()
+            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Ungültiges Datum"))
+        val detail = service.weatherDetail(location, day)
+            ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Keine Wetterdaten"))
+        call.respond(detail)
     }
 
     // ── News-Ticker ───────────────────────────────────────────────────────────

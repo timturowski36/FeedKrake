@@ -25,8 +25,10 @@ import de.noonoo.aggregator.adapter.input.scheduler.WmPollingScheduler
 import de.noonoo.aggregator.adapter.output.api.wm.EspnWmAdapter
 import de.noonoo.aggregator.adapter.output.api.wm.OpenFootballAdapter
 import de.noonoo.aggregator.adapter.output.api.wm.WmDataSource
+import de.noonoo.aggregator.adapter.output.api.OpenMeteoAdapter
 import de.noonoo.aggregator.adapter.output.persistence.PostgresPubgRepository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresRepository
+import de.noonoo.aggregator.adapter.output.persistence.PostgresWeatherRepository
 import de.noonoo.aggregator.adapter.output.persistence.PostgresWcRepository
 import de.noonoo.core.application.WorldCupIngestionService
 import de.noonoo.core.application.WorldCupQueryService
@@ -56,6 +58,8 @@ import de.noonoo.core.domain.port.output.NotificationPort
 import de.noonoo.core.domain.port.output.PubgApiPort
 import de.noonoo.core.domain.port.output.PubgRepository
 import de.noonoo.core.domain.port.output.WcApiPort
+import de.noonoo.core.domain.port.output.WeatherPort
+import de.noonoo.core.domain.port.output.WeatherRepository
 import org.koin.core.qualifier.named
 import de.noonoo.core.domain.port.output.WcRepository
 import de.noonoo.core.domain.service.F1IngestionService
@@ -186,6 +190,10 @@ val appModule = module {
     single<FetchWorldCupDataUseCase> { WorldCupIngestionService(get(), get()) }
     single<QueryWorldCupDataUseCase> { WorldCupQueryService(get()) }
 
+    // ── Adapter: Wetter ───────────────────────────────────────────────────────
+    single<WeatherPort> { OpenMeteoAdapter(get()) }
+    single<WeatherRepository> { PostgresWeatherRepository(get()) }
+
     // ── Adapter: Events (Wochenkalender) ──────────────────────────────────────
     single<de.noonoo.core.domain.port.output.EventRepository> {
         de.noonoo.aggregator.adapter.output.persistence.PostgresEventRepository(get())
@@ -203,6 +211,7 @@ val appModule = module {
                     .filter { it.type == "handball" || it.type == "handball_statistics" }
                     .mapNotNull { it.config["leagueId"] },
                 pubgEnabled = enabled.any { it.type == "pubg" },
+                pubgBundled = get<AppConfig>().features.pubgBundled,
                 f1Enabled = enabled.any { it.type == "formula1" },
                 worldCupEnabled = enabled.any { it.type == "worldcup" }
             ),
@@ -267,7 +276,9 @@ val appModule = module {
             handballRepository = get(),
             notificationPort = get(),
             webhookChannels = get(),
-            eventProjectionService = get()
+            eventProjectionService = get(),
+            weatherPort = get(),
+            weatherRepository = get()
         )
     }
 }

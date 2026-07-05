@@ -19,10 +19,13 @@ import de.noonoo.core.domain.port.input.QueryDataUseCase
 import de.noonoo.core.domain.port.input.QueryF1DataUseCase
 import de.noonoo.core.domain.port.input.QueryHandballStatisticsUseCase
 import de.noonoo.core.domain.port.input.QueryPubgDataUseCase
+import de.noonoo.core.domain.model.WeatherLocation
 import de.noonoo.core.domain.port.output.F1Repository
 import de.noonoo.core.domain.port.output.HandballRepository
 import de.noonoo.core.domain.port.output.NewsRepository
 import de.noonoo.core.domain.port.output.NotificationPort
+import de.noonoo.core.domain.port.output.WeatherPort
+import de.noonoo.core.domain.port.output.WeatherRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
 import java.time.DayOfWeek
@@ -53,12 +56,15 @@ class IngestionScheduler(
     private val handballRepository: HandballRepository,
     private val notificationPort: NotificationPort,
     private val webhookChannels: Map<String, String>,
-    private val eventProjectionService: de.noonoo.core.domain.service.EventProjectionService
+    private val eventProjectionService: de.noonoo.core.domain.service.EventProjectionService,
+    private val weatherPort: WeatherPort? = null,
+    private val weatherRepository: WeatherRepository? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun start() {
         startEventProjection()
+        startWeatherPolling()
         modules.filter { it.enabled }.forEach { module ->
             when (module.type) {
                 "football"             -> startFootballIngestion(module)
@@ -95,6 +101,40 @@ class IngestionScheduler(
                     log.error(e) { "Fehler bei der Event-Projektion: ${e.message}" }
                 }
                 delay(2 * 60_000L)
+            }
+        }
+    }
+
+    // ── Wetter-Polling ────────────────────────────────────────────────────────
+
+    private fun startWeatherPolling() {
+        val port = weatherPort ?: return
+        val repo = weatherRepository ?: return
+        scope.launch {
+            while (isActive) {
+                for (location in WeatherLocation.entries) {
+                    var attempt = 0
+                    val delays = listOf(5_000L, 30_000L, 120_000L)
+                    while (attempt <= delays.size) {
+                        try {
+                            val forecast = port.fetchForecast(location)
+                            repo.upsertDays(forecast.days)
+                            repo.upsertHours(forecast.hours)
+                            log.info { "[weather] ${location.displayName}: ${forecast.days.size} Tage gespeichert." }
+                            break
+                        } catch (e: Exception) {
+                            if (attempt < delays.size) {
+                                log.warn { "[weather] ${location.displayName}: Fehler (Versuch ${attempt + 1}): ${e.message}" }
+                                delay(delays[attempt])
+                                attempt++
+                            } else {
+                                log.error(e) { "[weather] ${location.displayName}: Alle Versuche fehlgeschlagen." }
+                                break
+                            }
+                        }
+                    }
+                }
+                delay(60 * 60_000L) // stündlich
             }
         }
     }

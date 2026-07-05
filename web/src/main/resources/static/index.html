@@ -183,6 +183,25 @@
     #cfg-result { font-size: 0.8rem; }
     #cfg-result b { color: var(--color-accent); letter-spacing: 0.2em; }
 
+    /* ── Wetter ────────────────────────────────────────────────────────────── */
+    .weather-line {
+      font-size: 0.62rem; font-family: var(--font-mono);
+      color: var(--color-text-secondary); padding: 0.2rem 0.6rem 0.35rem;
+      border-bottom: 1px solid var(--color-border);
+      cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      letter-spacing: 0.02em;
+    }
+    .weather-line:hover { color: var(--color-text-primary); }
+    .weather-bar {
+      display: flex; gap: 0.35rem; align-items: flex-end; padding: 0.5rem 0;
+    }
+    .weather-bar-col { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; font-size: 0.62rem; color: var(--color-text-muted); }
+    .weather-bar-col .wh-bar { width: 18px; background: var(--color-border-strong); border-radius: 2px 2px 0 0; min-height: 2px; }
+    .weather-bar-col .wh-rain { font-size: 0.55rem; color: var(--color-text-muted); }
+    .weather-kpi { display: flex; gap: 1rem; margin-top: 0.75rem; font-size: 0.72rem; }
+    .weather-kpi dt { color: var(--color-text-muted); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .weather-kpi dd { color: var(--color-text-primary); }
+
     /* ── News-Ticker ───────────────────────────────────────────────────────── */
     #ticker {
       position: fixed; left: 0; right: 0; bottom: 0; height: 2.4rem;
@@ -217,7 +236,6 @@
       <span id="code-chip"></span>
       <button class="hdr-btn" id="open-config">Konfigurieren</button>
       <a class="hdr-btn" id="ics-link" href="/calendar.ics">📅 Abonnieren</a>
-      <a class="hdr-btn" href="/ambient.html">Ambient</a>
     </div>
   </header>
 
@@ -356,8 +374,16 @@
         const events = (byDay[day] || []);
         const cards = events.map(cardHtml).join("");
         const isToday = day === today ? "today" : "";
+        const wd = d.weather?.[day];
+        let weatherHtml = "";
+        if (wd) {
+          let text = `${esc(wd.symbol)} ${wd.tempMax}°/${wd.tempMin}°`;
+          if (wd.precipProbMax >= 40) text += ` ☂ ${wd.precipProbMax}%`;
+          weatherHtml = `<div class="weather-line" data-location="${esc(d.weatherLocation)}" data-day="${esc(day)}" role="button" tabindex="0" aria-label="Wetter ${DAY_NAMES[i]}">${text}</div>`;
+        }
         return `<section class="day ${isToday}">
           <div class="day-head"><span>${DAY_NAMES[i]}</span><span>${dateFmt.format(new Date(day + "T12:00:00"))}</span></div>
+          ${weatherHtml}
           <div class="day-events">${cards}</div>
         </section>`;
       }).join("");
@@ -367,6 +393,10 @@
       }
       grid.querySelectorAll(".event-card").forEach(el =>
         el.addEventListener("click", () => openDrawer(el.dataset.id)));
+      grid.querySelectorAll(".weather-line").forEach(el => {
+        el.addEventListener("click", () => openWeatherDrawer(el.dataset.location, el.dataset.day));
+        el.addEventListener("keydown", e => { if (e.key === "Enter") openWeatherDrawer(el.dataset.location, el.dataset.day); });
+      });
     }
 
     function cardHtml(e) {
@@ -464,6 +494,48 @@
       document.getElementById("drawer-backdrop").classList.remove("open");
     }
 
+    // ── Wetter-Drawer ───────────────────────────────────────────────────────
+    async function openWeatherDrawer(location, day) {
+      const res = await fetch(`/api/weather/${encodeURIComponent(location)}/${encodeURIComponent(day)}`);
+      if (!res.ok) return;
+      const det = await res.json();
+      document.getElementById("drawer-mod").textContent = `Wetter · ${esc(det.location)}`;
+      const dateParts = day.split("-");
+      const dateLabel = new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "numeric", month: "long" }).format(
+        new Date(`${day}T12:00:00`)
+      );
+      document.getElementById("drawer-title").textContent = dateLabel;
+      const body = document.getElementById("drawer-body");
+      // Kopfzeile
+      let html = `<p style="font-size:1.4rem;margin-bottom:0.25rem">${esc(det.symbol)}</p>`;
+      html += `<p style="font-size:0.85rem;color:var(--color-text-secondary);margin-bottom:0.75rem">${esc(det.label)}</p>`;
+      html += `<p style="font-size:0.8rem;margin-bottom:0.5rem">Max ${det.tempMax}° · Min ${det.tempMin}°</p>`;
+      html += `<p style="font-size:0.72rem;color:var(--color-text-muted)">☀ ${esc(det.sunrise)} Aufgang · ${esc(det.sunset)} Untergang</p>`;
+      // Stundenverlauf
+      if (det.hours && det.hours.length > 0) {
+        const maxTemp = Math.max(...det.hours.map(h => h.temp));
+        const minTemp = Math.min(...det.hours.map(h => h.temp));
+        const tempRange = maxTemp - minTemp || 1;
+        html += `<h3>Stundenverlauf (06–24 Uhr)</h3>`;
+        html += `<div class="weather-bar">` + det.hours.map(h => {
+          const barH = Math.round(8 + ((h.temp - minTemp) / tempRange) * 40);
+          return `<div class="weather-bar-col">
+            <div class="wh-rain">${h.precipProbability > 0 ? h.precipProbability + "%" : ""}</div>
+            <div class="wh-bar" style="height:${barH}px" title="${h.temp}°"></div>
+            <span>${h.hour}h</span>
+          </div>`;
+        }).join("") + `</div>`;
+      }
+      // Kennzahlen
+      html += `<div class="weather-kpi">
+        <div><dt>Niederschlag</dt><dd>${det.precipSumMm.toFixed(1)} mm</dd></div>
+        <div><dt>Wind max.</dt><dd>${det.windMaxKmh.toFixed(0)} km/h</dd></div>
+      </div>`;
+      body.innerHTML = html;
+      document.getElementById("drawer").classList.add("open");
+      document.getElementById("drawer-backdrop").classList.add("open");
+    }
+
     // ── Konfigurator ────────────────────────────────────────────────────────
     async function openConfig() {
       document.getElementById("modal-backdrop").classList.add("open");
@@ -481,11 +553,17 @@
       document.getElementById("modal-body").innerHTML = state.catalog.modules.map(m => {
         const on = m.module in current;
         const selected = new Set(current[m.module] || []);
-        const options = m.options.map(o =>
-          `<label><input type="checkbox" data-ref="${esc(o.ref)}" ${selected.has(o.ref) ? "checked" : ""}> ${esc(o.label)}</label>`).join("");
+        const isRadio = m.module === "weather";
+        const options = m.options.map(o => {
+          if (isRadio) {
+            return `<label><input type="radio" name="weather-loc" data-ref="${esc(o.ref)}" ${selected.has(o.ref) ? "checked" : ""}> ${esc(o.label)}</label>`;
+          }
+          return `<label><input type="checkbox" data-ref="${esc(o.ref)}" ${selected.has(o.ref) ? "checked" : ""}> ${esc(o.label)}</label>`;
+        }).join("");
+        const hint = isRadio ? "Genau ein Ort (Einfachauswahl)" : `Ohne Auswahl: alle ${esc(m.label)}-Termine`;
         return `<div class="cfg-module ${on ? "on" : ""}" data-module="${m.module}">
           <label><input type="checkbox" class="mod-toggle" ${on ? "checked" : ""}> <b>${esc(m.label)}</b></label>
-          ${m.selectableRefs && m.options.length ? `<div class="cfg-hint">Ohne Auswahl: alle ${esc(m.label)}-Termine</div><div class="cfg-options">${options}</div>` : ""}
+          ${m.selectableRefs && m.options.length ? `<div class="cfg-hint">${hint}</div><div class="cfg-options">${options}</div>` : ""}
         </div>`;
       }).join("");
       document.querySelectorAll(".mod-toggle").forEach(t =>
@@ -496,10 +574,12 @@
     async function createCode() {
       const selections = [...document.querySelectorAll(".cfg-module")]
         .filter(m => m.querySelector(".mod-toggle").checked)
-        .map(m => ({
-          module: m.dataset.module,
-          refs: [...m.querySelectorAll(".cfg-options input:checked")].map(i => i.dataset.ref)
-        }));
+        .map(m => {
+          const checked = [...m.querySelectorAll(".cfg-options input:checked")].map(i => i.dataset.ref);
+          // WEATHER: Radio-Verhalten – genau einen Ort als ref, wenn keiner angekreuzt → überspringen
+          if (m.dataset.module === "weather" && checked.length === 0) return null;
+          return { module: m.dataset.module, refs: checked };
+        }).filter(Boolean);
       if (!selections.length) {
         document.getElementById("cfg-result").textContent = "Bitte mindestens ein Modul wählen.";
         return;

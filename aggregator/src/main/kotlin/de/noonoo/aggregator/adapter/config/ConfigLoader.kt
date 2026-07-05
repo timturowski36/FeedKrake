@@ -6,10 +6,17 @@ import kotlinx.serialization.Serializable
 import java.io.File
 
 @Serializable
+data class FeaturesConfig(
+    val ambientEnabled: Boolean = false,
+    val pubgBundled: Boolean = true
+)
+
+@Serializable
 data class AppConfig(
     val modules: List<ModuleConfig>,
     val outputs: OutputsConfig,
-    val debug: Boolean = false
+    val debug: Boolean = false,
+    val features: FeaturesConfig = FeaturesConfig()
 )
 
 @Serializable
