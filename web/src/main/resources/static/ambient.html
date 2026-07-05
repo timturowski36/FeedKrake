@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NooNoo Ambient</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&family=JetBrains+Mono:wght@100..800&display=swap" rel="stylesheet">
+  <style>
+    /* ── CSS-Variablen ──────────────────────────────────────────────────────── */
+    :root {
+      --color-bg:             #0d0d0d;
+      --color-bg-elevated:    #141414;
+      --color-bg-subtle:      #1a1a1a;
+      --color-text-primary:   #f0ede8;
+      --color-text-secondary: #8a8580;
+      --color-text-muted:     #4a4845;
+      --color-accent:         #e8472a;
+      --color-accent-dim:     rgba(232, 71, 42, 0.15);
+      --color-live:           #e8472a;
+      --color-de:             #e8b42a;
+      --color-de-dim:         rgba(232, 180, 42, 0.12);
+      --color-win:            #4a8a5a;
+      --color-lose:           #8a4a4a;
+      --color-draw:           #5a5a4a;
+      --color-border:         #222220;
+      --color-border-strong:  #333330;
+      --color-btn-active-dim: rgba(232, 71, 42, 0.2);
+      --color-btn-partial:    rgba(232, 71, 42, 0.45);
+
+      --font-serif: "Source Serif 4", "Times New Roman", serif;
+      --font-mono:  "JetBrains Mono", "Courier New", monospace;
+
+      --text-display:  clamp(2.5rem, 6vw, 5rem);
+      --text-heading:  clamp(1.4rem, 3vw, 2.2rem);
+      --text-sub:      clamp(0.75rem, 1.2vw, 0.95rem);
+      --text-body:     clamp(0.85rem, 1.4vw, 1.05rem);
+      --text-data:     clamp(0.8rem, 1.3vw, 1rem);
+      --text-label:    clamp(0.65rem, 0.9vw, 0.75rem);
+      --text-micro:    clamp(0.55rem, 0.75vw, 0.65rem);
+
+      --weight-light:   300;
+      --weight-regular: 400;
+      --weight-medium:  500;
+      --weight-bold:    700;
+      --weight-black:   900;
+
+      --space-1:  0.25rem;
+      --space-2:  0.5rem;
+      --space-3:  0.75rem;
+      --space-4:  1rem;
+      --space-6:  1.5rem;
+      --space-8:  2rem;
+      --space-12: 3rem;
+      --space-16: 4rem;
+
+      --header-height:    52px;
+      --slide-padding-x:  clamp(1.5rem, 5vw, 5rem);
+      --slide-padding-y:  clamp(1rem, 3vh, 2.5rem);
+      --table-row-height: clamp(1.8rem, 2.5vh, 2.4rem);
+    }
+
+    /* ── Reset & Base ───────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--color-bg);
+      color: var(--color-text-primary);
+      font-family: var(--font-mono);
+      -webkit-font-smoothing: antialiased;
+    }
+    body { display: flex; flex-direction: column; }
+
+    /* ── Module-Bar ─────────────────────────────────────────────────────────── */
+    #module-bar {
+      height: var(--header-height);
+      background: var(--color-bg-elevated);
+      border-bottom: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--slide-padding-x);
+      gap: var(--space-2);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .modules { display: flex; gap: var(--space-2); align-items: center; flex-wrap: nowrap; }
+
+    .module-btn {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      font-weight: var(--weight-medium);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-secondary);
+      background: transparent;
+      border: 1px solid var(--color-border-strong);
+      border-radius: 2px;
+      padding: var(--space-2) var(--space-3);
+      min-height: 32px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .module-btn:hover {
+      color: var(--color-text-primary);
+      border-color: var(--color-text-muted);
+    }
+    .module-btn[aria-pressed="true"] {
+      color: var(--color-accent);
+      border-color: var(--color-accent);
+      background: var(--color-btn-active-dim);
+    }
+    .module-btn[aria-pressed="mixed"] {
+      color: var(--color-accent);
+      border-color: var(--color-btn-partial);
+      opacity: 0.75;
+    }
+
+    #skip-btn {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: var(--space-2);
+      transition: color 0.15s;
+      flex-shrink: 0;
+    }
+    #skip-btn:hover { color: var(--color-text-primary); }
+
+    /* ── Dropdown ───────────────────────────────────────────────────────────── */
+    .module-group { position: relative; }
+
+    .module-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + var(--space-2));
+      left: 0;
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border-strong);
+      border-radius: 2px;
+      padding: var(--space-2);
+      flex-direction: column;
+      gap: var(--space-1);
+      min-width: 170px;
+      z-index: 200;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    }
+    .module-group.open .module-dropdown { display: flex; }
+
+    .sub-btn {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--color-text-secondary);
+      background: transparent;
+      border: none;
+      border-radius: 2px;
+      padding: var(--space-2) var(--space-3);
+      min-height: 32px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+      white-space: nowrap;
+    }
+    .sub-btn:hover { background: var(--color-bg-subtle); color: var(--color-text-primary); }
+    .sub-btn[aria-pressed="true"] { color: var(--color-accent); background: var(--color-btn-active-dim); }
+
+    /* ── Empty Hint ─────────────────────────────────────────────────────────── */
+    #empty-hint {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: var(--color-bg-elevated);
+      color: var(--color-text-muted);
+      padding: var(--space-3) var(--slide-padding-x);
+      border-bottom: 1px solid var(--color-border);
+      flex-shrink: 0;
+    }
+
+    /* ── Slide-Bereich ──────────────────────────────────────────────────────── */
+    main#slide {
+      flex: 1;
+      overflow: hidden;
+      padding: var(--slide-padding-y) var(--slide-padding-x);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: var(--space-6);
+      view-transition-name: slide;
+    }
+
+    /* ── Slide-Header ───────────────────────────────────────────────────────── */
+    .slide-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      font-weight: var(--weight-regular);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .slide-label::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--color-accent);
+      flex-shrink: 0;
+    }
+    .slide-label.is-live::before {
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    .slide-title {
+      font-family: var(--font-serif);
+      font-size: var(--text-heading);
+      font-weight: var(--weight-black);
+      color: var(--color-text-primary);
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      text-transform: uppercase;
+    }
+    .slide-subtitle {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: var(--weight-light);
+      font-size: var(--text-body);
+      color: var(--color-text-secondary);
+    }
+
+    /* ── Tabellen ───────────────────────────────────────────────────────────── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: var(--text-data);
+    }
+    .data-table thead th {
+      font-size: var(--text-label);
+      font-weight: var(--weight-regular);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      text-align: left;
+      padding: var(--space-2) var(--space-3);
+      border-bottom: 1px solid var(--color-border-strong);
+    }
+    .data-table tbody tr {
+      border-bottom: 1px solid var(--color-border);
+      height: var(--table-row-height);
+    }
+    .data-table tbody tr:nth-child(even) { background: var(--color-bg-subtle); }
+    .data-table tbody td {
+      padding: var(--space-2) var(--space-3);
+      color: var(--color-text-primary);
+      vertical-align: middle;
+    }
+    .data-table .col-rank { color: var(--color-text-muted); width: 2.5rem; }
+    .data-table .col-num  { text-align: right; font-variant-numeric: tabular-nums; }
+    .data-table .col-name { font-family: var(--font-serif); font-weight: var(--weight-bold); }
+    .data-table .col-hl   { color: var(--color-accent); font-weight: var(--weight-bold); }
+    .data-table .row-promoted td:first-child { border-left: 2px solid var(--color-win); }
+    .data-table .row-relegated td:first-child { border-left: 2px solid var(--color-lose); }
+    .data-table .row-de { background: var(--color-de-dim) !important; }
+    .data-table .row-de td { color: var(--color-de); }
+
+    /* ── Divider mit Label ──────────────────────────────────────────────────── */
+    .divider-label {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      color: var(--color-text-muted);
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .divider-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--color-border-strong);
+    }
+
+    /* ── Stat-Grid (PUBG, F1) ───────────────────────────────────────────────── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: var(--space-4) var(--space-6);
+    }
+    .stat-item { display: flex; flex-direction: column; gap: var(--space-1); }
+    .stat-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+    .stat-value {
+      font-family: var(--font-mono);
+      font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+      font-weight: var(--weight-bold);
+      color: var(--color-text-primary);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .stat-value.hl { color: var(--color-accent); }
+    .stat-sub {
+      font-family: var(--font-mono);
+      font-size: var(--text-micro);
+      color: var(--color-text-muted);
+    }
+
+    /* ── Record-Liste (PUBG Persönliche Rekorde) ───────────────────────────── */
+    .record-list { display: flex; flex-direction: column; gap: var(--space-4); }
+    .record-row { display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; }
+    .record-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      flex: 0 0 160px;
+    }
+    .record-value {
+      font-family: var(--font-mono);
+      font-size: clamp(1.1rem, 2vw, 1.5rem);
+      font-weight: var(--weight-bold);
+      font-variant-numeric: tabular-nums;
+      min-width: 50px;
+      text-align: right;
+    }
+    .record-value.hl { color: var(--color-accent); }
+    .record-meta {
+      font-family: var(--font-mono);
+      font-size: var(--text-micro);
+      color: var(--color-text-muted);
+    }
+
+    /* ── WM Gruppen-Paar ────────────────────────────────────────────────────── */
+    .group-pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-8);
+      flex: 1;
+      min-height: 0;
+    }
+    .wm-group-title {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      margin-bottom: var(--space-2);
+    }
+
+    /* ── WM Live Score ──────────────────────────────────────────────────────── */
+    .live-score {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: var(--space-8);
+      font-family: var(--font-serif);
+      font-weight: var(--weight-black);
+      font-size: clamp(2.5rem, 6vw, 5rem);
+      letter-spacing: -0.03em;
+      color: var(--color-text-primary);
+      line-height: 1;
+    }
+    .live-score .score-num { font-variant-numeric: tabular-nums; }
+    .live-score .score-sep {
+      font-weight: var(--weight-light);
+      color: var(--color-text-muted);
+      font-size: 0.55em;
+    }
+    .live-venue {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      color: var(--color-text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* ── Deutschland Highlight ──────────────────────────────────────────────── */
+    .de-match {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-6);
+    }
+    .de-team {
+      font-family: var(--font-serif);
+      font-size: var(--text-heading);
+      font-weight: var(--weight-black);
+      text-transform: uppercase;
+      letter-spacing: -0.02em;
+    }
+    .de-score {
+      font-family: var(--font-serif);
+      font-weight: var(--weight-black);
+      font-size: clamp(3rem, 7vw, 6rem);
+      color: var(--color-de);
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    /* ── F1 Podium ──────────────────────────────────────────────────────────── */
+    .podium-row {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-4);
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .podium-pos {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      color: var(--color-text-muted);
+      width: 2rem;
+      flex-shrink: 0;
+    }
+    .podium-pos.p1 { font-size: var(--text-data); color: var(--color-accent); }
+    .podium-driver {
+      font-family: var(--font-serif);
+      font-size: var(--text-body);
+      font-weight: var(--weight-bold);
+      flex: 1;
+    }
+    .podium-team {
+      font-family: var(--font-mono);
+      font-size: var(--text-label);
+      color: var(--color-text-secondary);
+      flex: 1;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .podium-pts {
+      font-family: var(--font-mono);
+      font-size: var(--text-data);
+      font-weight: var(--weight-bold);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      min-width: 3.5rem;
+    }
+
+    /* ── Slide Footer ───────────────────────────────────────────────────────── */
+    .slide-footer {
+      margin-top: auto;
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .slide-source {
+      font-family: var(--font-mono);
+      font-size: var(--text-micro);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+
+    /* ── Status-Pill ────────────────────────────────────────────────────────── */
+    #status {
+      position: fixed;
+      bottom: var(--space-4);
+      right: var(--space-4);
+      font-family: var(--font-mono);
+      font-size: var(--text-micro);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+
+    /* ── Bundesliga Zwei-Spalten ────────────────────────────────────────────── */
+    .bl-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-8);
+      flex: 1;
+      min-height: 0;
+    }
+    .bl-two-col .data-table {
+      font-size: clamp(0.6rem, 1.1vw, 0.85rem);
+    }
+    .bl-two-col .data-table thead th {
+      font-size: clamp(0.55rem, 0.85vw, 0.7rem);
+    }
+    @media (max-width: 599px) {
+      .bl-two-col { grid-template-columns: 1fr; }
+    }
+
+    /* ── View Transitions ───────────────────────────────────────────────────── */
+    ::view-transition-old(slide) {
+      animation: slide-out 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+    }
+    ::view-transition-new(slide) {
+      animation: slide-in 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+    }
+    @keyframes slide-out {
+      from { opacity: 1; transform: translateY(0); }
+      to   { opacity: 0; transform: translateY(-8px); }
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      ::view-transition-old(slide), ::view-transition-new(slide) { animation: none; }
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────────────────── */
+    @media (max-width: 599px) {
+      :root {
+        --slide-padding-x: 1rem;
+        --slide-padding-y: 0.75rem;
+        --table-row-height: 2rem;
+      }
+      #module-bar { flex-wrap: wrap; height: auto; min-height: var(--header-height); padding: var(--space-2) var(--space-4); gap: var(--space-1); }
+      .module-btn { font-size: 0.6rem; padding: var(--space-1) var(--space-2); min-height: 28px; }
+      .group-pair { grid-template-columns: 1fr; }
+      .stat-grid  { grid-template-columns: repeat(2, 1fr); }
+      .col-optional { display: none; }
+    }
+    @media (min-width: 600px) and (max-width: 1279px) {
+      .stat-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (min-width: 1280px) {
+      :root { --slide-padding-x: 5rem; --slide-padding-y: 3rem; }
+    }
+    @media (min-width: 2560px) {
+      :root { --text-heading: 2.8rem; --text-body: 1.2rem; --text-data: 1.1rem; }
+    }
+
+    /* ── Auto-Button ────────────────────────────────────────────────────── */
+    .auto-btn {
+      background: none; border: 1px solid var(--color-border);
+      color: var(--color-text-secondary); font-size: var(--text-label);
+      font-family: var(--font-mono); padding: var(--space-1) var(--space-4);
+      border-radius: var(--space-2); cursor: pointer; transition: all 0.2s;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .auto-btn:hover { border-color: var(--color-accent); color: var(--color-text-primary); }
+    .auto-btn.active {
+      background: var(--color-accent-dim); border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    /* ── Subpage-Navigation ─────────────────────────────────────────────── */
+    .page-nav {
+      display: flex; align-items: center; justify-content: center; gap: var(--space-6);
+      position: fixed; bottom: var(--space-4); left: 50%; transform: translateX(-50%);
+      z-index: 100; background: rgba(20,20,20,0.85); border: 1px solid var(--color-border);
+      border-radius: 32px; padding: var(--space-2) var(--space-6);
+      backdrop-filter: blur(8px);
+    }
+    .page-nav.hidden { display: none; }
+    .page-nav-btn {
+      background: none; border: none; color: var(--color-text-primary);
+      font-size: 1.5rem; cursor: pointer; padding: var(--space-1) var(--space-3);
+      border-radius: 50%; transition: background 0.2s; line-height: 1;
+    }
+    .page-nav-btn:hover { background: rgba(255,255,255,0.1); }
+    .page-nav-btn:disabled { opacity: 0.2; cursor: default; }
+    .page-indicator {
+      color: var(--color-text-secondary); font-size: var(--text-label);
+      font-family: var(--font-mono); min-width: 36px; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header id="module-bar">
+    <div class="modules" id="modules-container"></div>
+    <button id="auto-btn" class="auto-btn" title="Slideshow starten/stoppen">Auto ▶</button>
+  </header>
+
+  <div id="empty-hint" hidden>
+    Mindestens ein Modul wählen — in 10 s werden alle aktiviert.
+  </div>
+
+  <main id="slide">
+    <div class="slide-label">noonoo · verbinde</div>
+    <h1 class="slide-title">Lädt…</h1>
+  </main>
+  <div id="status">verbinde</div>
+
+  <div id="pageNav" class="page-nav hidden">
+    <button id="prevPage" class="page-nav-btn" aria-label="Zurück">&#8592;</button>
+    <span id="pageIndicator" class="page-indicator"></span>
+    <button id="nextPage" class="page-nav-btn" aria-label="Weiter">&#8594;</button>
+  </div>
+
+  <script>
+    // ── Menü-Struktur ─────────────────────────────────────────────────────────
+
+    const MENU = [
+      { key: "wm", label: "WM ▾", children: [
+          { slug: "wm-naechste-spiele",   label: "Nächste Spiele" },
+          { slug: "wm-letzte-ergebnisse", label: "Letzte Ergebnisse" },
+          { slug: "wm-gruppen",           label: "Gruppenstände" },
+          { slug: "wm-deutschland",       label: "🇩🇪 Deutschland" },
+          { slug: "wm-torschuetzen",      label: "Torschützen" },
+          { slug: "wm-karten",            label: "Karten" }
+      ]},
+      { key: "bundesliga", label: "Bundesliga ▾", children: [
+          { slug: "bundesliga-1", label: "1. Bundesliga" },
+          { slug: "bundesliga-2", label: "2. Bundesliga" }
+      ]},
+      { key: "pubg", label: "PUBG ▾", children: [
+          { slug: "pubg-brotrustgaming", label: "brotrustgaming" },
+          { slug: "pubg-alxndr-d",       label: "Alxndr_D" },
+          { slug: "pubg-libaty",         label: "Libaty" },
+          { slug: "pubg-philipnc",       label: "philipnc" },
+          { slug: "pubg-einfachden",     label: "EinfachDen" },
+          { slug: "pubg-chrissi1970",    label: "chrissi1970" }
+      ]},
+      { key: "f1", label: "F1 ▾", children: [
+          { slug: "f1-naechstes-rennen", label: "Nächstes Rennen" },
+          { slug: "f1-letztes-rennen",   label: "Letztes Rennen" },
+          { slug: "f1-fahrer",           label: "Fahrerwertung" },
+          { slug: "f1-konstrukteure",    label: "Konstrukteurswertung" }
+      ]},
+      { key: "news", label: "News ▾", children: [
+          { slug: "news-tagesschau", label: "Tagesschau" },
+          { slug: "news-heise",      label: "Heise" }
+      ]}
+    ];
+
+    // ── Sub-Page-Konfiguration (welche Slide-Types gehören zu welchem Modul-Slug) ─
+    const MODULE_SUBPAGES = {
+      'wm-gruppen':    ['wm.standings.0','wm.standings.1','wm.standings.2',
+                        'wm.standings.3','wm.standings.4','wm.standings.5'],
+      'wm-deutschland':['wm.de.next','wm.de.last'],
+      'bundesliga-1':  ['football.bl1','football.bl1.scorers'],
+      'bundesliga-2':  ['football.bl2','football.bl2.scorers'],
+    };
+    ['brotrustgaming','alxndr-d','libaty','philipnc','einfachden','chrissi1970'].forEach(p => {
+      MODULE_SUBPAGES[`pubg-${p}`] = [
+        `pubg.weekly.${p}`,`pubg.daily.${p}`,`pubg.recent.${p}`,`pubg.records.${p}`
+      ];
+    });
+
+    const ALL_MODULES = MENU.flatMap(g => g.children ? g.children.map(c => c.slug) : [g.slug]);
+    const DEFAULT_MODULES = new Set([
+      "wm-naechste-spiele","wm-letzte-ergebnisse","wm-gruppen","wm-deutschland","wm-torschuetzen",
+      "bundesliga-1","bundesliga-2","pubg-philipnc",
+      "f1-naechstes-rennen","f1-letztes-rennen","f1-fahrer","f1-konstrukteure",
+      "news-tagesschau","news-heise"
+    ]);
+    const STORAGE_KEY = "noonoo.modules";
+    const EMPTY_FALLBACK_MS = 10_000;
+
+    const slideEl   = document.getElementById("slide");
+    const statusEl  = document.getElementById("status");
+    const emptyHint = document.getElementById("empty-hint");
+    const sessionId = crypto.randomUUID();
+
+    // ── Auswahl ───────────────────────────────────────────────────────────────
+
+    function loadSelection() {
+      const p = new URL(location.href).searchParams.get("modules");
+      if (p !== null) return parseModuleList(p);
+      try { const s = localStorage.getItem(STORAGE_KEY); if (s) return parseModuleList(s); } catch {}
+      return new Set(DEFAULT_MODULES);
+    }
+    function parseModuleList(str) {
+      const set = new Set(str.split(",").map(s => s.trim().toLowerCase()).filter(s => ALL_MODULES.includes(s)));
+      return set.size > 0 ? set : new Set(DEFAULT_MODULES);
+    }
+    function persistSelection(sel) {
+      const list = [...sel].sort().join(",");
+      const url = new URL(location.href);
+      sel.size === ALL_MODULES.length ? url.searchParams.delete("modules") : url.searchParams.set("modules", list);
+      history.replaceState(null, "", url.toString());
+      try { localStorage.setItem(STORAGE_KEY, list); } catch {}
+    }
+
+    let selection = loadSelection();
+    let emptyTimer = null;
+
+    // ── Subpage-Navigation ────────────────────────────────────────────────
+    let currentModuleSlug = null;
+    let currentSlideType  = null;
+
+    function moduleEnumToSlug(moduleEnum) {
+      return moduleEnum.toLowerCase().replace(/_/g, '-');
+    }
+    function gotoChild(slug) {
+      fetch(`/goto?sid=${sessionId}&slug=${encodeURIComponent(slug)}`, { method: 'POST' }).catch(() => {});
+    }
+    function gotoType(type) {
+      fetch(`/goto?sid=${sessionId}&type=${encodeURIComponent(type)}`, { method: 'POST' }).catch(() => {});
+    }
+    function updatePageNav() {
+      const pageNav   = document.getElementById('pageNav');
+      const prevBtn   = document.getElementById('prevPage');
+      const nextBtn   = document.getElementById('nextPage');
+      const indicator = document.getElementById('pageIndicator');
+      const subpages  = MODULE_SUBPAGES[currentModuleSlug] ?? [];
+      if (subpages.length <= 1) { pageNav.classList.add('hidden'); return; }
+      pageNav.classList.remove('hidden');
+      const idx = subpages.indexOf(currentSlideType);
+      prevBtn.disabled = idx <= 0;
+      nextBtn.disabled = idx >= subpages.length - 1 || idx === -1;
+      indicator.textContent = idx >= 0 ? `${idx + 1} / ${subpages.length}` : '';
+    }
+    document.getElementById('prevPage').addEventListener('click', () => {
+      const subpages = MODULE_SUBPAGES[currentModuleSlug] ?? [];
+      const idx = subpages.indexOf(currentSlideType);
+      if (idx > 0) gotoType(subpages[idx - 1]);
+    });
+    document.getElementById('nextPage').addEventListener('click', () => {
+      const subpages = MODULE_SUBPAGES[currentModuleSlug] ?? [];
+      const idx = subpages.indexOf(currentSlideType);
+      if (idx < subpages.length - 1) gotoType(subpages[idx + 1]);
+    });
+
+    // ── Auto-Slideshow ────────────────────────────────────────────────────
+    let autoTimer = null;
+    const AUTO_INTERVAL_MS = 30_000;
+    function sendSkip() {
+      fetch(`/skip?sid=${sessionId}`, { method: 'POST' }).catch(() => {});
+    }
+    function startAuto() {
+      const btn = document.getElementById('auto-btn');
+      btn.classList.add('active'); btn.textContent = 'Auto ⏸';
+      sendSkip();
+      autoTimer = setInterval(sendSkip, AUTO_INTERVAL_MS);
+    }
+    function stopAuto() {
+      clearInterval(autoTimer); autoTimer = null;
+      const btn = document.getElementById('auto-btn');
+      btn.classList.remove('active'); btn.textContent = 'Auto ▶';
+    }
+    document.getElementById('auto-btn').addEventListener('click', () => {
+      autoTimer ? stopAuto() : startAuto();
+    });
+
+    // ── Module-Bar ────────────────────────────────────────────────────────────
+
+    function buildModuleBar() {
+      const c = document.getElementById("modules-container");
+      c.innerHTML = "";
+      MENU.forEach(group => {
+        if (group.children) {
+          const all  = group.children.every(ch => selection.has(ch.slug));
+          const some = group.children.some(ch => selection.has(ch.slug));
+          const wrap = document.createElement("div");
+          wrap.className = "module-group";
+          wrap.dataset.groupKey = group.key;
+
+          const btn = document.createElement("button");
+          btn.className = "module-btn";
+          btn.textContent = group.label;
+          btn.dataset.group = group.key;
+          btn.setAttribute("aria-pressed", all ? "true" : some ? "mixed" : "false");
+
+          const drop = document.createElement("div");
+          drop.className = "module-dropdown";
+          group.children.forEach(ch => {
+            const sub = document.createElement("button");
+            sub.className = "sub-btn";
+            sub.textContent = ch.label;
+            sub.dataset.module = ch.slug;
+            sub.setAttribute("aria-pressed", selection.has(ch.slug) ? "true" : "false");
+            drop.appendChild(sub);
+          });
+
+          wrap.appendChild(btn);
+          wrap.appendChild(drop);
+          c.appendChild(wrap);
+        } else {
+          const btn = document.createElement("button");
+          btn.className = "module-btn";
+          btn.textContent = group.label;
+          btn.dataset.module = group.slug;
+          btn.setAttribute("aria-pressed", selection.has(group.slug) ? "true" : "false");
+          c.appendChild(btn);
+        }
+      });
+
+      if (selection.size === 0) {
+        emptyHint.hidden = false;
+        clearTimeout(emptyTimer);
+        emptyTimer = setTimeout(() => { selection = new Set(DEFAULT_MODULES); applyChange(); }, EMPTY_FALLBACK_MS);
+      } else {
+        emptyHint.hidden = true;
+        clearTimeout(emptyTimer);
+      }
+    }
+
+    function applyChange() { persistSelection(selection); buildModuleBar(); attachHoverDropdowns(); reconnect(); updatePageNav(); }
+
+    // ── Dropdown: Hover mit Schließverzögerung ────────────────────────────────
+    // mouseenter/mouseleave + 150ms Delay verhindert, dass das Dropdown
+    // schließt während die Maus den Spalt zwischen Button und Liste überquert.
+
+    function attachHoverDropdowns() {
+      document.querySelectorAll(".module-group").forEach(group => {
+        let leaveTimer = null;
+        group.addEventListener("mouseenter", () => {
+          clearTimeout(leaveTimer);
+          document.querySelectorAll(".module-group.open").forEach(g => { if (g !== group) g.classList.remove("open"); });
+          group.classList.add("open");
+        });
+        group.addEventListener("mouseleave", () => {
+          leaveTimer = setTimeout(() => group.classList.remove("open"), 150);
+        });
+      });
+    }
+
+    // ── Klick-Handler ─────────────────────────────────────────────────────────
+
+    document.getElementById("modules-container").addEventListener("click", e => {
+      const sub = e.target.closest(".sub-btn");
+      if (sub) {
+        const m = sub.dataset.module;
+        selection.has(m) ? selection.delete(m) : selection.add(m);
+        applyChange();
+        gotoChild(m);
+        return;
+      }
+      // Touch-Fallback: Parent-Button öffnet/schließt Dropdown per Klick
+      const parent = e.target.closest(".module-btn[data-group]");
+      if (parent) {
+        const wrap = parent.closest(".module-group");
+        const was = wrap.classList.contains("open");
+        document.querySelectorAll(".module-group.open").forEach(g => g.classList.remove("open"));
+        if (!was) wrap.classList.add("open");
+        return;
+      }
+      const direct = e.target.closest(".module-btn[data-module]");
+      if (direct) {
+        const m = direct.dataset.module;
+        selection.has(m) ? selection.delete(m) : selection.add(m);
+        applyChange();
+      }
+    });
+
+    document.addEventListener("click", e => {
+      if (!e.target.closest(".module-group"))
+        document.querySelectorAll(".module-group.open").forEach(g => g.classList.remove("open"));
+    });
+
+    // ── SSE ───────────────────────────────────────────────────────────────────
+
+    let es = null;
+    function connectStream() {
+      const mods = [...selection].sort().join(",");
+      es = new EventSource(`/ambient?sid=${sessionId}&modules=${encodeURIComponent(mods)}`);
+      es.addEventListener("slide", ev => {
+        const data = JSON.parse(ev.data);
+        if (document.startViewTransition) {
+          document.startViewTransition(() => { slideEl.innerHTML = renderSlide(data); });
+        } else {
+          slideEl.style.opacity = "0";
+          setTimeout(() => { slideEl.innerHTML = renderSlide(data); slideEl.style.opacity = "1"; }, 200);
+        }
+        statusEl.textContent = new Date().toLocaleTimeString("de-DE");
+        currentModuleSlug = moduleEnumToSlug(data.module);
+        currentSlideType  = data.type;
+        updatePageNav();
+      });
+      es.onerror = () => { statusEl.textContent = "getrennt"; };
+      es.onopen  = () => { statusEl.textContent = "verbunden"; };
+    }
+    function reconnect() {
+      if (es) { es.close(); es = null; }
+      if (selection.size === 0) { slideEl.innerHTML = `<div class="slide-label">noonoo</div><h1 class="slide-title">Keine Module</h1>`; statusEl.textContent = "pausiert"; return; }
+      connectStream();
+    }
+
+    // ── Render-Hilfsfunktionen ────────────────────────────────────────────────
+
+    function esc(s) {
+      return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+    }
+    function hd(label, title, sub, isLive) {
+      const liveClass = isLive ? " is-live" : "";
+      return `<div class="slide-label${liveClass}">${esc(label)}</div>
+              ${title ? `<h1 class="slide-title">${esc(title)}</h1>` : ""}
+              ${sub   ? `<p class="slide-subtitle">${esc(sub)}</p>` : ""}`;
+    }
+    function ft(ts, src) {
+      return `<footer class="slide-footer">
+        <span class="slide-source">${esc(src)}</span>
+        <span class="slide-source">Stand: ${esc(new Date(ts).toLocaleString("de-DE"))}</span>
+      </footer>`;
+    }
+
+    const WM_STATUS = {NS:"Bevorstehend",FIRST_HALF:"1. HZ",HT:"Halbzeit",SECOND_HALF:"2. HZ",ET:"Verl.",BT:"Pause",PEN:"Elfmeter",FT:"Beendet",AET:"n.V.",PST:"Verschoben",CANC:"Abgesagt"};
+
+    // ── Haupt-Render ──────────────────────────────────────────────────────────
+
+    function renderSlide(s) {
+      const p = s.payload;
+
+      // WM Live
+      if (s.type === "wm.live") {
+        const sc = (p.homeScore != null && p.awayScore != null) ? `${p.homeScore} — ${p.awayScore}` : "– — –";
+        const label = `LIVE · ${p.statusLabel || ""}${p.group ? " · Gruppe " + p.group : ""}`;
+        return hd(label, null, null, true) +
+          `<div class="live-score">
+            <span class="score-num">${esc(p.home)}</span>
+            <span class="score-sep">${esc(sc)}</span>
+            <span class="score-num">${esc(p.away)}</span>
+          </div>` + ft(s.generatedAt, "ESPN Live");
+      }
+
+      // WM Fixtures (Nächste Spiele)
+      if (s.type === "wm.fixtures") {
+        const rows = (p.fixtures || []).map(f => {
+          const dt = new Date(f.kickoff).toLocaleString("de-DE", {timeZone:"Europe/Berlin",weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+          return `<tr>
+            <td>${esc(dt)}</td>
+            <td class="col-name">${esc(f.home)} – ${esc(f.away)}</td>
+            <td>${esc(f.group || f.round)}</td>
+            <td class="col-optional">${esc(WM_STATUS[f.status] || f.status)}</td>
+          </tr>`;
+        }).join("");
+        return hd("WM 2026 · Spielplan", "Nächste Spiele") +
+          `<table class="data-table"><thead><tr>
+            <th>Anstoß</th><th>Spiel</th><th>Gruppe</th><th class="col-optional">Status</th>
+          </tr></thead><tbody>${rows}</tbody></table>` + ft(s.generatedAt, "ESPN");
+      }
+
+      // WM Results (Ergebnisse)
+      if (s.type === "wm.results") {
+        const STATUS_LABEL = {FT:"Beendet", AET:"n.V.", PEN:"n.E."};
+        const rows = (p.fixtures || []).map(f => {
+          const dt = new Date(f.kickoff).toLocaleString("de-DE", {timeZone:"Europe/Berlin",weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+          const sc = (f.homeScore != null && f.awayScore != null) ? `${f.homeScore} : ${f.awayScore}` : "– : –";
+          return `<tr>
+            <td class="col-optional">${esc(dt)}</td>
+            <td class="col-name">${esc(f.home)}</td>
+            <td class="col-num col-hl" style="font-size:1.05em;letter-spacing:0.06em">${esc(sc)}</td>
+            <td class="col-name">${esc(f.away)}</td>
+            <td>${esc(f.group || f.round)}</td>
+            <td class="col-optional" style="color:var(--color-text-muted)">${esc(STATUS_LABEL[f.status] || f.status)}</td>
+          </tr>`;
+        }).join("");
+        return hd("WM 2026 · Ergebnisse", "Spielergebnisse") +
+          `<table class="data-table"><thead><tr>
+            <th class="col-optional">Datum</th><th>Heim</th><th class="col-num">Ergebnis</th>
+            <th>Gast</th><th>Gruppe</th><th class="col-optional"></th>
+          </tr></thead><tbody>${rows}</tbody></table>` + ft(s.generatedAt, "ESPN");
+      }
+
+      // WM Gruppen-Paar
+      if (s.type.startsWith("wm.standings.")) {
+        const groups = (p.groups || []).map(g => {
+          const rows = (g.rows || []).map((r, i) => {
+            const isDE = (r.team || "").includes("Germany") || (r.team || "").includes("Deutschland");
+            const cls = (i < 2 ? "row-promoted" : "") + (isDE ? " row-de" : "");
+            return `<tr class="${cls}">
+              <td class="col-rank">${r.rank}</td>
+              <td class="col-name">${esc(r.team)}</td>
+              <td class="col-num">${r.played}</td>
+              <td class="col-num">${r.won}</td>
+              <td class="col-num">${r.drawn}</td>
+              <td class="col-num">${r.lost}</td>
+              <td class="col-num col-hl">${r.points}</td>
+            </tr>`;
+          }).join("");
+          return `<div>
+            <div class="wm-group-title">Gruppe ${esc(g.name)}</div>
+            <table class="data-table"><thead><tr>
+              <th>#</th><th>Team</th><th class="col-num">Sp</th><th class="col-num">S</th>
+              <th class="col-num">U</th><th class="col-num">N</th><th class="col-num">Pkt</th>
+            </tr></thead><tbody>${rows}</tbody></table>
+          </div>`;
+        }).join("");
+        return hd("WM 2026 · Gruppen", esc(s.title).replace("WM 2026 – ", "")) +
+          `<div class="group-pair">${groups}</div>` + ft(s.generatedAt, "ESPN");
+      }
+
+      // WM Torschützen
+      if (s.type === "wm.topscorers") {
+        const rows = (p.rows || []).map(r => `<tr>
+          <td class="col-rank">${r.rank}</td>
+          <td class="col-name">${esc(r.player)}</td>
+          <td>${esc(r.team)}</td>
+          <td class="col-num col-hl">${r.goals}</td>
+          <td class="col-num col-optional">${r.assists}</td>
+        </tr>`).join("");
+        return hd("WM 2026 · Torschützen", "Torjägerliste") +
+          `<table class="data-table"><thead><tr>
+            <th>#</th><th>Spieler</th><th>Team</th><th class="col-num">Tore</th><th class="col-num col-optional">Assists</th>
+          </tr></thead><tbody>${rows}</tbody></table>` + ft(s.generatedAt, "ESPN");
+      }
+
+      // WM Karten-Statistik
+      if (s.type === "wm.karten") {
+        function cardRows(entries) {
+          return (entries || []).slice(0,10).map(c => `<tr>
+            <td class="col-name">${esc(c.player)}</td>
+            <td style="color:var(--color-text-secondary)">${esc(c.team)}</td>
+            <td class="col-num col-hl">${c.count}</td>
+          </tr>`).join("");
+        }
+        return hd("WM 2026 · Karten", "Karten-Statistik") +
+          `<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-8);flex:1;min-height:0">
+            <div>
+              <div class="wm-group-title">🟨 Gelbe Karten</div>
+              <table class="data-table"><tbody>${cardRows(p.yellow)}</tbody></table>
+            </div>
+            <div>
+              <div class="wm-group-title">🟥 Rote Karten</div>
+              <table class="data-table"><tbody>${cardRows(p.red)}</tbody></table>
+            </div>
+          </div>` + ft(s.generatedAt, "ESPN");
+      }
+
+      // WM Deutschland nächstes Spiel
+      if (s.type === "wm.de.next") {
+        return `<div style="border-left:3px solid var(--color-de);padding-left:var(--space-6)">` +
+          hd("WM 2026 · Deutschland", "Nächstes Spiel") +
+          `<div class="de-match">
+            <span class="de-team">🇩🇪 Deutschland</span>
+            <span style="color:var(--color-text-muted);font-family:var(--font-mono);font-size:var(--text-label)">vs.</span>
+            <span class="de-team">${esc(p.opponent)}</span>
+          </div>
+          <div style="margin-top:var(--space-4)">
+            <span class="slide-source">📅 ${esc(p.kickoff)}</span>
+            ${p.group ? `<span class="slide-source" style="margin-left:var(--space-6)">Gruppe ${esc(p.group)}</span>` : ""}
+          </div>` +
+          `</div>` + ft(s.generatedAt, "ESPN");
+      }
+
+      // WM Deutschland letztes Ergebnis
+      if (s.type === "wm.de.last") {
+        const hs = p.isHome ? (p.deScore ?? "?") : (p.opScore ?? "?");
+        const as_ = p.isHome ? (p.opScore ?? "?") : (p.deScore ?? "?");
+        const home = p.isHome ? "🇩🇪 Deutschland" : esc(p.opponent);
+        const away = p.isHome ? esc(p.opponent) : "🇩🇪 Deutschland";
+        return `<div style="border-left:3px solid var(--color-de);padding-left:var(--space-6)">` +
+          hd("WM 2026 · Deutschland", "Letztes Ergebnis") +
+          `<div class="de-match">
+            <span class="de-team">${home}</span>
+            <span class="de-score">${hs} — ${as_}</span>
+            <span class="de-team">${away}</span>
+          </div>
+          <div style="margin-top:var(--space-3)"><span class="slide-source">📅 ${esc(p.kickoff)}</span></div>` +
+          `</div>` + ft(s.generatedAt, "ESPN");
+      }
+
+      // F1 Nächster Grand Prix
+      if (s.type === "f1.next") {
+        const rows = [
+          p.raceDate  ? `<tr><td class="col-name">📅 Rennen</td><td class="col-hl">${esc(p.raceDate)}</td></tr>` : "",
+          p.qualiDate ? `<tr><td class="col-name">⏱ Qualifying</td><td>${esc(p.qualiDate)}</td></tr>` : "",
+          p.fp1Date   ? `<tr><td class="col-name">🔧 Training</td><td>${esc(p.fp1Date)}</td></tr>` : "",
+          `<tr><td class="col-name">📍 Strecke</td><td>${esc(p.circuitName)}${p.locality ? ", " + esc(p.locality) : ""}</td></tr>`
+        ].filter(Boolean).join("");
+        return hd("Formel 1 · Nächster GP", esc(p.raceName || "")) +
+          `<table class="data-table"><tbody>${rows}</tbody></table>` +
+          ft(s.generatedAt, "Jolpica / F1");
+      }
+
+      // F1 Fahrerwertung
+      if (s.type === "f1.drivers") {
+        const rows = (p.rows || []).slice(0, 10).map(r => `
+          <div class="podium-row">
+            <span class="podium-pos${r.position === 1 ? ' p1' : ''}">${r.position}.</span>
+            <span class="podium-driver">${esc(r.driver)}${r.position === 1 ? " 🏆" : ""}</span>
+            <span class="podium-team">${esc(r.constructor)}</span>
+            <span class="podium-pts">${r.points}</span>
+          </div>`).join("");
+        return hd("Formel 1 · Saison", "Fahrerwertung") + `<div>${rows}</div>` + ft(s.generatedAt, "Jolpica / F1");
+      }
+
+      // F1 Konstrukteure
+      if (s.type === "f1.constructors") {
+        const rows = (p.rows || []).map(r => `
+          <div class="podium-row">
+            <span class="podium-pos${r.position === 1 ? ' p1' : ''}">${r.position}.</span>
+            <span class="podium-driver" style="flex:2">${esc(r.team)}${r.position === 1 ? " 🏆" : ""}</span>
+            <span class="podium-pts">${r.points}</span>
+          </div>`).join("");
+        return hd("Formel 1 · Saison", "Konstrukteure") + `<div>${rows}</div>` + ft(s.generatedAt, "Jolpica / F1");
+      }
+
+      // F1 Letztes Rennen
+      if (s.type === "f1.last.result") {
+        const MEDALS = ["🥇","🥈","🥉"];
+        const rows = (p.results || []).map(r => {
+          const medal = r.position <= 3 ? MEDALS[r.position - 1] : `${r.position}.`;
+          return `<div class="podium-row">
+            <span class="podium-pos${r.position <= 3 ? ' p1' : ''}">${medal}</span>
+            <span class="podium-driver">${esc(r.driver)}</span>
+            <span class="podium-team">${esc(r.constructor)}</span>
+            <span class="podium-pts">${r.points} Pkt</span>
+          </div>`;
+        }).join("");
+        const meta = [
+          p.circuitName ? `📍 ${esc(p.circuitName)}` : "",
+          p.laps        ? `${p.laps} Runden` : "",
+        ].filter(Boolean).join(" | ");
+        const fl = p.fastestLap ? `<div class="slide-meta" style="margin-top:.8rem">⚡ Schnellste Runde: <strong>${esc(p.fastestLap)}</strong></div>` : "";
+        return hd(`Formel 1 · ${p.season || ""}`, `Rennen ${p.round || ""}: ${esc(p.raceName || "")}`) +
+          `<div class="slide-meta" style="margin-bottom:.8rem;opacity:.6">${meta}</div>` +
+          `<div>${rows}</div>${fl}` +
+          ft(s.generatedAt, "Jolpica / F1");
+      }
+
+      // Bundesliga Tabelle (alle 18 Zeilen, zwei Spalten)
+      if (s.type === "football.bl1" || s.type === "football.bl2") {
+        const tier = s.type === "football.bl1" ? "1. Bundesliga" : "2. Bundesliga";
+        const all = p.rows || [];
+        const left  = all.slice(0, 9);
+        const right = all.slice(9, 18);
+        function blRows(rows) {
+          return rows.map(r => {
+            const pos = r.position;
+            let cls = "";
+            if (pos <= 2) cls = "row-promoted";
+            else if (pos >= 16) cls = "row-relegated";
+            return `<tr class="${cls}">
+              <td class="col-rank">${pos}</td>
+              <td class="col-name">${esc(r.team)}</td>
+              <td class="col-num col-optional">${r.played}</td>
+              <td class="col-num col-hl">${r.points}</td>
+            </tr>`;
+          }).join("");
+        }
+        const tHead = `<thead><tr>
+          <th>#</th><th>Verein</th>
+          <th class="col-num col-optional">Sp</th><th class="col-num">Pkt</th>
+        </tr></thead>`;
+        return hd(`Fußball · ${tier}`, `Tabelle ${esc(p.season || "")}`) +
+          `<div class="bl-two-col">
+            <table class="data-table">${tHead}<tbody>${blRows(left)}</tbody></table>
+            <table class="data-table">${tHead}<tbody>${blRows(right)}</tbody></table>
+          </div>` + ft(s.generatedAt, "OpenLigaDB");
+      }
+
+      // Bundesliga Torjäger
+      if (s.type === "football.bl1.scorers" || s.type === "football.bl2.scorers") {
+        const tier = s.type.includes("bl1") ? "1. Bundesliga" : "2. Bundesliga";
+        const rows = (p.rows || []).map(r => `<tr>
+          <td class="col-rank">${r.rank}</td>
+          <td class="col-name">${esc(r.name)}</td>
+          <td>${esc(r.team)}</td>
+          <td class="col-num col-hl">${r.goals}</td>
+        </tr>`).join("");
+        return hd(`Fußball · ${tier}`, `Torjäger ${esc(p.season || "")}`) +
+          `<table class="data-table"><thead><tr>
+            <th>#</th><th>Spieler</th><th>Verein</th><th class="col-num">Tore</th>
+          </tr></thead><tbody>${rows}</tbody></table>` + ft(s.generatedAt, "OpenLigaDB");
+      }
+
+      // PUBG Wochenstatistik
+      if (s.type.startsWith("pubg.weekly.")) {
+        return hd(`PUBG · ${esc(p.player)}`, "Wochenstatistik", "Letzte 7 Tage — Steam") +
+          `<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+            <div class="stat-item"><span class="stat-label">Matches</span><span class="stat-value">${p.matches}</span></div>
+            <div class="stat-item"><span class="stat-label">Wins</span><span class="stat-value">${p.wins}</span></div>
+            <div class="stat-item"><span class="stat-label">K/D</span><span class="stat-value hl">${p.kd}</span></div>
+            <div class="stat-item"><span class="stat-label">Kills</span><span class="stat-value">${p.kills}</span></div>
+            <div class="stat-item"><span class="stat-label">Assists</span><span class="stat-value">${p.assists}</span></div>
+            <div class="stat-item"><span class="stat-label">Ø Schaden</span><span class="stat-value">${p.avgDamage}</span></div>
+            <div class="stat-item"><span class="stat-label">Weitest. Kill</span><span class="stat-value">${p.longestKill}m</span></div>
+            <div class="stat-item"><span class="stat-label">Headshots</span><span class="stat-value">${p.headshotKills}<span class="stat-sub"> (${p.headshotPct}%)</span></span></div>
+            <div class="stat-item"><span class="stat-label">Revives</span><span class="stat-value">${p.revives}</span></div>
+            <div class="stat-item"><span class="stat-label">Knockdowns</span><span class="stat-value">${p.knockdowns}</span></div>
+          </div>` + ft(s.generatedAt, "PUBG API");
+      }
+
+      // PUBG Tagesstatistik
+      if (s.type.startsWith("pubg.daily.")) {
+        return hd(`PUBG · ${esc(p.player)}`, "Tagesstatistik", "Heute — Steam") +
+          `<div class="stat-grid">
+            <div class="stat-item"><span class="stat-label">Matches</span><span class="stat-value">${p.matches}</span></div>
+            <div class="stat-item"><span class="stat-label">Wins</span><span class="stat-value">${p.wins}</span></div>
+            <div class="stat-item"><span class="stat-label">K/D</span><span class="stat-value hl">${p.kd}</span></div>
+            <div class="stat-item"><span class="stat-label">Kills</span><span class="stat-value">${p.kills}</span></div>
+            <div class="stat-item"><span class="stat-label">Assists</span><span class="stat-value">${p.assists}</span></div>
+            <div class="stat-item"><span class="stat-label">Ø Schaden</span><span class="stat-value">${p.avgDamage}</span></div>
+          </div>` + ft(s.generatedAt, "PUBG API");
+      }
+
+      // PUBG Letzte 5 Matches
+      if (s.type.startsWith("pubg.recent.")) {
+        const rows = (p.matches || []).map(m => `<tr>
+          <td>${esc(m.date)}</td>
+          <td>${esc(m.map)}</td>
+          <td class="col-num">#${m.placement}</td>
+          <td class="col-num col-hl">${m.kills}</td>
+          <td class="col-num">${m.damage}</td>
+        </tr>`).join("");
+        return hd(`PUBG · ${esc(p.player)}`, "Letzte 5 Matches") +
+          `<table class="data-table"><thead><tr>
+            <th>Datum</th><th>Map</th><th class="col-num">Pl.</th>
+            <th class="col-num">Kills</th><th class="col-num">Dmg</th>
+          </tr></thead><tbody>${rows}</tbody></table>` + ft(s.generatedAt, "PUBG API");
+      }
+
+      // PUBG Rekorde
+      if (s.type.startsWith("pubg.records.")) {
+        return hd(`PUBG · ${esc(p.player)}`, "Persönliche Rekorde") +
+          `<div class="record-list">
+            <div class="record-row">
+              <span class="record-label">Meiste Kills</span>
+              <span class="record-value hl">${p.mostKills}</span>
+              <span class="record-meta">${esc(p.mostKillsDate)} · ${esc(p.mostKillsMap)}</span>
+            </div>
+            <div class="record-row">
+              <span class="record-label">Höchster Schaden</span>
+              <span class="record-value hl">${p.highestDamage}</span>
+              <span class="record-meta">${esc(p.highestDamageDate)} · ${esc(p.highestDamageMap)}</span>
+            </div>
+            <div class="record-row">
+              <span class="record-label">Weitester Kill</span>
+              <span class="record-value">${p.longestKill}m</span>
+              <span class="record-meta">${esc(p.longestKillDate)}</span>
+            </div>
+            <div class="record-row">
+              <span class="record-label">Lifetime Wins</span>
+              <span class="record-value">${p.lifetimeWins}</span>
+            </div>
+          </div>` + ft(s.generatedAt, "PUBG API");
+      }
+
+      // News
+      if (s.type.startsWith("news.")) {
+        const src = s.type === "news.tagesschau" ? "Tagesschau" : "Heise";
+        const items = (p.items || []).map(i => `
+          <div class="podium-row">
+            <span style="color:var(--color-accent);font-size:var(--text-label);flex-shrink:0">›</span>
+            <span style="font-family:var(--font-serif);font-size:var(--text-body)">${esc(i.title)}</span>
+          </div>`).join("");
+        return hd(`News · ${src}`, src) + `<div>${items}</div>` + ft(s.generatedAt, src);
+      }
+
+      // System leer
+      if (s.type === "system.empty") {
+        return hd("noonoo · status", null) +
+          `<h1 class="slide-title">${esc(s.title)}</h1>
+           <p class="slide-subtitle">${esc(p.message)}</p>`;
+      }
+
+      return hd(s.type, s.title) + `<pre style="font-size:var(--text-micro);color:var(--color-text-muted)">${esc(JSON.stringify(p, null, 2))}</pre>`;
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    buildModuleBar();
+    attachHoverDropdowns();
+    reconnect();
+  </script>
+</body>
+</html>
