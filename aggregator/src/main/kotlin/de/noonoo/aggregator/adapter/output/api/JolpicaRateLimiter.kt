@@ -62,3 +62,30 @@ suspend fun <T> withJolpicaRetry(limiter: JolpicaRateLimiter, action: suspend ()
         }
     }
 }
+
+/**
+ * Simpler In-Memory-TTL-Cache pro URL, um das Sustained-Limit (500/h) zu schonen.
+ * Vergangene Rennergebnisse/Qualifyings sind unter ihrer URL unveraendlich -> lange TTL;
+ * "current/last" und Wertungen aendern sich mit jedem Rennen -> kuerzere TTL.
+ */
+class JolpicaCache {
+    private data class Entry(val value: Any?, val expiresAt: Long)
+
+    private val mutex = Mutex()
+    private val store = mutableMapOf<String, Entry>()
+
+    @Suppress("UNCHECKED_CAST")
+    suspend fun <T> getOrPut(key: String, ttlMs: Long, compute: suspend () -> T): T {
+        mutex.withLock {
+            val cached = store[key]
+            if (cached != null && cached.expiresAt > System.currentTimeMillis()) {
+                return cached.value as T
+            }
+        }
+        val result = compute()
+        mutex.withLock {
+            store[key] = Entry(result, System.currentTimeMillis() + ttlMs)
+        }
+        return result
+    }
+}

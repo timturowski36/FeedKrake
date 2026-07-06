@@ -35,6 +35,19 @@ enum class ModuleType(val slug: String, val label: String) {
 @Serializable
 enum class EventStatus { SCHEDULED, LIVE, FINISHED, POSTPONED, CANCELLED }
 
+/** Ticket 5.1: einheitliche Drawer-Phase, aus [EventStatus] abgeleitet, steuert die Tab-Auswahl im Frontend. */
+@Serializable
+enum class EventPhase { PRE, LIVE, POST;
+
+    companion object {
+        fun fromStatus(status: EventStatus): EventPhase = when (status) {
+            EventStatus.LIVE -> LIVE
+            EventStatus.FINISHED -> POST
+            EventStatus.SCHEDULED, EventStatus.POSTPONED, EventStatus.CANCELLED -> PRE
+        }
+    }
+}
+
 @Serializable
 enum class SeasonStatus { NOT_STARTED, ACTIVE, FINISHED }
 

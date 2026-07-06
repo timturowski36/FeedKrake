@@ -23,15 +23,22 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     private val baseUrl = "https://api.jolpi.ca/ergast/f1"
     private val rateLimiter = JolpicaRateLimiter()
+    private val cache = JolpicaCache()
 
-    private suspend inline fun <reified T> jolpicaGet(url: String): T =
-        withJolpicaRetry(rateLimiter) { httpClient.get(url).body() }
+    // TTLs: abgeschlossene Rennen/Qualifyings sind unter ihrer URL unveraendlich -> lange
+    // Cache-Dauer; "current"-Endpoints (Kalender, Wertungen, letztes Rennen) aendern sich
+    // mit jedem Rennwochenende -> kuerzere Cache-Dauer.
+    private val ttlImmutable = 24 * 60 * 60 * 1000L
+    private val ttlCurrent = 15 * 60 * 1000L
+
+    private suspend inline fun <reified T> jolpicaGet(url: String, ttlMs: Long = ttlCurrent): T =
+        cache.getOrPut(url, ttlMs) { withJolpicaRetry(rateLimiter) { httpClient.get(url).body() } }
 
     // ── API: Rennkalender ─────────────────────────────────────────────────────
 
     override suspend fun fetchCurrentSchedule(): List<F1Race> {
         return try {
-            val response: ScheduleResponse = jolpicaGet("$baseUrl/current.json")
+            val response: ScheduleResponse = jolpicaGet("$baseUrl/current.json", ttlCurrent)
             response.mrData.raceTable.races.map { it.toF1Race() }
         } catch (e: Exception) {
             log.error(e) { "[F1] Fehler beim Abruf des Rennkalenders: ${e.message}" }
@@ -43,7 +50,7 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     override suspend fun fetchLastRaceResults(): List<F1RaceResult> {
         return try {
-            val response: RaceResultResponse = jolpicaGet("$baseUrl/current/last/results.json")
+            val response: RaceResultResponse = jolpicaGet("$baseUrl/current/last/results.json", ttlCurrent)
             val race = response.mrData.raceTable.races.firstOrNull() ?: return emptyList()
             race.results.orEmpty().map { it.toF1RaceResult(race) }
         } catch (e: Exception) {
@@ -56,7 +63,7 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     override suspend fun fetchQualifyingResults(season: Int, round: Int): List<F1RaceResult> {
         return try {
-            val response: QualifyingResponse = jolpicaGet("$baseUrl/$season/$round/qualifying.json")
+            val response: QualifyingResponse = jolpicaGet("$baseUrl/$season/$round/qualifying.json", ttlImmutable)
             val race = response.mrData.raceTable.races.firstOrNull() ?: return emptyList()
             race.qualifyingResults.orEmpty().map { it.toF1RaceResult(race) }
         } catch (e: Exception) {
@@ -69,7 +76,7 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     override suspend fun fetchDriverStandings(): List<F1Standing> {
         return try {
-            val response: DriverStandingsResponse = jolpicaGet("$baseUrl/current/driverStandings.json")
+            val response: DriverStandingsResponse = jolpicaGet("$baseUrl/current/driverStandings.json", ttlCurrent)
             val list = response.mrData.standingsTable.standingsLists.firstOrNull() ?: return emptyList()
             val round = list.round.toIntOrNull() ?: 0
             val season = list.season.toIntOrNull() ?: 0
@@ -96,7 +103,8 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     override suspend fun fetchConstructorStandings(): List<F1Standing> {
         return try {
-            val response: ConstructorStandingsResponse = jolpicaGet("$baseUrl/current/constructorStandings.json")
+            val response: ConstructorStandingsResponse =
+                jolpicaGet("$baseUrl/current/constructorStandings.json", ttlCurrent)
             val list = response.mrData.standingsTable.standingsLists.firstOrNull() ?: return emptyList()
             val round = list.round.toIntOrNull() ?: 0
             val season = list.season.toIntOrNull() ?: 0
@@ -123,7 +131,8 @@ class JolpicaF1Client(private val httpClient: HttpClient) : F1ApiPort {
 
     override suspend fun fetchRaceResultByCircuit(season: Int, circuitId: String): List<F1RaceResult> {
         return try {
-            val response: RaceResultResponse = jolpicaGet("$baseUrl/$season/circuits/$circuitId/results.json")
+            val response: RaceResultResponse =
+                jolpicaGet("$baseUrl/$season/circuits/$circuitId/results.json", ttlImmutable)
             val race = response.mrData.raceTable.races.firstOrNull() ?: return emptyList()
             race.results.orEmpty().map { it.toF1RaceResult(race) }
         } catch (e: Exception) {

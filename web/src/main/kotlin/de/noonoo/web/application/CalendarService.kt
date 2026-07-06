@@ -1,6 +1,7 @@
 package de.noonoo.web.application
 
 import de.noonoo.core.domain.model.Event
+import de.noonoo.core.domain.model.EventPhase
 import de.noonoo.core.domain.model.EventStatus
 import de.noonoo.core.domain.model.IsoWeek
 import de.noonoo.core.domain.model.ModuleType
@@ -115,8 +116,8 @@ data class EventDetailsResponse(
     val module: String,
     val title: String,
     val capabilities: List<String>,
-    /** PRE/LIVE/POST, aus Event.status abgeleitet (Ticket 5.1) — steuert die Tab-Auswahl im Frontend. */
-    val phase: String = "PRE",
+    /** aus Event.status abgeleitet (Ticket 5.1) — steuert die Tab-Auswahl im Frontend. */
+    val phase: EventPhase = EventPhase.PRE,
     val standings: List<de.noonoo.web.adapter.db.DetailStandingRow>? = null,
     val matchEvents: List<de.noonoo.web.adapter.db.DetailMatchEventRow>? = null,
     val headToHead: List<de.noonoo.web.adapter.db.DetailH2hRow>? = null,
@@ -285,21 +286,13 @@ class CalendarService(
     private fun randomCode(): String =
         (1..4).map { CODE_ALPHABET[random.nextInt(CODE_ALPHABET.length)] }.joinToString("")
 
-    // ── Event-Phase (Ticket 5.1: PRE/LIVE/POST, steuert Tab-Auswahl im Frontend) ──
-
-    private fun phaseOf(status: EventStatus): String = when (status) {
-        EventStatus.LIVE -> "LIVE"
-        EventStatus.FINISHED -> "POST"
-        EventStatus.SCHEDULED, EventStatus.POSTPONED, EventStatus.CANCELLED -> "PRE"
-    }
-
     // ── Event-Details (nur, was die Quelle wirklich hergibt) ──────────────────
 
     fun eventDetails(event: Event): EventDetailsResponse {
         val base = EventDetailsResponse(
             eventId = event.id, module = event.moduleType.slug,
             title = event.title, capabilities = emptyList(),
-            phase = phaseOf(event.status)
+            phase = EventPhase.fromStatus(event.status)
         )
         return when (event.moduleType) {
             // OpenLigaDB: Tabelle, Torschützen, H2H – KEINE Karten/Assists/Aufstellungen (nicht im Schema)

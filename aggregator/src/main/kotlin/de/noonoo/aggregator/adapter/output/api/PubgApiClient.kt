@@ -13,6 +13,8 @@ import io.ktor.http.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -37,6 +39,36 @@ private val pubgHttpClient = HttpClient(CIO)
 
 private val pubgJson = Json { ignoreUnknownKeys = true; isLenient = true }
 
+// Proaktiver Rate-Limiter für players-/seasons-Endpoints: PUBG-Doku nennt 10 req/min als
+// Default-Limit für "testing/development". /matches und Telemetry sind explizit ausgenommen
+// (siehe fetchMatchDetails, das bewusst NICHT über diesen Limiter läuft) und bleiben ungedrosselt.
+private object PubgDiscoveryRateLimiter {
+    private const val MAX_REQUESTS_PER_WINDOW = 10
+    private const val WINDOW_MS = 60_000L
+    private val timestamps = ArrayDeque<Long>()
+    private val mutex = Mutex()
+
+    suspend fun acquire() {
+        mutex.withLock {
+            fun prune(now: Long) {
+                while (timestamps.isNotEmpty() && now - timestamps.first() >= WINDOW_MS) {
+                    timestamps.removeFirst()
+                }
+            }
+            prune(System.currentTimeMillis())
+            if (timestamps.size >= MAX_REQUESTS_PER_WINDOW) {
+                val waitMs = WINDOW_MS - (System.currentTimeMillis() - timestamps.first())
+                if (waitMs > 0) {
+                    log.debug { "[PUBG] Discovery-Rate-Limit (10/min) erreicht – warte ${waitMs}ms" }
+                    delay(waitMs)
+                }
+                prune(System.currentTimeMillis())
+            }
+            timestamps.addLast(System.currentTimeMillis())
+        }
+    }
+}
+
 class PubgApiClient(
     @Suppress("UNUSED_PARAMETER") sharedHttpClient: HttpClient,
     private val apiKey: String
@@ -49,10 +81,13 @@ class PubgApiClient(
         header(HttpHeaders.Accept, "application/vnd.api+json")
     }
 
-    // Führt einen rate-limitierten GET-Request aus und wiederholt bei 429 mit Backoff (max. 3 Versuche).
+    // Führt einen rate-limitierten GET-Request aus (proaktiver 10/min-Throttle) und wiederholt
+    // bei 429 zusätzlich mit Backoff (max. 3 Versuche). Gilt für players-/seasons-Endpoints;
+    // /matches läuft bewusst NICHT hierüber (siehe fetchMatchDetails).
     private suspend fun getWithBackoff(url: String, withAuth: Boolean = true): HttpResponse? {
         var attempt = 0
         while (attempt < 3) {
+            PubgDiscoveryRateLimiter.acquire()
             return try {
                 val resp = pubgHttpClient.get(url) {
                     if (withAuth) pubgHeaders()
