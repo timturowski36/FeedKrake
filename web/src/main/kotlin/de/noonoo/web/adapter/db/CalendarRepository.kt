@@ -14,6 +14,12 @@ import java.sql.Timestamp
 import java.time.Instant
 import javax.sql.DataSource
 
+// Vor der durchgängigen PUBG-Bündelung (pubgBundled=true) entstandene Einzel-Match-Events
+// (external_id = "pubg:{matchId}") bleiben als Historie in der DB erhalten, sollen aber nicht
+// mehr neben dem gebündelten Tages-Event ("pubg:day:{date}") im Kalender auftauchen.
+private const val LEGACY_PUBG_FILTER =
+    "NOT (module_type = 'PUBG' AND external_id NOT LIKE 'pubg:day:%')"
+
 @Serializable
 data class Selection(val module: String, val refs: List<String> = emptyList())
 
@@ -39,6 +45,7 @@ class CalendarRepository(private val dataSource: DataSource) {
         query(
             buildString {
                 append("SELECT * FROM events WHERE start_time >= ? AND start_time < ?")
+                append(" AND $LEGACY_PUBG_FILTER")
                 if (!modules.isNullOrEmpty()) append(" AND module_type = ANY (?)")
                 append(" ORDER BY start_time")
             },
@@ -66,6 +73,7 @@ class CalendarRepository(private val dataSource: DataSource) {
         dataSource.connection.use { conn ->
             val sql = buildString {
                 append("SELECT MAX(last_updated) AS m FROM events WHERE start_time >= ? AND start_time < ?")
+                append(" AND $LEGACY_PUBG_FILTER")
                 if (!modules.isNullOrEmpty()) append(" AND module_type = ANY (?)")
             }
             conn.prepareStatement(sql).use { stmt ->
