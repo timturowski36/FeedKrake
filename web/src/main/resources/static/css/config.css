@@ -1,0 +1,122 @@
+/* Konfigurations-Screen, Marketplace, Account (NOO-131/132/133) */
+
+#screen-config, #screen-account {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  padding: 0 clamp(.75rem, 3vw, 2.5rem) 3rem;
+  animation: fadeIn .2s;
+}
+#screen-config[hidden], #screen-account[hidden] { display: none; }
+
+.screen-back {
+  display: inline-block;
+  padding: 20px 0 6px;
+  font-size: 14px; color: var(--sec); font-weight: 600;
+}
+.screen-title { margin: 4px 0 20px; font-size: 26px; font-weight: 700; letter-spacing: -.01em; }
+
+.cfg-section { margin-bottom: 26px; }
+.cfg-section-label {
+  font-size: 13px; font-weight: 600; color: var(--sec); letter-spacing: .05em;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.cfg-card {
+  background: var(--card); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden;
+}
+
+/* Theme-Segmented-Control */
+.seg-control { display: flex; background: var(--fill); border-radius: 9px; padding: 2px; margin: 12px; }
+.seg-control button {
+  flex: 1; border: none; background: transparent; border-radius: 7px;
+  padding: 8px; font-size: 14px; font-weight: 600; color: var(--sec);
+}
+.seg-control button.active { background: var(--card); box-shadow: 0 1px 3px rgba(0, 0, 0, .15); color: var(--fg); }
+
+/* Modulzeilen */
+.module-row { border-bottom: 1px solid var(--sep); }
+.module-row:last-child { border-bottom: none; }
+.module-row-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; cursor: pointer;
+}
+.module-row-icon {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--row-color, var(--sec));
+  color: #fff; display: grid; place-items: center; flex-shrink: 0;
+  font-size: 15px; font-weight: 700;
+}
+.module-row-text { flex: 1; }
+.module-row-text .name { font-size: 15px; font-weight: 600; }
+.module-row-text .desc { font-size: 12px; color: var(--sec); margin-top: 1px; }
+.module-row-chevron { color: var(--sec); transition: transform .2s; flex-shrink: 0; }
+.module-row.open .module-row-chevron { transform: rotate(90deg); }
+.module-row-body { display: none; padding: 0 14px 16px; }
+.module-row.open .module-row-body { display: block; }
+
+.ref-chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.ref-chip {
+  display: flex; align-items: center; gap: 6px;
+  border: 1.5px solid var(--sep); border-radius: 20px; padding: 6px 12px;
+  font-size: 13px; background: var(--card);
+}
+.ref-chip.active { border-color: var(--acc); background: rgba(10, 132, 255, .12); color: var(--acc); }
+.ref-hint { font-size: 12px; color: var(--sec); margin-bottom: 8px; }
+
+.module-row-footer { display: flex; gap: 16px; margin-top: 12px; }
+.link-btn { border: none; background: none; font-size: 13px; font-weight: 600; color: var(--acc); padding: 0; }
+.link-btn.danger { color: var(--bad); }
+
+.empty-state { padding: 20px 14px; font-size: 13px; color: var(--sec); text-align: center; }
+
+/* Marketplace */
+.marketplace-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border-bottom: 1px solid var(--sep);
+}
+.marketplace-row:last-child { border-bottom: none; }
+.marketplace-row.locked { opacity: .55; }
+.marketplace-row.dev { opacity: .45; }
+.marketplace-row .tag {
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+  background: var(--fill); color: var(--sec);
+}
+.marketplace-row .tag.dev-tag { background: rgba(94, 92, 230, .15); color: var(--mod-quiz); }
+.add-btn {
+  border: none; background: var(--fill); color: var(--acc);
+  font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 20px;
+}
+
+/* Teilen */
+.share-code-display {
+  font-size: 22px; font-weight: 700; letter-spacing: .25em; color: var(--acc);
+  text-align: center; padding: 14px 0;
+}
+.share-row { display: flex; gap: 8px; padding: 12px 14px; }
+.share-input {
+  flex: 1; border: 1.5px solid var(--sep); border-radius: 10px; padding: 10px 12px;
+  background: var(--bg); color: var(--fg); text-transform: uppercase; letter-spacing: .15em;
+  font-size: 14px;
+}
+.primary-btn {
+  border: none; background: var(--acc); color: #fff; font-weight: 600;
+  border-radius: 10px; padding: 10px 18px; font-size: 14px;
+}
+.cfg-hint { font-size: 12px; color: var(--sec); padding: 0 14px 12px; }
+
+/* Account-Screen */
+.account-avatar {
+  width: 72px; height: 72px; border-radius: 50%; background: var(--fill);
+  display: grid; place-items: center; margin: 24px auto 12px;
+}
+.account-header { text-align: center; }
+.account-header p { color: var(--sec); font-size: 14px; max-width: 320px; margin: 8px auto 20px; }
+.account-form { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.account-form input {
+  border: 1.5px solid var(--sep); border-radius: 10px; padding: 12px 14px;
+  background: var(--bg); color: var(--fg); font-size: 14px;
+}
+.account-disclaimer { font-size: 12px; color: var(--sec); text-align: center; margin-top: 8px; }
+.benefit-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--sep); }
+.benefit-row:last-child { border-bottom: none; }
+.benefit-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex-shrink: 0; }

@@ -1,0 +1,3253 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+// GENERATED from dc-runtime/src/*.ts — do not edit. Rebuild with `cd dc-runtime && bun run build`.
+"use strict";
+(() => {
+  var __defProp = Object.defineProperty;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+
+  // src/react.ts
+  function getReact() {
+    const R = window.React;
+    if (!R) throw new Error("dc-runtime: window.React is not available yet");
+    return R;
+  }
+  function getReactDOM() {
+    const RD = window.ReactDOM;
+    if (!RD) throw new Error("dc-runtime: window.ReactDOM is not available yet");
+    return RD;
+  }
+  var h = ((...args) => getReact().createElement(
+    ...args
+  ));
+
+  // src/parse.ts
+  function parseDcDocument(doc) {
+    const dc = doc.querySelector("x-dc");
+    if (!dc) return null;
+    const scriptEl = doc.querySelector("script[data-dc-script]");
+    const { props, preview } = parseDataProps(
+      scriptEl?.getAttribute("data-props") ?? null
+    );
+    return {
+      template: dc.innerHTML,
+      js: scriptEl ? scriptEl.textContent || "" : "",
+      props,
+      preview
+    };
+  }
+  function parseDcText(src) {
+    const openMatch = /<x-dc(?:\s[^>]*)?>/.exec(src);
+    if (!openMatch) return null;
+    const close = src.lastIndexOf("</x-dc>");
+    if (close === -1 || close < openMatch.index) return null;
+    const template = src.slice(openMatch.index + openMatch[0].length, close);
+    const doc = new DOMParser().parseFromString(src, "text/html");
+    const scriptEl = doc.querySelector("script[data-dc-script]");
+    const { props, preview } = parseDataProps(
+      scriptEl?.getAttribute("data-props") ?? null
+    );
+    return {
+      template,
+      js: scriptEl ? scriptEl.textContent || "" : "",
+      props,
+      preview
+    };
+  }
+  function parseDataProps(raw) {
+    if (!raw) return { props: null, preview: null };
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return { props: null, preview: null };
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { props: null, preview: null };
+    }
+    const obj = parsed;
+    const preview = obj.$preview && typeof obj.$preview === "object" ? obj.$preview : null;
+    const rest = {};
+    for (const k of Object.keys(obj)) {
+      if (k[0] !== "$") rest[k] = obj[k];
+    }
+    return { props: Object.keys(rest).length ? rest : null, preview };
+  }
+  function dcNameFromPath(pathname) {
+    let p = pathname || "";
+    try {
+      p = decodeURIComponent(p);
+    } catch {
+    }
+    const base = p.split("/").pop() || "Root";
+    return base.replace(/\.dc\.html$/, "").replace(/\.html?$/, "") || "Root";
+  }
+
+  // src/boot.ts
+  var BASE_CSS = `
+    .sc-placeholder{background:color-mix(in srgb,currentColor 8%,transparent);
+      border:1px solid color-mix(in srgb,currentColor 50%,transparent);
+      border-radius:2px;box-sizing:border-box;overflow:hidden}
+    @keyframes sc-shine{0%{background-position:100% 50%}100%{background-position:0% 50%}}
+    html.sc-dc-streaming .sc-placeholder,
+    html.sc-dc-streaming .sc-interp.sc-missing{position:relative;
+      background:color-mix(in srgb,currentColor 5%,transparent);
+      border-color:transparent}
+    html.sc-dc-streaming .sc-placeholder::before,
+    html.sc-dc-streaming .sc-interp.sc-missing::before{content:'';
+      position:absolute;inset:0;pointer-events:none;
+      background:linear-gradient(90deg,rgba(217,119,87,0) 25%,rgba(247,225,211,.95) 37%,rgba(217,119,87,0) 63%);
+      background-size:400% 100%;animation:sc-shine 1.4s ease infinite}
+    html.sc-dc-streaming .sc-placeholder:nth-child(n+9 of .sc-placeholder)::before,
+    html.sc-dc-streaming .sc-interp.sc-missing:nth-child(n+9 of .sc-interp.sc-missing)::before{animation:none;
+      background:color-mix(in srgb,currentColor 8%,transparent)}
+    .sc-placeholder-error{padding:4px 8px;font:11px/1.4 ui-monospace,monospace;
+      color:color-mix(in srgb,currentColor 70%,transparent);word-break:break-word}
+    .sc-interp.sc-missing{display:inline-block;width:2em;height:1em;overflow:hidden;
+      vertical-align:text-bottom;background:rgba(255,255,255,.3);border:1px solid rgba(0,0,0,.5);
+      border-radius:2px;box-sizing:border-box;color:transparent;
+      user-select:none}
+    .sc-interp.sc-unresolved{font-family:ui-monospace,monospace;font-size:.85em;
+      color:color-mix(in srgb,currentColor 50%,transparent);
+      background:color-mix(in srgb,currentColor 10%,transparent);border-radius:3px;
+      padding:0 3px}
+    .sc-host.sc-has-error{position:relative}
+    .sc-logic-error{position:absolute;top:8px;left:8px;z-index:2147483647;max-width:60ch;
+      padding:6px 10px;background:#b00020;color:#fff;font:12px/1.4 ui-monospace,monospace;
+      border-radius:4px;white-space:pre-wrap;pointer-events:none}
+    /* Mirrors PRINT_BASELINE_CSS in apps/web deck-stage-export.ts \u2014 keep both
+       in sync until dc-runtime regains a build step. */
+    @media print {
+      @page { margin: 0.5cm; }
+      figure, table { break-inside: avoid; }
+      #dc-root, #dc-root > .sc-host { height: auto; }
+      *, *::before, *::after {
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
+        backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+        animation-delay: -99s !important; animation-duration: .001s !important;
+        animation-iteration-count: 1 !important; animation-fill-mode: both !important;
+        animation-play-state: running !important; transition-duration: 0s !important;
+      }
+    }
+  `;
+  var FULL_PAGE_CSS = "html,body{height:100%;margin:0}#dc-root,#dc-root>.sc-host{height:100%}";
+  function rootNameForDocument(doc, loc) {
+    let bootPath = loc.pathname || "";
+    if (!/\.dc\.html?$/i.test(safeDecode(bootPath))) {
+      try {
+        bootPath = new URL(doc.baseURI || "/").pathname;
+      } catch {
+      }
+    }
+    return dcNameFromPath(bootPath);
+  }
+  function safeDecode(s) {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s;
+    }
+  }
+  function boot(runtime, doc = document) {
+    const parsed = parseDcDocument(doc);
+    if (!parsed) return null;
+    const React = getReact();
+    const rootName = rootNameForDocument(doc, location);
+    runtime.markFetched(rootName);
+    runtime.setRootName(rootName);
+    runtime.adoptParsed(rootName, parsed);
+    if (!window.__resources) {
+      fetch(location.href).then((res) => res.ok ? res.text() : "").then((t) => {
+        const raw = t ? parseDcText(t) : null;
+        if (raw?.template) runtime.updateHtml(rootName, raw.template);
+      }).catch(() => {
+      });
+    }
+    const dc = doc.querySelector("x-dc");
+    const hostEl = doc.createElement("div");
+    hostEl.id = "dc-root";
+    dc.replaceWith(hostEl);
+    if (!parsed.preview) {
+      const s = doc.createElement("style");
+      s.textContent = FULL_PAGE_CSS;
+      doc.head.appendChild(s);
+    }
+    const Root = runtime.getDC(rootName);
+    const entry = runtime.registry.get(rootName);
+    function StandaloneRoot() {
+      const [, setTick] = React.useState(0);
+      React.useEffect(() => {
+        const sub = () => setTick((n) => n + 1);
+        entry.subs.add(sub);
+        return () => {
+          entry.subs.delete(sub);
+        };
+      }, []);
+      const defaults = React.useMemo(() => {
+        const d = {};
+        for (const k in entry.propsMeta || {}) {
+          const v = entry.propsMeta?.[k]?.default;
+          if (v !== void 0) d[k] = v;
+        }
+        return d;
+      }, [entry.propsMeta]);
+      return h(Root, { ...defaults, ...entry.propOverrides || {} });
+    }
+    const ReactDOM = getReactDOM();
+    if (ReactDOM.createRoot)
+      ReactDOM.createRoot(hostEl).render(h(StandaloneRoot));
+    else ReactDOM.render(h(StandaloneRoot), hostEl);
+    return rootName;
+  }
+
+  // src/expr.ts
+  var IDENT_RE = /^[A-Za-z_$][A-Za-z0-9_$]*/;
+  var NUMBER_RE = /^-?\d+(\.\d+)?$/;
+  function resolve(vals, src) {
+    const expr = String(src).trim();
+    if (!expr) return void 0;
+    if (expr[0] === "(" && expr[expr.length - 1] === ")" && parensWrapWhole(expr)) {
+      return resolve(vals, expr.slice(1, -1));
+    }
+    const eq = findTopLevelEquality(expr);
+    if (eq) {
+      const lv = resolve(vals, expr.slice(0, eq.index));
+      const rv = resolve(vals, expr.slice(eq.index + eq.op.length));
+      switch (eq.op) {
+        case "===":
+          return lv === rv;
+        case "!==":
+          return lv !== rv;
+        case "==":
+          return lv == rv;
+        default:
+          return lv != rv;
+      }
+    }
+    if (expr[0] === "!") return !resolve(vals, expr.slice(1));
+    if (expr === "true") return true;
+    if (expr === "false") return false;
+    if (expr === "null") return null;
+    if (expr === "undefined") return void 0;
+    if (NUMBER_RE.test(expr)) return Number(expr);
+    if (expr.length >= 2 && (expr[0] === '"' || expr[0] === "'") && expr[expr.length - 1] === expr[0]) {
+      return expr.slice(1, -1);
+    }
+    return resolvePath(vals, expr);
+  }
+  function parensWrapWhole(expr) {
+    let depth = 0;
+    for (let i = 0; i < expr.length - 1; i++) {
+      if (expr[i] === "(") depth++;
+      else if (expr[i] === ")") {
+        depth--;
+        if (depth === 0) return false;
+      }
+    }
+    return true;
+  }
+  function findTopLevelEquality(expr) {
+    let depth = 0;
+    for (let i = 0; i < expr.length; i++) {
+      const c = expr[i];
+      if (c === "[" || c === "(") depth++;
+      else if (c === "]" || c === ")") depth--;
+      else if (depth === 0 && (c === "=" || c === "!") && expr[i + 1] === "=") {
+        if (i > 0 && (expr[i - 1] === "=" || expr[i - 1] === "!")) continue;
+        if (!expr.slice(0, i).trim()) continue;
+        const op = expr[i + 2] === "=" ? c + "==" : c + "=";
+        return { index: i, op };
+      }
+    }
+    return null;
+  }
+  function resolvePath(vals, expr) {
+    const head = expr.match(IDENT_RE);
+    if (!head) return void 0;
+    let cur = vals == null ? void 0 : vals[head[0]];
+    let i = head[0].length;
+    while (i < expr.length) {
+      if (expr[i] === ".") {
+        const m = expr.slice(i + 1).match(IDENT_RE) || expr.slice(i + 1).match(/^\d+/);
+        if (!m) return void 0;
+        cur = cur == null ? void 0 : cur[m[0]];
+        i += 1 + m[0].length;
+      } else if (expr[i] === "[") {
+        let depth = 1;
+        let j = i + 1;
+        while (j < expr.length && depth > 0) {
+          if (expr[j] === "[") depth++;
+          else if (expr[j] === "]") {
+            depth--;
+            if (depth === 0) break;
+          }
+          j++;
+        }
+        if (depth !== 0) return void 0;
+        const key = resolve(vals, expr.slice(i + 1, j));
+        cur = cur == null ? void 0 : cur[key];
+        i = j + 1;
+      } else {
+        return void 0;
+      }
+    }
+    return cur;
+  }
+
+  // src/encode.ts
+  var CAMEL_ATTR = "sc-camel-";
+  var INLINE_TEXT_TAGS = new Set(
+    "a abbr b bdi bdo br cite code del dfn em i ins kbd mark q s samp small span strike strong sub sup u var wbr".split(
+      " "
+    )
+  );
+  var RAW_WRAP = {
+    select: "sc-raw-select",
+    table: "sc-raw-table",
+    tbody: "sc-raw-tbody",
+    thead: "sc-raw-thead",
+    tfoot: "sc-raw-tfoot",
+    tr: "sc-raw-tr",
+    td: "sc-raw-td",
+    th: "sc-raw-th",
+    caption: "sc-raw-caption"
+  };
+  var RAW_UNWRAP = Object.fromEntries(
+    Object.entries(RAW_WRAP).map(([k, v]) => [v, k])
+  );
+  var EVENT_MAP = {
+    onclick: "onClick",
+    onchange: "onChange",
+    oninput: "onInput",
+    onsubmit: "onSubmit",
+    onkeydown: "onKeyDown",
+    onkeyup: "onKeyUp",
+    onkeypress: "onKeyPress",
+    onmousedown: "onMouseDown",
+    onmouseup: "onMouseUp",
+    onmouseenter: "onMouseEnter",
+    onmouseleave: "onMouseLeave",
+    onfocus: "onFocus",
+    onblur: "onBlur",
+    ondoubleclick: "onDoubleClick",
+    oncontextmenu: "onContextMenu"
+  };
+  var ATTRS = `(?:[^>"']|"[^"]*"|'[^']*')*`;
+  var IMPORT_SELF_CLOSE_RE = new RegExp(
+    "<(x-import|dc-import)(" + ATTRS + ")/>",
+    "gi"
+  );
+  var CAMEL_ATTR_RE = /(\s)([a-z]+[A-Z][A-Za-z0-9]*)(\s*=)/g;
+  function encodeCase(html) {
+    html = html.replace(
+      IMPORT_SELF_CLOSE_RE,
+      (_, t, a) => "<" + t + a + "></" + t + ">"
+    );
+    html = html.replace(/<helmet(\s|>)/gi, "<sc-helmet$1");
+    html = html.replace(/<\/helmet\s*>/gi, "</sc-helmet>");
+    html = html.replace(
+      CAMEL_ATTR_RE,
+      (_, sp, name, eq) => sp + CAMEL_ATTR + name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()) + eq
+    );
+    for (const [real, alias] of Object.entries(RAW_WRAP)) {
+      html = html.replace(
+        new RegExp("(</?)" + real + "(?=[\\s>])", "gi"),
+        "$1" + alias
+      );
+    }
+    return html;
+  }
+  function kebabToCamel(s) {
+    return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  }
+  function cssToObj(css) {
+    const o = {};
+    for (const decl of css.split(";")) {
+      const i = decl.indexOf(":");
+      if (i < 0) continue;
+      const prop = decl.slice(0, i).trim();
+      o[prop.startsWith("--") ? prop : kebabToCamel(prop)] = decl.slice(i + 1).trim();
+    }
+    return o;
+  }
+  function compileAttr(raw) {
+    const whole = raw.match(/^\s*\{\{([\s\S]+?)\}\}\s*$/);
+    if (whole) {
+      const path = whole[1];
+      return (vals) => resolve(vals, path);
+    }
+    if (raw.includes("{{")) {
+      const parts = raw.split(/\{\{([\s\S]+?)\}\}/g);
+      return (vals) => parts.map((s, i) => i & 1 ? resolve(vals, s) ?? "" : s).join("");
+    }
+    return () => raw;
+  }
+
+  // src/compile.ts
+  function collectProps(node, kind, host) {
+    const propGetters = [];
+    const pseudoClasses = [];
+    let hintSize = null;
+    for (const { name, value } of [...node.attributes]) {
+      if (name === "sc-name" || name === "data-dc-tpl") continue;
+      let key = name;
+      if (key.startsWith(CAMEL_ATTR))
+        key = kebabToCamel(key.slice(CAMEL_ATTR.length));
+      if (key === "hint-size") {
+        hintSize = value;
+        continue;
+      }
+      if (key.startsWith("style-")) {
+        pseudoClasses.push(host.pseudoClass(key.slice(6), value));
+        continue;
+      }
+      if (kind !== "dom") {
+        if (key.includes("-") && !(kind === "x-import" && (key.startsWith("aria-") || key.startsWith("data-"))))
+          key = kebabToCamel(key);
+      } else {
+        if (key === "class") key = "className";
+        else if (key === "for") key = "htmlFor";
+        else if (key.startsWith("on"))
+          key = EVENT_MAP[key] || "on" + key[2].toUpperCase() + key.slice(3);
+      }
+      propGetters.push([key, compileAttr(value)]);
+    }
+    return { propGetters, pseudoClasses, hintSize };
+  }
+  var HOST_STYLE_PROPS = /* @__PURE__ */ new Set([
+    "position",
+    "left",
+    "right",
+    "top",
+    "bottom",
+    "inset",
+    "width",
+    "height",
+    "z-index",
+    "transform"
+  ]);
+  function hostPositionStyle(style) {
+    const all = typeof style === "string" ? cssToObj(style) : style != null && typeof style === "object" ? style : null;
+    if (!all) return void 0;
+    const out = {};
+    for (const [k, v] of Object.entries(all)) {
+      const kebab = k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+      if (HOST_STYLE_PROPS.has(kebab)) out[k] = v;
+    }
+    return Object.keys(out).length ? out : void 0;
+  }
+  function compileTemplate(html, host) {
+    const tpl = document.createElement("template");
+    //! nosemgrep: direct-inner-html-assignment
+    tpl.innerHTML = encodeCase(html);
+    let tplN = 0;
+    (function stamp(node) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        node.setAttribute("data-dc-tpl", String(tplN++));
+      }
+      for (const c of node.childNodes) stamp(c);
+    })(tpl.content);
+    const builders = walkChildren(tpl.content, host);
+    const render = ((vals, ctx) => builders.map((b, i) => b(vals || {}, ctx, i)));
+    render.__annotated = tpl.innerHTML;
+    return render;
+  }
+  function walkChildren(node, host) {
+    return [...node.childNodes].map((c) => walk(c, host)).filter((b) => b != null);
+  }
+  function walk(node, host) {
+    if (node.nodeType === Node.TEXT_NODE) return walkText(node);
+    if (node.nodeType !== Node.ELEMENT_NODE) return null;
+    const el = node;
+    const tag = el.tagName.toLowerCase();
+    if (tag === "sc-for") return walkFor(el, host);
+    if (tag === "sc-if") return walkIf(el, host);
+    if (tag === "x-import") return walkXImport(el, host);
+    if (tag === "sc-helmet") return host.helmet(el);
+    if (tag === "dc-import") return walkComponent(el, host);
+    return walkElement(el, host);
+  }
+  var warnedHoles = /* @__PURE__ */ new Set();
+  function warnUnresolved(ctx, what) {
+    const key = (ctx?.__name || "?") + "\0" + what;
+    if (warnedHoles.has(key)) return;
+    warnedHoles.add(key);
+    console.warn("[dc-runtime] " + (ctx?.__name || "template") + ": " + what);
+  }
+  function walkText(node) {
+    const txt = node.nodeValue ?? "";
+    if (!txt.includes("{{")) {
+      if (!txt.trim() && !txt.includes(" ")) return null;
+      return () => txt;
+    }
+    const parts = txt.split(/\{\{([\s\S]+?)\}\}/g);
+    return (vals, ctx, key) => h(
+      getReact().Fragment,
+      { key },
+      ...parts.map((p, i) => {
+        if (!(i & 1)) return p;
+        const v = resolve(vals, p);
+        if (v === void 0) {
+          if (!ctx?.__streamingNow) {
+            if (document.body?.hasAttribute("data-dc-editor-on")) {
+              return h(
+                "span",
+                { key: i, className: "sc-interp sc-unresolved" },
+                "{{ " + p.trim() + " }}"
+              );
+            }
+            warnUnresolved(
+              ctx,
+              "{{ " + p.trim() + " }} never resolved \u2014 rendered as empty"
+            );
+            return null;
+          }
+          return h(
+            "span",
+            { key: i, className: "sc-interp sc-missing" },
+            p.trim()
+          );
+        }
+        if (getReact().isValidElement(v) || Array.isArray(v)) {
+          return h(getReact().Fragment, { key: i }, v);
+        }
+        if (v === null || typeof v === "boolean") return null;
+        return h("span", { key: i, className: "sc-interp" }, String(v));
+      })
+    );
+  }
+  function walkFor(el, host) {
+    const listGet = compileAttr(el.getAttribute("list") || "");
+    const asName = el.getAttribute("as") || "item";
+    const hintN = parseInt(el.getAttribute("hint-placeholder-count") || "0", 10);
+    const kids = walkChildren(el, host);
+    const listSrc = el.getAttribute("list") || "";
+    return (vals, ctx, key) => {
+      let list = listGet(vals);
+      if (!Array.isArray(list)) {
+        if (!ctx?.__streamingNow) {
+          if (list !== void 0 && list !== null) {
+            warnUnresolved(
+              ctx,
+              'sc-for list="' + listSrc + '" is not an array (' + typeof list + ")"
+            );
+          }
+          list = [];
+        } else {
+          list = hintN > 0 ? Array(hintN).fill(void 0) : [];
+        }
+      }
+      return h(
+        getReact().Fragment,
+        { key },
+        list.map((item, i) => {
+          const sub = { ...vals, [asName]: item, $index: i };
+          return h(
+            getReact().Fragment,
+            { key: i },
+            kids.map((b, j) => b(sub, ctx, j))
+          );
+        })
+      );
+    };
+  }
+  function walkIf(el, host) {
+    const valGet = compileAttr(el.getAttribute("value") || "");
+    const hintRaw = el.getAttribute("hint-placeholder-val");
+    const hintGet = hintRaw != null ? compileAttr(hintRaw) : null;
+    const kids = walkChildren(el, host);
+    return (vals, ctx, key) => {
+      let v = valGet(vals);
+      if (v === void 0 && hintGet && ctx?.__streamingNow) v = hintGet(vals);
+      return v ? h(
+        getReact().Fragment,
+        { key },
+        kids.map((b, j) => b(vals, ctx, j))
+      ) : null;
+    };
+  }
+  function walkComponent(el, host) {
+    const name = el.getAttribute("name") || el.getAttribute("component") || "";
+    el.removeAttribute("name");
+    el.removeAttribute("component");
+    const tplId = el.getAttribute("data-dc-tpl");
+    const styleRaw = el.getAttribute("style");
+    el.removeAttribute("style");
+    const styleGet = styleRaw != null ? compileAttr(styleRaw) : null;
+    const { propGetters, hintSize } = collectProps(el, "dc-import", host);
+    const kids = walkChildren(el, host);
+    return (vals, ctx, key) => {
+      const props = {
+        key,
+        __hintSize: hintSize,
+        __tplId: tplId,
+        __hostStyle: styleGet ? hostPositionStyle(styleGet(vals)) : void 0
+      };
+      for (const [k, g] of propGetters) {
+        const v = g(vals);
+        if (k === "dcProps") {
+          if (v && typeof v === "object") Object.assign(props, v);
+          continue;
+        }
+        props[k] = v;
+      }
+      if (kids.length) props.children = kids.map((b, j) => b(vals, ctx, j));
+      return h(host.component(name), props);
+    };
+  }
+  function walkXImport(el, host) {
+    const globalNameGet = compileAttr(
+      el.getAttribute("component-from-global-scope") || ""
+    );
+    const exportNameGet = compileAttr(
+      el.getAttribute("component") || el.getAttribute("name") || ""
+    );
+    const fromRaw = el.getAttribute("from") || (el.getAttribute("component-from-global-scope") ? "" : el.getAttribute("src") || el.getAttribute("import") || "");
+    const urls = fromRaw.trim() ? fromRaw.trim().split(/\s+/) : [];
+    const url = urls.length ? urls[urls.length - 1] : "";
+    const kindOf = (u) => /\.(jsx|tsx)(\?|#|$)/i.test(u) ? "jsx" : "js";
+    const tplId = el.getAttribute("data-dc-tpl");
+    const styleRaw = el.getAttribute("style");
+    el.removeAttribute("style");
+    const styleGet = styleRaw != null ? compileAttr(styleRaw) : null;
+    const wrap = tplId != null || styleGet != null;
+    const { propGetters, hintSize } = collectProps(el, "x-import", host);
+    const hasContent = el.children.length > 0 || !!(el.textContent || "").trim();
+    const kids = hasContent ? walkChildren(el, host) : [];
+    const urlBindable = fromRaw.includes("{{");
+    if (urls.length && !urlBindable) {
+      let prev;
+      for (const u of urls) prev = host.loadExternal(kindOf(u), u, prev);
+    }
+    const evalName = (g, vals) => {
+      const v = g(vals);
+      const s = v == null ? "" : String(v);
+      return s.includes("{{") ? "" : s;
+    };
+    return (vals, ctx, key) => {
+      const globalName = evalName(globalNameGet, vals);
+      const name = globalName || evalName(exportNameGet, vals);
+      const C = !name || urlBindable ? null : globalName ? host.resolveExternalGlobal(url, globalName) : host.resolveExternal(url, name);
+      const hostStyle = styleGet ? hostPositionStyle(styleGet(vals)) : void 0;
+      const wrapper = wrap ? {
+        key,
+        className: "sc-host-x",
+        "data-dc-tpl": tplId,
+        style: hostStyle || { display: "contents" }
+      } : null;
+      if (!C) {
+        const error = urlBindable ? "x-import `from` cannot contain {{ \u2026 }} \u2014 module URLs are resolved at parse time; use a literal URL" : host.resolveExternalError(url, name);
+        const ph = host.placeholder({
+          key: wrapper ? void 0 : key,
+          name,
+          hintSize,
+          error
+        });
+        return wrapper ? h("div", wrapper, ph) : ph;
+      }
+      const props = wrapper ? {} : { key };
+      let unresolvedHole = false;
+      for (const [k, g] of propGetters) {
+        if (k === "component" || k === "componentFromGlobalScope" || k === "from") {
+          continue;
+        }
+        const v = g(vals);
+        if (v === void 0) unresolvedHole = true;
+        if (k === "dcProps") {
+          if (v && typeof v === "object") Object.assign(props, v);
+          continue;
+        }
+        props[k] = v;
+      }
+      if (unresolvedHole && ctx?.__htmlStreamingNow) {
+        const ph = host.placeholder({
+          key: wrapper ? void 0 : key,
+          name,
+          hintSize,
+          error: null
+        });
+        return wrapper ? h("div", wrapper, ph) : ph;
+      }
+      if (kids.length) props.children = kids.map((b, j) => b(vals, ctx, j));
+      return wrapper ? h("div", wrapper, h(C, props)) : h(C, props);
+    };
+  }
+  function contentKey(el) {
+    const clone = el.cloneNode(true);
+    for (const d of clone.querySelectorAll("*")) {
+      while (d.attributes.length) d.removeAttribute(d.attributes[0].name);
+    }
+    const s = clone.innerHTML;
+    let h2 = 5381;
+    for (let i = 0; i < s.length; i++) h2 = (h2 << 5) + h2 + s.charCodeAt(i) | 0;
+    return s.length + "." + (h2 >>> 0).toString(36);
+  }
+  var NEVER_CONTENT_KEYED = new Set(
+    "script style textarea option title select canvas iframe video audio".split(
+      " "
+    )
+  );
+  var NOT_INLINE_SELECTOR = ":not(" + [...INLINE_TEXT_TAGS].join(",") + ")";
+  function walkElement(el, host) {
+    const realTag = RAW_UNWRAP[el.localName] || el.localName;
+    const tplId = el.getAttribute("data-dc-tpl");
+    const inlineOnly = el.childNodes.length > 0 && !NEVER_CONTENT_KEYED.has(realTag) && el.querySelector(NOT_INLINE_SELECTOR) === null;
+    const keySuffix = inlineOnly ? "|" + contentKey(el) : "";
+    const { propGetters, pseudoClasses } = collectProps(el, "dom", host);
+    const kids = walkChildren(el, host);
+    return (vals, ctx, key) => {
+      const props = {
+        key: key + keySuffix,
+        "data-dc-tpl": tplId
+      };
+      for (const [k, g] of propGetters) {
+        let v = g(vals);
+        if (k === "style" && typeof v === "string") v = cssToObj(v);
+        if ((k === "value" || k === "checked") && v === void 0) {
+          v = k === "checked" ? false : "";
+        }
+        props[k] = v;
+      }
+      if (pseudoClasses.length) {
+        props.className = [props.className, ...pseudoClasses].filter(Boolean).join(" ");
+      }
+      return h(realTag, props, ...kids.map((b, j) => b(vals, ctx, j)));
+    };
+  }
+
+  // src/logic.ts
+  var StreamableLogic = class {
+    constructor(props) {
+      __publicField(this, "props");
+      __publicField(this, "state", {});
+      /** Back-pointer to the wrapper component, installed after construction. */
+      __publicField(this, "__host");
+      this.props = props || {};
+    }
+    setState(update, cb) {
+      this.__host && this.__host.__setLogicState(update, cb);
+    }
+    forceUpdate() {
+      this.__host && this.__host.forceUpdate();
+    }
+    componentDidMount() {
+    }
+    componentDidUpdate(_prevProps) {
+    }
+    componentWillUnmount() {
+    }
+    /** The flat object the template renders against (merged over props). */
+    renderVals() {
+      return {};
+    }
+  };
+  function evalDcLogic(src) {
+    //! nosemgrep: eval-and-function-constructor
+    const fn = new Function(
+      "DCLogic",
+      "StreamableLogic",
+      "React",
+      src + '\n;return (typeof Component!=="undefined"&&Component)||undefined;'
+    );
+    return fn(StreamableLogic, StreamableLogic, getReact());
+  }
+
+  // src/component.ts
+  function shallowEqual(a, b) {
+    if (!b) return false;
+    const ak = Object.keys(a).filter((k) => k !== "children");
+    const bk = Object.keys(b).filter((k) => k !== "children");
+    if (ak.length !== bk.length) return false;
+    for (const k of ak) if (a[k] !== b[k]) return false;
+    return true;
+  }
+  function Placeholder({
+    name,
+    hintSize,
+    streaming,
+    error
+  }) {
+    const [w, hgt] = (hintSize || "100%,60px").split(",");
+    return h(
+      "div",
+      {
+        className: "sc-placeholder" + (streaming ? " sc-streaming" : ""),
+        style: { width: w.trim(), height: hgt && hgt.trim() },
+        title: name
+      },
+      error ? h(
+        "div",
+        { className: "sc-placeholder-error" },
+        (name ? name + ": " : "") + error
+      ) : null
+    );
+  }
+  function hintToMin(hint) {
+    if (!hint) return void 0;
+    const [w, hgt] = hint.split(",");
+    return { minWidth: w.trim(), minHeight: hgt && hgt.trim() };
+  }
+  function createComponentFactory(registry, ensureFetched) {
+    const React = getReact();
+    const AncestorContext = React.createContext([]);
+    class StreamableComponent extends React.Component {
+      constructor(props) {
+        super(props);
+        __publicField(this, "__name");
+        __publicField(this, "__sub");
+        __publicField(this, "__needsDidMount", false);
+        /** Snapshot of the registry's streaming flags taken at render time —
+         *  builders read it off the RenderCtx (this) to pick placeholder vs
+         *  render-nothing for unresolved values. */
+        __publicField(this, "__streamingNow", false);
+        __publicField(this, "__htmlStreamingNow", false);
+        /** When a construct throws, remember the (class, registry.ver, props)
+         *  triple so render-time reconcile doesn't re-attempt it on every parent
+         *  re-render. A registry bump (new class, template, external module
+         *  resolving via bumpAll) changes `ver` and breaks the memo so an
+         *  env-dependent constructor can self-heal. */
+        __publicField(this, "__failedLogic", null);
+        __publicField(this, "__failedUserProps", null);
+        __publicField(this, "__failedVer", -1);
+        /** Per-instance constructor error — kept here (not on the registry entry)
+         *  so one instance's successful construct can't hide a sibling's failure,
+         *  and a construct can never wipe an eval error `updateJs` recorded on
+         *  `r.logicError`. */
+        __publicField(this, "__ctorError", null);
+        __publicField(this, "logic");
+        this.__name = props.__name;
+        this.state = { __v: 0, __err: null };
+        this.__sub = () => {
+          if (this.state.__err) this.setState({ __err: null });
+          this.forceUpdate();
+        };
+        this.__makeLogic(registry.get(this.__name).Logic, null);
+        ensureFetched(this.__name);
+      }
+      /** Error-boundary hook: a render crash anywhere in this DC's subtree
+       *  (its own template, an x-import'd component, a child DC without its
+       *  own deeper boundary) lands here instead of unmounting the page. */
+      static getDerivedStateFromError(e) {
+        return { __err: e instanceof Error && e.message ? e.message : String(e) };
+      }
+      componentDidCatch(e, info) {
+        console.error(
+          "[dc-runtime] render error in <" + this.__name + ">:",
+          e,
+          info?.componentStack || ""
+        );
+      }
+      /** Instantiate the logic class (or the no-op base) and adopt `prevState`
+       *  over its initial state — used both at mount and on hot-swap. */
+      __makeLogic(Logic, prevState) {
+        const L = Logic || StreamableLogic;
+        try {
+          this.logic = new L(this.__userProps());
+          this.__failedLogic = null;
+          this.__failedUserProps = null;
+          this.__ctorError = null;
+        } catch (e) {
+          console.error(e);
+          this.__failedLogic = Logic;
+          this.__failedUserProps = this.__userProps();
+          this.__failedVer = registry.get(this.__name).ver;
+          this.__ctorError = this.__name + ": " + (e instanceof Error && e.message ? e.message : String(e));
+          this.logic = new StreamableLogic(
+            this.__userProps()
+          );
+        }
+        this.logic.__host = this;
+        if (prevState)
+          this.logic.state = { ...this.logic.state || {}, ...prevState };
+      }
+      /** The props the author's logic + template see — internal __-prefixed
+       *  wiring stripped. */
+      __userProps() {
+        const { __name, __hintSize, __tplId, __hostStyle, ...rest } = this.props;
+        return rest;
+      }
+      __setLogicState(update, cb) {
+        const prev = this.logic.state;
+        const patch = typeof update === "function" ? update(prev) : update;
+        this.logic.state = { ...prev, ...patch };
+        this.setState((s) => ({ __v: s.__v + 1 }), cb);
+      }
+      /** Swap the logic instance when the registry's Logic class changed
+       *  (streaming completion, hot reload). State carries over; didMount
+       *  re-fires after the swap commits so refs exist. */
+      __reconcileLogic() {
+        const r = registry.get(this.__name);
+        const Next = r.Logic;
+        const Cur = this.logic.constructor;
+        if (Next === Cur || !Next && Cur === StreamableLogic || Next === this.__failedLogic && r.ver === this.__failedVer && shallowEqual(this.__userProps(), this.__failedUserProps)) {
+          return;
+        }
+        if (!this.__needsDidMount) {
+          try {
+            this.logic.componentWillUnmount();
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        this.__makeLogic(Next, this.logic.state);
+        this.__needsDidMount = true;
+      }
+      componentDidMount() {
+        registry.get(this.__name).subs.add(this.__sub);
+        try {
+          this.logic.componentDidMount();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      componentDidUpdate(prevProps) {
+        this.logic.props = this.__userProps();
+        if (this.__needsDidMount) {
+          if (this.state.__err || !registry.get(this.__name).tpl) return;
+          this.__needsDidMount = false;
+          try {
+            this.logic.componentDidMount();
+          } catch (e) {
+            console.error(e);
+          }
+        } else {
+          try {
+            this.logic.componentDidUpdate(prevProps);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+      componentWillUnmount() {
+        registry.get(this.__name).subs.delete(this.__sub);
+        if (!this.__needsDidMount) {
+          try {
+            this.logic.componentWillUnmount();
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      }
+      render() {
+        const r = registry.get(this.__name);
+        const cls = "sc-host" + (r.htmlStreaming ? " sc-streaming-html" : "") + (r.jsStreaming ? " sc-streaming-js" : "");
+        const hintStyle = r.htmlStreaming ? hintToMin(this.props.__hintSize) : void 0;
+        const hostStyle = this.props.__hostStyle || hintStyle ? { ...hintStyle || {}, ...this.props.__hostStyle || {} } : void 0;
+        const hostBase = {
+          className: cls,
+          style: hostStyle,
+          "data-sc-name": this.__name,
+          "data-dc-tpl": this.props.__tplId
+        };
+        const chain = Array.isArray(this.context) ? this.context : [];
+        if (chain.includes(this.__name)) {
+          const cycle = [
+            ...chain.slice(chain.indexOf(this.__name)),
+            this.__name
+          ].join(" \u2192 ");
+          return h(
+            "div",
+            { ...hostBase, className: cls + " sc-has-error" },
+            h(Placeholder, {
+              name: this.__name,
+              hintSize: this.props.__hintSize,
+              error: "circular import: " + cycle
+            })
+          );
+        }
+        if (this.state.__err) {
+          return h(
+            "div",
+            { ...hostBase, className: cls + " sc-has-error" },
+            h(
+              "div",
+              { className: "sc-logic-error", "data-omelette-chrome": "" },
+              this.__name + ": " + this.state.__err
+            ),
+            h(Placeholder, {
+              name: this.__name,
+              hintSize: this.props.__hintSize,
+              error: this.state.__err
+            })
+          );
+        }
+        this.__reconcileLogic();
+        if (!r.tpl) {
+          return h(
+            "div",
+            hostBase,
+            h(Placeholder, { name: this.__name, hintSize: this.props.__hintSize })
+          );
+        }
+        const userProps = this.__userProps();
+        this.logic.props = userProps;
+        let vals = userProps;
+        let renderErr = r.logicError || this.__ctorError;
+        try {
+          vals = { ...userProps, ...this.logic.renderVals() || {} };
+        } catch (e) {
+          console.error(e);
+          renderErr = this.__name + ".renderVals(): " + (e instanceof Error && e.message ? e.message : String(e));
+        }
+        this.__streamingNow = !!(r.htmlStreaming || r.jsStreaming);
+        this.__htmlStreamingNow = !!r.htmlStreaming;
+        return h(
+          "div",
+          { ...hostBase, className: cls + (renderErr ? " sc-has-error" : "") },
+          renderErr && h(
+            "div",
+            { className: "sc-logic-error", "data-omelette-chrome": "" },
+            renderErr
+          ),
+          h(
+            AncestorContext.Provider,
+            { value: [...chain, this.__name] },
+            r.tpl(vals, this)
+          )
+        );
+      }
+    }
+    __publicField(StreamableComponent, "contextType", AncestorContext);
+    const named = /* @__PURE__ */ new Map();
+    function getDC(name) {
+      const hit = named.get(name);
+      if (hit) return hit;
+      function Dispatcher(p) {
+        const [, setTick] = React.useState(0);
+        React.useEffect(() => {
+          const sub = () => setTick((n) => n + 1);
+          registry.get(name).subs.add(sub);
+          return () => {
+            registry.get(name).subs.delete(sub);
+          };
+        }, []);
+        ensureFetched(name);
+        return h(StreamableComponent, { ...p, __name: name });
+      }
+      Dispatcher.displayName = name;
+      named.set(name, Dispatcher);
+      return Dispatcher;
+    }
+    return {
+      getDC,
+      StreamableComponent
+    };
+  }
+
+  // src/bundled.ts
+  function bundledBlob(url) {
+    const blobs = window.__resourceBlobs;
+    const b = blobs ? blobs[url.split("#")[0]] : void 0;
+    return b instanceof Blob ? b : null;
+  }
+
+  // src/cdn.ts
+  var REACT_URL = "https://unpkg.com/react@18.3.1/umd/react.production.min.js";
+  var REACT_SRI = "sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z";
+  var REACT_DOM_URL = "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js";
+  var REACT_DOM_SRI = "sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1";
+  var BABEL_URL = "https://unpkg.com/@babel/standalone@7.29.0/babel.min.js";
+  var BABEL_SRI = "sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y";
+  function cdnScriptFor(url, sri) {
+    const res = window.__resources;
+    const v = res ? res[url] : void 0;
+    return typeof v === "string" && v ? { src: v } : { src: url, integrity: sri };
+  }
+
+  // src/external.ts
+  var isCustomElementName = (n) => !n.includes(".") && n.includes("-");
+  function isRenderableType(g) {
+    if (typeof g === "function") return !isElementClass(g);
+    return typeof g === "object" && g !== null && typeof g.$typeof === "symbol";
+  }
+  function resolveDottedPath(root, name) {
+    let cur = root;
+    for (const seg of name.split(".")) {
+      if (cur == null) return void 0;
+      cur = cur[seg];
+    }
+    return cur;
+  }
+  var GLOBAL_POLL_INTERVAL_MS = 50;
+  var GLOBAL_POLL_TIMEOUT_MS = 3e4;
+  function createExternalModules(onResolved) {
+    const cache = /* @__PURE__ */ new Map();
+    let babelLoading = null;
+    const reportedMissing = /* @__PURE__ */ new Map();
+    const polling = /* @__PURE__ */ new Set();
+    function ensureBabel() {
+      if (window.Babel) return Promise.resolve();
+      if (babelLoading) return babelLoading;
+      const babel = cdnScriptFor(BABEL_URL, BABEL_SRI);
+      babelLoading = new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = babel.src;
+        if (babel.integrity) {
+          s.integrity = babel.integrity;
+          s.crossOrigin = "anonymous";
+        }
+        s.onload = () => res();
+        s.onerror = rej;
+        document.head.appendChild(s);
+      });
+      return babelLoading;
+    }
+    const pending = /* @__PURE__ */ new Map();
+    function load(kind, url, after) {
+      const existing = pending.get(url);
+      if (existing) return existing;
+      cache.set(url, null);
+      console.info("[dc-runtime] x-import: loading", url, "(" + kind + ")");
+      const ready = Promise.all([
+        kind === "jsx" ? ensureBabel() : Promise.resolve(),
+        after ?? Promise.resolve()
+      ]);
+      const p = ready.then(() => {
+        const pre = bundledBlob(url);
+        if (pre) return pre.text();
+        return fetch(url).then((r) => {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        });
+      }).then((src) => {
+        const code = kind === "jsx" ? window.Babel.transform(src, {
+          filename: url,
+          presets: ["react", "typescript"]
+        }).code : src;
+        const module = { exports: {} };
+        const before = new Set(Object.keys(window));
+        //! nosemgrep: eval-and-function-constructor
+        new Function("React", "module", "exports", "require", code)(
+          getReact(),
+          module,
+          module.exports,
+          () => ({})
+        );
+        const globals = {};
+        for (const k of Object.keys(window)) {
+          if (!before.has(k) && typeof window[k] === "function") {
+            globals[k] = window[k];
+          }
+        }
+        cache.set(url, { mod: module.exports, globals });
+        console.info(
+          "[dc-runtime] x-import: loaded",
+          url,
+          "\u2014 exports:",
+          Object.keys(module.exports),
+          "window globals:",
+          Object.keys(globals)
+        );
+        onResolved();
+      }).catch((e) => {
+        cache.set(url, {
+          mod: {},
+          globals: {},
+          error: "failed to load: " + (e instanceof Error && e.message ? e.message : String(e))
+        });
+        console.error(
+          "[dc-runtime] x-import: FAILED to load",
+          url,
+          "(" + kind + ")",
+          e
+        );
+        onResolved();
+      });
+      pending.set(url, p);
+      return p;
+    }
+    function resolve2(url, name) {
+      const entry = cache.get(url);
+      if (!entry) return null;
+      const { mod, globals } = entry;
+      const C = mod && mod[name] || globals && globals[name] || typeof window !== "undefined" && window[name] || mod && mod.default;
+      if (typeof C === "function") return C;
+      const key = url + "\0" + name;
+      if (!reportedMissing.has(key)) {
+        reportedMissing.set(
+          key,
+          entry.error || 'no export named "' + name + '" (has: ' + Object.keys(mod).join(", ") + ")"
+        );
+        console.error(
+          "[dc-runtime] x-import: module",
+          url,
+          "loaded but has no component named",
+          JSON.stringify(name),
+          "\u2014 available exports:",
+          Object.keys(mod),
+          "window globals:",
+          Object.keys(globals),
+          ". The module must `module.exports = {" + name + "}` or set `window." + name + "`."
+        );
+      }
+      return null;
+    }
+    function waitForGlobal(name) {
+      if (polling.has(name)) return;
+      polling.add(name);
+      const started = Date.now();
+      const isCE = isCustomElementName(name);
+      const tick = () => {
+        const found = isCE ? customElements.get(name) : isRenderableType(resolveDottedPath(window, name));
+        if (found) {
+          polling.delete(name);
+          onResolved();
+          return;
+        }
+        if (Date.now() - started >= GLOBAL_POLL_TIMEOUT_MS) {
+          console.warn(
+            "[dc-runtime] x-import: global",
+            JSON.stringify(name),
+            "never appeared on window after " + GLOBAL_POLL_TIMEOUT_MS + "ms"
+          );
+          return;
+        }
+        setTimeout(tick, GLOBAL_POLL_INTERVAL_MS);
+      };
+      setTimeout(tick, GLOBAL_POLL_INTERVAL_MS);
+    }
+    function resolveGlobal(url, name) {
+      const isCE = isCustomElementName(name);
+      if (!url) {
+        if (isCE) {
+          if (customElements.get(name)) return name;
+          waitForGlobal(name);
+          return null;
+        }
+        const g2 = resolveDottedPath(window, name);
+        if (isRenderableType(g2)) return g2;
+        waitForGlobal(name);
+        return null;
+      }
+      const entry = cache.get(url);
+      if (!entry) return null;
+      if (isCE && customElements.get(name)) return name;
+      const g = entry.globals[name] ?? resolveDottedPath(window, name);
+      if (isRenderableType(g)) return g;
+      if (name.includes(".")) return null;
+      const key = url + "\0global\0" + name;
+      if (!reportedMissing.has(key)) {
+        reportedMissing.set(key, null);
+        if (isCE && !customElements.get(name)) {
+          console.warn(
+            "[dc-runtime] x-import:",
+            url,
+            "loaded but no custom element",
+            JSON.stringify(name),
+            "is registered and window." + name + " is not a function \u2014 rendering <" + name + "> as an unknown element."
+          );
+        }
+      }
+      return name;
+    }
+    function getError(url, name) {
+      const entry = cache.get(url);
+      if (entry?.error) return entry.error;
+      return reportedMissing.get(url + "\0" + name) || null;
+    }
+    return { load, resolve: resolve2, resolveGlobal, getError };
+  }
+  function isElementClass(g) {
+    try {
+      return typeof g === "function" && typeof HTMLElement !== "undefined" && g.prototype instanceof HTMLElement;
+    } catch {
+      return false;
+    }
+  }
+
+  // src/atomics.ts
+  var ATOMIC_CSS = (
+    // layout
+    ".fx{display:flex}.col{display:flex;flex-direction:column}.grid{display:grid}.ac{align-items:center}.jc{justify-content:center}.jb{justify-content:space-between}.f1{flex:1}.noshrink{flex-shrink:0}.wrap{flex-wrap:wrap}.fw5{font-weight:500}.fw6{font-weight:600}.fw7{font-weight:700}.fw8{font-weight:800}.fs11{font-size:11px}.fs12{font-size:12px}.fs13{font-size:13px}.fs14{font-size:14px}.fs15{font-size:15px}.fs16{font-size:16px}.fs20{font-size:20px}.fs22{font-size:22px}.upper{text-transform:uppercase}.tc{text-align:center}.nowrap{white-space:nowrap}.gap8{gap:8px}.gap10{gap:10px}.gap12{gap:12px}.gap16{gap:16px}.gap24{gap:24px}.m0{margin:0}.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mb8{margin-bottom:8px}.mb12{margin-bottom:12px}.mb16{margin-bottom:16px}.posrel{position:relative}.posabs{position:absolute}.round{border-radius:50%}.ohide{overflow:hidden}.bbox{box-sizing:border-box}.pointer{cursor:pointer}.w100{width:100%}.b0{border:none}"
+  );
+
+  // src/helmet.ts
+  var DESIGN_DOC_MODE_RE = /<meta\b[^>]*\bname\s*=\s*["']design_doc_mode["'][^>]*\b(?:content|value)\s*=\s*["'](\w+)["']/i;
+  var CANVAS_BG_LIGHT = "#f0eee6";
+  var CANVAS_BG_DARK = "#2e2c26";
+  function createHelmetManager(doc, isStreaming) {
+    const mounted = /* @__PURE__ */ new Set();
+    const live = /* @__PURE__ */ new Map();
+    let designDocMode = null;
+    let canvasStyleEl = null;
+    let appTheme = "light";
+    try {
+      const ds = doc.documentElement.dataset.theme;
+      appTheme = ds === "dark" || ds === "light" ? ds : new URLSearchParams(doc.defaultView?.location.search ?? "").get(
+        "theme"
+      ) === "dark" ? "dark" : "light";
+    } catch {
+    }
+    function applyCanvasBg() {
+      if (!canvasStyleEl) return;
+      const bg = appTheme === "dark" ? CANVAS_BG_DARK : CANVAS_BG_LIGHT;
+      canvasStyleEl.textContent = `html,body{background:${bg}}#dc-root>.sc-host{position:relative}`;
+    }
+    function postDesignMode(mode) {
+      if (window.parent === window) return;
+      try {
+        window.parent.postMessage({ type: "__dc_design_mode", mode }, "*");
+      } catch {
+      }
+    }
+    function setDesignDocMode(mode) {
+      if (mode === designDocMode) return;
+      designDocMode = mode;
+      postDesignMode(mode);
+      if (mode === "canvas") {
+        doc.documentElement.setAttribute("data-dc-canvas", "");
+        canvasStyleEl = doc.createElement("style");
+        canvasStyleEl.setAttribute("data-dc-canvas", "");
+        applyCanvasBg();
+        doc.head.appendChild(canvasStyleEl);
+      } else {
+        doc.documentElement.removeAttribute("data-dc-canvas");
+        canvasStyleEl?.remove();
+        canvasStyleEl = null;
+      }
+    }
+    window.addEventListener("message", (e) => {
+      const type = e.data && e.data.type;
+      if (type === "__dc_theme") {
+        const t = e.data.theme;
+        if (t === "light" || t === "dark") {
+          appTheme = t;
+          applyCanvasBg();
+        }
+        return;
+      }
+      if (!designDocMode || type !== "__dc_probe") return;
+      postDesignMode(designDocMode);
+    });
+    function compile(node) {
+      const raw = [...node.children];
+      const helmetClosed = node.nextSibling != null || node.parentNode?.nextSibling != null;
+      if (node.hasAttribute("data-dc-atomics") && !mounted.has("__dc-atomics")) {
+        mounted.add("__dc-atomics");
+        const el = doc.createElement("style");
+        el.id = "__dc-atomics";
+        el.textContent = ATOMIC_CSS;
+        doc.head.appendChild(el);
+      }
+      return (_vals, ctx) => {
+        const name = ctx && ctx.__name || "";
+        const streaming = !!(name && isStreaming(name));
+        for (let i = 0; i < raw.length; i++) {
+          const child = raw[i];
+          const tag = child.tagName;
+          const mayBePartial = streaming && !helmetClosed && i === raw.length - 1;
+          if (tag === "SCRIPT") {
+            if (mayBePartial) continue;
+            const key = "SCRIPT|" + (child.getAttribute("src") || child.textContent || "");
+            if (mounted.has(key)) continue;
+            mounted.add(key);
+            const el = doc.createElement("script");
+            for (const { name: an, value } of [...child.attributes])
+              el.setAttribute(an, value);
+            if (child.textContent) el.textContent = child.textContent;
+            doc.head.appendChild(el);
+          } else if (tag === "LINK" || tag === "META") {
+            if (mayBePartial) continue;
+            const key = tag + "|" + (child.getAttribute("href") || child.getAttribute("src") || child.outerHTML);
+            if (mounted.has(key)) continue;
+            mounted.add(key);
+            doc.head.appendChild(child.cloneNode(true));
+          } else {
+            const key = name + "|" + i;
+            let el = live.get(key);
+            if (!el || el.tagName !== tag) {
+              if (el) el.remove();
+              el = doc.createElement(tag.toLowerCase());
+              live.set(key, el);
+              doc.head.appendChild(el);
+            }
+            for (const { name: an, value } of [...child.attributes]) {
+              if (el.getAttribute(an) !== value) el.setAttribute(an, value);
+            }
+            if (el.textContent !== child.textContent)
+              el.textContent = child.textContent;
+          }
+        }
+        return null;
+      };
+    }
+    return { compile, setDesignDocMode };
+  }
+
+  // src/pseudo.ts
+  function createPseudoSheet(doc) {
+    let el = null;
+    const cache = /* @__PURE__ */ new Map();
+    let n = 0;
+    return (pseudo, css) => {
+      const k = pseudo + "|" + css;
+      const hit = cache.get(k);
+      if (hit) return hit;
+      if (!el) {
+        el = doc.createElement("style");
+        doc.head.appendChild(el);
+      }
+      const cls = "scp" + (n++).toString(36);
+      const sel = pseudo === "before" || pseudo === "after" ? "." + cls + "::" + pseudo : "." + cls + ":" + pseudo;
+      el.sheet.insertRule(sel + "{" + css + "}", el.sheet.cssRules.length);
+      cache.set(k, cls);
+      return cls;
+    };
+  }
+
+  // src/registry.ts
+  function createRegistry() {
+    const entries = /* @__PURE__ */ Object.create(null);
+    function get(name) {
+      return entries[name] || (entries[name] = {
+        html: "",
+        tpl: null,
+        Logic: null,
+        jsStreaming: false,
+        htmlStreaming: false,
+        ver: 0,
+        subs: /* @__PURE__ */ new Set(),
+        fetched: false
+      });
+    }
+    function bump(name) {
+      const r = get(name);
+      r.ver++;
+      for (const fn of r.subs) fn();
+    }
+    return {
+      entries,
+      get,
+      bump,
+      bumpAll() {
+        for (const n in entries) bump(n);
+      }
+    };
+  }
+
+  // src/runtime.ts
+  var COMPONENT_DIR = ".";
+  function createRuntime(doc = document) {
+    const registry = createRegistry();
+    const pseudoClass = createPseudoSheet(doc);
+    const helmet = createHelmetManager(
+      doc,
+      (name) => registry.get(name).htmlStreaming
+    );
+    const external = createExternalModules(() => registry.bumpAll());
+    const factory = createComponentFactory(registry, ensureFetched);
+    const host = {
+      component: (name) => factory.getDC(name),
+      placeholder: (props) => h(Placeholder, props),
+      helmet: (node) => helmet.compile(node),
+      loadExternal: (kind, url, after) => external.load(kind, url, after),
+      resolveExternal: (url, name) => external.resolve(url, name),
+      resolveExternalGlobal: (url, name) => external.resolveGlobal(url, name),
+      resolveExternalError: (url, name) => external.getError(url, name),
+      pseudoClass
+    };
+    function ensureFetched(name) {
+      const r = registry.get(name);
+      if (r.fetched) return;
+      r.fetched = true;
+      const url = COMPONENT_DIR + "/" + encodeURIComponent(name) + ".dc.html";
+      const res = window.__resources;
+      const pre = res ? res[url] : void 0;
+      const target = typeof pre === "string" && pre ? pre : url;
+      const blob = bundledBlob(target);
+      (blob ? blob.text() : fetch(target).then((res2) => {
+        if (!res2.ok) {
+          console.error(
+            '[dc-runtime] sibling fetch for "' + name + '" failed:',
+            url,
+            "returned",
+            res2.status,
+            "\u2014 the reference renders as an empty placeholder."
+          );
+          return "";
+        }
+        return res2.text();
+      })).then((t) => {
+        if (!t) return;
+        const parsed = parseDcText(t);
+        if (!parsed) {
+          console.error(
+            '[dc-runtime] sibling fetch for "' + name + '":',
+            url,
+            "has no <x-d" + "c> block \u2014 not a Design Component."
+          );
+          return;
+        }
+        if (parsed.props) r.propsMeta = parsed.props;
+        if (parsed.preview) r.preview = parsed.preview;
+        if (parsed.template && !r.html) updateHtml(name, parsed.template);
+        if (parsed.js && !r.Logic) updateJs(name, parsed.js);
+      }).catch(
+        (e) => console.error(
+          '[dc-runtime] sibling fetch for "' + name + '" threw:',
+          url,
+          e
+        )
+      );
+    }
+    let rootName = null;
+    function updateHtml(name, html) {
+      const r = registry.get(name);
+      r.html = html;
+      if (name === rootName) {
+        const mode = DESIGN_DOC_MODE_RE.exec(html)?.[1] ?? null;
+        if (mode || !r.htmlStreaming) helmet.setDesignDocMode(mode);
+      }
+      try {
+        r.tpl = compileTemplate(html, host);
+      } catch (e) {
+        console.error("[dc-runtime] template compile FAILED for", name, e);
+      }
+      registry.bump(name);
+    }
+    function updateJs(name, src) {
+      const r = registry.get(name);
+      const seq = r.jsSeq = (r.jsSeq || 0) + 1;
+      try {
+        const Cls = evalDcLogic(src);
+        if (r.jsSeq !== seq) return;
+        if (typeof Cls !== "function") {
+          r.logicError = name + ".dc.html: <script data-dc-script> must define `class Component extends DCLogic`";
+        } else {
+          r.logicError = null;
+          r.Logic = Cls;
+        }
+      } catch (e) {
+        if (r.jsSeq !== seq) return;
+        console.error(
+          "[dc-runtime] logic class eval FAILED for",
+          name,
+          "\u2014 the template renders with props only.",
+          e
+        );
+        r.logicError = name + ": " + (e instanceof Error && e.message ? e.message : String(e));
+      }
+      registry.bump(name);
+    }
+    function setStreaming(name, kind, on) {
+      const r = registry.get(name);
+      if (kind === "html") r.htmlStreaming = !!on;
+      else r.jsStreaming = !!on;
+      let any = false;
+      for (const n in registry.entries) {
+        const e = registry.entries[n];
+        if (e && (e.htmlStreaming || e.jsStreaming)) {
+          any = true;
+          break;
+        }
+      }
+      doc.documentElement.classList.toggle("sc-dc-streaming", any);
+      registry.bump(name);
+    }
+    function dcUpdate(name, kind, content, streaming) {
+      if (streaming) registry.get(name).fetched = true;
+      if (kind === "html") {
+        setStreaming(name, "html", !!streaming);
+        updateHtml(name, content);
+      } else if (kind === "js") {
+        setStreaming(name, "js", !!streaming);
+        if (!streaming) updateJs(name, content);
+      } else if (kind === "props") {
+        const { props, preview } = parseDataProps(content);
+        const r = registry.get(name);
+        r.propsMeta = props ?? void 0;
+        r.preview = preview;
+        registry.bump(name);
+      }
+    }
+    function setProps(name, overrides) {
+      registry.get(name).propOverrides = overrides && typeof overrides === "object" ? { ...overrides } : null;
+      registry.bump(name);
+    }
+    function adoptParsed(name, parsed) {
+      if (!parsed) return;
+      const r = registry.get(name);
+      if (parsed.props) r.propsMeta = parsed.props;
+      if (parsed.preview) r.preview = parsed.preview;
+      if (parsed.template) updateHtml(name, parsed.template);
+      if (parsed.js) updateJs(name, parsed.js);
+    }
+    return {
+      registry,
+      getDC: factory.getDC,
+      updateHtml,
+      updateJs,
+      dcUpdate,
+      setProps,
+      adoptParsed,
+      setRootName: (name) => {
+        rootName = name;
+      },
+      markFetched: (name) => {
+        registry.get(name).fetched = true;
+      },
+      annotatedTemplate: (name) => {
+        const r = registry.get(name);
+        return r.tpl && r.tpl.__annotated || null;
+      },
+      templateSource: (name) => registry.get(name).html || null,
+      StreamableLogic
+    };
+  }
+
+  // src/stream-state.ts
+  function createStreamTracker(staleMs = 6e4, now = Date.now) {
+    const since = /* @__PURE__ */ new Map();
+    const liveOne = (n) => {
+      const t = since.get(n);
+      if (t === void 0) return false;
+      if (now() - t > staleMs) {
+        since.delete(n);
+        return false;
+      }
+      return true;
+    };
+    return {
+      push(name, streaming, viewportKey) {
+        if (viewportKey === "dc-model") return;
+        if (streaming) since.set(name, now());
+        else since.delete(name);
+      },
+      live(name) {
+        if (name !== void 0) return liveOne(name);
+        for (const n of [...since.keys()]) if (liveOne(n)) return true;
+        return false;
+      }
+    };
+  }
+
+  // src/index.ts
+  function hideRawTemplate() {
+    const s = document.createElement("style");
+    s.textContent = "x-dc{display:none!important}";
+    document.head.appendChild(s);
+  }
+  function loadScript(src, integrity) {
+    return new Promise((resolve2, reject) => {
+      //! nosemgrep: create-script-element
+      const s = document.createElement("script");
+      s.src = src;
+      if (integrity) {
+        s.integrity = integrity;
+        s.crossOrigin = "anonymous";
+      }
+      s.async = false;
+      s.onload = () => resolve2();
+      s.onerror = () => reject(new Error(`failed to load ${src}`));
+      document.head.appendChild(s);
+    });
+  }
+  function loadReactUmd() {
+    const w = window;
+    if (w.React && w.ReactDOM) return Promise.resolve();
+    const react = cdnScriptFor(REACT_URL, REACT_SRI);
+    const reactDom = cdnScriptFor(REACT_DOM_URL, REACT_DOM_SRI);
+    return Promise.all([
+      loadScript(react.src, react.integrity),
+      loadScript(reactDom.src, reactDom.integrity)
+    ]).then(() => void 0);
+  }
+  function init() {
+    const runtime = createRuntime(document);
+    let rootName = "Root";
+    const baseCss = document.createElement("style");
+    baseCss.textContent = BASE_CSS;
+    document.head.prepend(baseCss);
+    const notifyHost = () => {
+      if (window.parent === window) return;
+      const r = runtime.registry.entries[rootName];
+      try {
+        window.parent.postMessage(
+          {
+            type: "__dc_booted",
+            rootName,
+            propsMeta: r && r.propsMeta || null,
+            preview: r && r.preview || null
+          },
+          "*"
+        );
+      } catch {
+      }
+    };
+    const streams = createStreamTracker();
+    const api = {
+      __dcUpdate: (name, kind, content, streaming, viewportKey) => {
+        streams.push(name, streaming, viewportKey);
+        runtime.dcUpdate(name, kind, content, streaming);
+        if (name === rootName && !streaming && kind === "props") notifyHost();
+      },
+      __dcStreaming: (name) => streams.live(name),
+      __dcSetProps: (name, overrides) => runtime.setProps(name, overrides),
+      /** Name of the component currently mounted as the page root — DC tools
+       *  push their template-stream here when targeting "the open page". */
+      __dcRootName: () => rootName,
+      /** Editor bridge — the encoded, `data-dc-tpl`-annotated template source.
+       *  The host editor parses this into its own template DOM so it can map a
+       *  rendered node (carrying the same `data-dc-tpl`) back to the source
+       *  node that emitted it. Returns the encoded form (`sc-camel-*` attrs,
+       *  `<sc-raw-*>`/`<sc-helmet>` tags); the editor decodes on serialize. */
+      __dcAnnotatedTemplate: (name) => runtime.annotatedTemplate(name),
+      /** Editor bridge — the *original* (decoded) template source. */
+      __dcTemplateSource: (name) => runtime.templateSource(name),
+      __dcBoot: () => {
+        rootName = boot(runtime, document) ?? rootName;
+        notifyHost();
+      },
+      __dcRegistry: runtime.registry.entries,
+      getDC: (name) => runtime.getDC(name),
+      // `DCLogic` is the documented base class name; `StreamableLogic` is the
+      // implementation alias kept for any project that already references it.
+      DCLogic: runtime.StreamableLogic,
+      StreamableLogic: runtime.StreamableLogic
+    };
+    Object.assign(window, api);
+    window.__dcContentKeyed = true;
+    if (document.readyState !== "loading") api.__dcBoot();
+    else document.addEventListener("DOMContentLoaded", () => api.__dcBoot());
+  }
+  hideRawTemplate();
+  loadReactUmd().then(init).catch((err) => {
+    console.error("[dc] failed to load React or boot:", err);
+    throw err;
+  });
+})();
+
+</script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#f2f2f7;--card:#ffffff;--fg:#1d1d1f;--sec:#8e8e93;--sep:rgba(60,60,67,.14);--fill:rgba(120,120,128,.12);--acc:#0a84ff;--good:#30d158;--warn:#ff9f0a;--bad:#ff453a;--shadow:0 1px 2px rgba(0,0,0,.05)}
+[data-theme="dunkel"]{--bg:#000000;--card:#1c1c1e;--fg:#f5f5f7;--sec:#98989d;--sep:rgba(84,84,88,.5);--fill:rgba(120,120,128,.22);--shadow:0 1px 2px rgba(0,0,0,.4)}
+html,body{margin:0;padding:0;background:var(--bg)}
+body{transition:background .25s}
+*{box-sizing:border-box}
+button,input{font-family:inherit;font-size:inherit;color:inherit}
+input{outline:none}
+a{color:var(--acc);text-decoration:none}
+a:hover{text-decoration:underline}
+::-webkit-scrollbar{display:none}
+@keyframes sheetUp{from{transform:translateY(48px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+</helmet>
+<div style="min-height:100vh;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;transition:background .25s,color .25s">
+
+<!-- ══════════ WOCHE ══════════ -->
+<sc-if value="{{ isWeek }}" hint-placeholder-val="{{ true }}">
+<div data-screen-label="Wochenübersicht" style="max-width:1180px;margin:0 auto;padding:0 16px calc(24px + env(safe-area-inset-bottom))">
+  <header style="display:flex;align-items:flex-end;justify-content:space-between;padding:20px 0 14px">
+    <div>
+      <div style="font-size:13px;font-weight:600;color:var(--acc);letter-spacing:.02em">{{ kwLabel }}</div>
+      <h1 style="margin:2px 0 0;font-size:30px;font-weight:700;letter-spacing:-.02em">{{ monthLabel }}</h1>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button onClick="{{ openSearch }}" aria-label="Suche" style="width:36px;height:36px;border:none;background:var(--fill);border-radius:50%;cursor:pointer;display:grid;place-items:center;color:var(--sec)"><svg viewBox="0 0 24 24" width="17" height="17"><path d="M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+      <div style="width:6px"></div>
+      <button onClick="{{ prevWeek }}" aria-label="Vorherige Woche" style="width:36px;height:36px;border:none;background:var(--fill);border-radius:50%;cursor:pointer;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+      <button onClick="{{ goToday }}" style="height:36px;padding:0 14px;border:none;background:var(--fill);border-radius:18px;cursor:pointer;font-size:14px;font-weight:600">Heute</button>
+      <button onClick="{{ nextWeek }}" aria-label="Nächste Woche" style="width:36px;height:36px;border:none;background:var(--fill);border-radius:50%;cursor:pointer;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+      <div style="width:6px"></div>
+      <button onClick="{{ openConfig }}" aria-label="Konfiguration" style="width:36px;height:36px;border:none;background:var(--fill);border-radius:50%;cursor:pointer;display:grid;place-items:center;color:var(--sec)"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 15.5A3.5 3.5 0 1012 8.5a3.5 3.5 0 000 7zM19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3 1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9 1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+      <button onClick="{{ openAccount }}" aria-label="Account" style="width:36px;height:36px;border:none;background:var(--fill);border-radius:50%;cursor:pointer;display:grid;place-items:center;color:var(--sec)"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+    </div>
+  </header>
+
+  <div style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 14px;-webkit-overflow-scrolling:touch">
+    <sc-for list="{{ days }}" as="day" hint-placeholder-count="7">
+      <button onClick="{{ day.select }}" style="flex:1;min-width:74px;border:none;cursor:pointer;border-radius:14px;padding:10px 4px 9px;display:flex;flex-direction:column;align-items:center;gap:4px;background:{{ day.pillBg }};transition:background .2s">
+        <span style="font-size:11px;font-weight:600;letter-spacing:.04em;color:{{ day.wdColor }}">{{ day.wd }}</span>
+        <span style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;background:{{ day.numBg }};color:{{ day.numColor }}">{{ day.num }}</span>
+        <span style="display:flex;align-items:center;gap:3px;color:var(--sec);font-size:11px;height:16px">
+          <sc-if value="{{ day.hasWeather }}" hint-placeholder-val="{{ true }}">
+            <svg viewBox="0 0 24 24" width="14" height="14" style="color:{{ day.wColor }}"><path d="{{ day.wPath }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span style="font-variant-numeric:tabular-nums">{{ day.temp }}°</span>
+          </sc-if>
+          <sc-if value="{{ day.noWeather }}"><span>–</span></sc-if>
+        </span>
+        <span style="display:flex;gap:3px;height:5px">
+          <sc-for list="{{ day.dots }}" as="dot" hint-placeholder-count="0"><span style="width:5px;height:5px;border-radius:50%;background:{{ dot.c }}"></span></sc-for>
+        </span>
+      </button>
+    </sc-for>
+  </div>
+
+  <!-- Mobil: ausgewählter Tag -->
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ true }}">
+    <div onTouchStart="{{ tStart }}" onTouchEnd="{{ tEnd }}" style="min-height:52vh">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;padding:6px 2px 12px">
+        <div style="font-size:19px;font-weight:700;letter-spacing:-.01em">{{ selDayTitle }}</div>
+        <div style="font-size:13px;color:var(--sec)">{{ selDayWeather }}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ selEntries }}" as="e" hint-placeholder-count="3">
+          <div onClick="{{ e.open }}" style="background:var(--card);border-radius:16px;padding:13px 15px;box-shadow:var(--shadow);cursor:{{ e.cursor }};display:flex;gap:12px;align-items:center">
+            <div style="width:4px;align-self:stretch;border-radius:2px;background:{{ e.color }}"></div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.06em;color:{{ e.color }}">{{ e.badge }}</span>
+                <span style="font-size:12px;color:var(--sec);font-variant-numeric:tabular-nums">{{ e.time }}</span>
+              </div>
+              <div style="font-size:15px;font-weight:600;margin-top:2px">{{ e.title }}</div>
+              <div style="font-size:13px;color:var(--sec);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ e.sub }}</div>
+            </div>
+            <sc-if value="{{ e.chip }}"><span style="font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;background:{{ e.chipBg }};color:{{ e.chipFg }};white-space:nowrap;animation:{{ e.chipAnim }}">{{ e.chip }}</span></sc-if>
+            <sc-if value="{{ e.check }}">
+              <button onClick="{{ e.toggle }}" aria-label="Abhaken" style="width:28px;height:28px;border-radius:50%;cursor:pointer;display:grid;place-items:center;border:2px solid {{ e.ckBorder }};background:{{ e.ckBg }};color:#fff;flex:none">
+                <sc-if value="{{ e.done }}"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+              </button>
+            </sc-if>
+          </div>
+        </sc-for>
+        <sc-if value="{{ selEmpty }}">
+          <div style="text-align:center;padding:48px 20px;color:var(--sec)">
+            <div style="font-size:15px;font-weight:600">Keine Einträge</div>
+            <div style="font-size:13px;margin-top:4px">Füge Module in der <a onClick="{{ openConfig }}" style="cursor:pointer">Konfiguration</a> hinzu.</div>
+          </div>
+        </sc-if>
+      </div>
+      <div style="text-align:center;padding:22px 0 4px;color:var(--sec);font-size:12px">← Wischen zum Tageswechsel →</div>
+    </div>
+  </sc-if>
+
+  <!-- Desktop: 7 Spalten -->
+  <sc-if value="{{ isDesktop }}">
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;align-items:start">
+      <sc-for list="{{ days }}" as="day" hint-placeholder-count="7">
+        <div style="display:flex;flex-direction:column;gap:8px;min-height:46vh;background:{{ day.colBg }};border-radius:14px;padding:8px">
+          <sc-for list="{{ day.entries }}" as="e" hint-placeholder-count="1">
+            <div onClick="{{ e.open }}" style="background:var(--card);border-radius:12px;padding:10px 11px;box-shadow:var(--shadow);cursor:{{ e.cursor }};border-left:3px solid {{ e.color }}">
+              <div style="display:flex;justify-content:space-between;gap:6px;align-items:center">
+                <span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:{{ e.color }}">{{ e.badge }}</span>
+                <span style="font-size:11px;color:var(--sec);font-variant-numeric:tabular-nums">{{ e.time }}</span>
+              </div>
+              <div style="font-size:13px;font-weight:600;margin-top:3px;line-height:1.3">{{ e.title }}</div>
+              <sc-if value="{{ e.chip }}"><span style="display:inline-block;margin-top:6px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:12px;background:{{ e.chipBg }};color:{{ e.chipFg }};animation:{{ e.chipAnim }}">{{ e.chip }}</span></sc-if>
+              <sc-if value="{{ e.check }}">
+                <button onClick="{{ e.toggle }}" style="margin-top:6px;height:26px;padding:0 10px;border-radius:13px;cursor:pointer;font-size:11px;font-weight:600;border:1.5px solid {{ e.ckBorder }};background:{{ e.ckBg }};color:{{ e.ckFg }}">{{ e.ckLabel }}</button>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<!-- ══════════ KONFIGURATION ══════════ -->
+<sc-if value="{{ isConfig }}">
+<div data-screen-label="Konfiguration" style="max-width:640px;margin:0 auto;padding:0 16px calc(32px + env(safe-area-inset-bottom));animation:fadeIn .25s">
+  <header style="display:flex;align-items:center;gap:4px;padding:16px 0 6px">
+    <button onClick="{{ goWeek }}" style="border:none;background:none;cursor:pointer;color:var(--acc);font-size:16px;display:flex;align-items:center;gap:2px;padding:6px 8px 6px 0"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>Kalender</button>
+  </header>
+  <h1 style="margin:0 0 18px;font-size:30px;font-weight:700;letter-spacing:-.02em">Konfiguration</h1>
+
+  <div style="font-size:13px;font-weight:600;color:var(--sec);letter-spacing:.05em;margin:0 0 8px 4px">DARSTELLUNG</div>
+  <div style="background:var(--card);border-radius:16px;padding:14px 15px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;margin-bottom:26px">
+    <span style="font-size:15px;font-weight:500">Erscheinungsbild</span>
+    <div style="display:flex;background:var(--fill);border-radius:9px;padding:2px">
+      <sc-for list="{{ themeOpts }}" as="t" hint-placeholder-count="2">
+        <button onClick="{{ t.on }}" style="border:none;cursor:pointer;padding:6px 16px;border-radius:7px;font-size:13px;font-weight:600;background:{{ t.bg }};box-shadow:{{ t.sh }}">{{ t.label }}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="font-size:13px;font-weight:600;color:var(--sec);letter-spacing:.05em;margin:0 0 8px 4px">MEINE MODULE</div>
+  <div style="background:var(--card);border-radius:16px;box-shadow:var(--shadow);margin-bottom:26px;overflow:hidden">
+    <sc-for list="{{ myModules }}" as="m" hint-placeholder-count="4">
+      <div style="border-bottom:1px solid var(--sep)">
+        <div onClick="{{ m.expand }}" style="display:flex;align-items:center;gap:12px;padding:13px 15px;cursor:pointer">
+          <span style="width:34px;height:34px;border-radius:9px;background:{{ m.color }};display:grid;place-items:center;color:#fff;flex:none"><svg viewBox="0 0 24 24" width="18" height="18"><path d="{{ m.icon }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+          <span style="flex:1;min-width:0">
+            <span style="display:block;font-size:15px;font-weight:600">{{ m.name }}</span>
+            <span style="display:block;font-size:12px;color:var(--sec);margin-top:1px">{{ m.desc }}</span>
+          </span>
+          <sc-if value="{{ m.hasCfg }}"><svg viewBox="0 0 24 24" width="14" height="14" style="color:var(--sec);flex:none;transform:rotate({{ m.chev }});transition:transform .2s"><path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+        </div>
+        <sc-if value="{{ m.open }}">
+          <div style="padding:2px 15px 14px;animation:fadeIn .2s">
+
+            <sc-if value="{{ m.isPubg }}">
+              <div style="font-size:12px;font-weight:600;color:var(--sec);margin:8px 0 5px">DEIN SPIELERNAME</div>
+              <input value="{{ pubgMe }}" onChange="{{ onPubgMe }}" placeholder="Spielername" style="width:100%;border:none;background:var(--fill);border-radius:10px;padding:10px 12px;font-size:15px">
+              <div style="font-size:12px;font-weight:600;color:var(--sec);margin:14px 0 5px">FREUNDE VERFOLGEN</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+                <sc-for list="{{ pubgFriends }}" as="f" hint-placeholder-count="2">
+                  <span style="display:inline-flex;align-items:center;gap:6px;background:var(--fill);border-radius:16px;padding:6px 6px 6px 12px;font-size:13px;font-weight:500">{{ f.name }}<button onClick="{{ f.remove }}" aria-label="Entfernen" style="width:18px;height:18px;border:none;border-radius:50%;background:var(--sep);cursor:pointer;display:grid;place-items:center;color:var(--sec)"><svg viewBox="0 0 24 24" width="10" height="10"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path></svg></button></span>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:8px">
+                <input value="{{ friendInput }}" onChange="{{ onFriendInput }}" onKeyDown="{{ friendKey }}" placeholder="Spielername hinzufügen" style="flex:1;border:none;background:var(--fill);border-radius:10px;padding:10px 12px;font-size:15px">
+                <button onClick="{{ addFriend }}" style="width:40px;border:none;border-radius:10px;background:var(--acc);color:#fff;cursor:pointer;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path></svg></button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ m.isQuiz }}">
+              <div style="font-size:12px;font-weight:600;color:var(--sec);margin:8px 0 6px">AN DIESEN TAGEN</div>
+              <div style="display:flex;gap:6px">
+                <sc-for list="{{ quizDayOpts }}" as="d" hint-placeholder-count="7">
+                  <button onClick="{{ d.on }}" style="width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;font-size:13px;font-weight:600;background:{{ d.bg }};color:{{ d.fg }}">{{ d.label }}</button>
+                </sc-for>
+              </div>
+              <div style="font-size:12px;font-weight:600;color:var(--sec);margin:14px 0 6px">THEMENGEBIETE</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <sc-for list="{{ topicOpts }}" as="t" hint-placeholder-count="6">
+                  <button onClick="{{ t.on }}" style="border:1.5px solid {{ t.border }};background:{{ t.bg }};color:{{ t.fg }};border-radius:16px;padding:7px 13px;font-size:13px;font-weight:500;cursor:pointer">{{ t.label }}</button>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ m.isAkt }}">
+              <div style="font-size:12px;font-weight:600;color:var(--sec);margin:8px 0 6px">WÖCHENTLICHE AKTIVITÄTEN</div>
+              <sc-for list="{{ aktRows }}" as="a" hint-placeholder-count="1">
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--sep)">
+                  <span style="flex:1;min-width:0"><span style="display:block;font-size:14px;font-weight:500">{{ a.name }}</span><span style="display:block;font-size:12px;color:var(--sec)">{{ a.daysLabel }}</span></span>
+                  <button onClick="{{ a.remove }}" style="border:none;background:none;color:var(--bad);font-size:13px;font-weight:500;cursor:pointer">Löschen</button>
+                </div>
+              </sc-for>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <input value="{{ aktInput }}" onChange="{{ onAktInput }}" placeholder="Neue Aktivität" style="flex:1;border:none;background:var(--fill);border-radius:10px;padding:10px 12px;font-size:15px">
+              </div>
+              <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+                <sc-for list="{{ aktDayOpts }}" as="d" hint-placeholder-count="7">
+                  <button onClick="{{ d.on }}" style="width:32px;height:32px;border-radius:50%;border:none;cursor:pointer;font-size:12px;font-weight:600;background:{{ d.bg }};color:{{ d.fg }}">{{ d.label }}</button>
+                </sc-for>
+                <button onClick="{{ addAkt }}" style="margin-left:auto;height:32px;padding:0 14px;border:none;border-radius:16px;background:var(--acc);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Hinzufügen</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ m.isUrlaub }}">
+              <div style="font-size:12px;font-weight:600;color:var(--sec);margin:8px 0 6px">GEPLANTE URLAUBE</div>
+              <sc-for list="{{ urlaubRows }}" as="u" hint-placeholder-count="1">
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--sep)">
+                  <span style="flex:1;min-width:0"><span style="display:block;font-size:14px;font-weight:500">{{ u.ort }}</span><span style="display:block;font-size:12px;color:var(--sec)">{{ u.range }}</span></span>
+                  <button onClick="{{ u.remove }}" style="border:none;background:none;color:var(--bad);font-size:13px;font-weight:500;cursor:pointer">Löschen</button>
+                </div>
+              </sc-for>
+              <sc-if value="{{ noUrlaube }}"><div style="font-size:13px;color:var(--sec);padding:4px 0 2px">Noch kein Urlaub geplant.</div></sc-if>
+              <input value="{{ urlOrt }}" onChange="{{ onUrlOrt }}" placeholder="Urlaubsort (z. B. Lissabon)" style="width:100%;border:none;background:var(--fill);border-radius:10px;padding:10px 12px;font-size:15px;margin-top:10px">
+              <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+                <input type="date" value="{{ urlVon }}" onChange="{{ onUrlVon }}" aria-label="Von" style="flex:1;min-width:0;border:none;background:var(--fill);border-radius:10px;padding:9px 12px;font-size:14px">
+                <input type="date" value="{{ urlBis }}" onChange="{{ onUrlBis }}" aria-label="Bis" style="flex:1;min-width:0;border:none;background:var(--fill);border-radius:10px;padding:9px 12px;font-size:14px">
+                <button onClick="{{ addUrlaub }}" style="height:38px;padding:0 14px;border:none;border-radius:19px;background:var(--acc);color:#fff;font-size:13px;font-weight:600;cursor:pointer;flex:none">Hinzufügen</button>
+              </div>
+              <div style="font-size:12px;color:var(--sec);margin-top:10px;line-height:1.5">Im Zeitraum wird das Wetter des Urlaubsorts in der Wochenübersicht angezeigt und gespeichert.</div>
+            </sc-if>
+
+            <div style="display:flex;gap:18px;margin-top:16px;padding-top:12px;border-top:1px solid var(--sep)">
+              <button onClick="{{ m.reset }}" style="border:none;background:none;color:var(--acc);font-size:14px;font-weight:500;cursor:pointer;padding:0">Zurücksetzen</button>
+              <button onClick="{{ m.removeMod }}" style="border:none;background:none;color:var(--bad);font-size:14px;font-weight:500;cursor:pointer;padding:0">Modul entfernen</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+    <sc-if value="{{ noModules }}"><div style="padding:20px;text-align:center;color:var(--sec);font-size:14px">Noch keine Module aktiv.</div></sc-if>
+  </div>
+
+  <div style="font-size:13px;font-weight:600;color:var(--sec);letter-spacing:.05em;margin:0 0 8px 4px">MARKETPLACE</div>
+  <div style="background:var(--card);border-radius:16px;box-shadow:var(--shadow);overflow:hidden">
+    <sc-for list="{{ marketItems }}" as="m" hint-placeholder-count="5">
+      <div onClick="{{ m.tap }}" style="display:flex;align-items:center;gap:12px;padding:13px 15px;border-bottom:1px solid var(--sep);opacity:{{ m.opacity }};cursor:{{ m.cursor }}">
+        <span style="width:34px;height:34px;border-radius:9px;background:{{ m.color }};display:grid;place-items:center;color:#fff;flex:none"><svg viewBox="0 0 24 24" width="18" height="18"><path d="{{ m.icon }}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+        <span style="flex:1;min-width:0">
+          <span style="display:flex;align-items:center;gap:7px"><span style="font-size:15px;font-weight:600">{{ m.name }}</span><sc-if value="{{ m.tag }}"><span style="font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:10px;background:{{ m.tagBg }};color:{{ m.tagFg }}">{{ m.tag }}</span></sc-if></span>
+          <span style="display:block;font-size:12px;color:var(--sec);margin-top:1px">{{ m.desc }}</span>
+        </span>
+        <sc-if value="{{ m.addable }}"><button onClick="{{ m.add }}" style="height:30px;padding:0 14px;border:none;border-radius:15px;background:var(--fill);color:var(--acc);font-size:13px;font-weight:700;cursor:pointer;flex:none">Hinzufügen</button></sc-if>
+        <sc-if value="{{ m.locked }}"><svg viewBox="0 0 24 24" width="17" height="17" style="color:var(--sec);flex:none"><path d="M7 11V7a5 5 0 0110 0v4M6 11h12a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1v-8a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+      </div>
+    </sc-for>
+  </div>
+  <div style="font-size:12px;color:var(--sec);margin:10px 4px 0;line-height:1.5">Module mit Schloss benötigen einen <a onClick="{{ openAccount }}" style="cursor:pointer">Account</a>.</div>
+</div>
+</sc-if>
+
+<!-- ══════════ ACCOUNT ══════════ -->
+<sc-if value="{{ isAccount }}">
+<div data-screen-label="Account" style="max-width:420px;margin:0 auto;padding:0 16px calc(32px + env(safe-area-inset-bottom));animation:fadeIn .25s">
+  <header style="display:flex;align-items:center;padding:16px 0 6px">
+    <button onClick="{{ goWeek }}" style="border:none;background:none;cursor:pointer;color:var(--acc);font-size:16px;display:flex;align-items:center;gap:2px;padding:6px 8px 6px 0"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>Kalender</button>
+  </header>
+  <div style="text-align:center;padding:18px 0 26px">
+    <div style="width:72px;height:72px;margin:0 auto 14px;border-radius:50%;background:var(--fill);display:grid;place-items:center;color:var(--sec)"><svg viewBox="0 0 24 24" width="34" height="34"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+    <h1 style="margin:0;font-size:26px;font-weight:700;letter-spacing:-.02em">Account anlegen</h1>
+    <p style="margin:8px auto 0;font-size:14px;color:var(--sec);max-width:300px;line-height:1.5">Verbinde externe Kalenderquellen und synchronisiere deine Konfiguration.</p>
+  </div>
+  <div style="background:var(--card);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:18px">
+    <input placeholder="E-Mail" style="width:100%;border:none;background:none;padding:14px 16px;font-size:15px;border-bottom:1px solid var(--sep)">
+    <input placeholder="Passwort" type="password" style="width:100%;border:none;background:none;padding:14px 16px;font-size:15px">
+  </div>
+  <button onClick="{{ noop }}" style="width:100%;height:48px;border:none;border-radius:14px;background:var(--acc);color:#fff;font-size:16px;font-weight:600;cursor:pointer">Weiter</button>
+  <div style="text-align:center;font-size:12px;color:var(--sec);margin-top:10px">Demo – Registrierung ist noch nicht aktiv.</div>
+  <div style="font-size:13px;font-weight:600;color:var(--sec);letter-spacing:.05em;margin:28px 0 8px 4px">DAS ERMÖGLICHT DIR</div>
+  <div style="background:var(--card);border-radius:16px;box-shadow:var(--shadow);overflow:hidden">
+    <div style="display:flex;gap:12px;align-items:center;padding:13px 15px;border-bottom:1px solid var(--sep)">
+      <span style="width:34px;height:34px;border-radius:9px;background:#30d158;display:grid;place-items:center;color:#fff;flex:none"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 4h16v16H4zM4 10h16M10 4v16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path></svg></span>
+      <span><span style="display:block;font-size:15px;font-weight:600">Google Sheets</span><span style="display:block;font-size:12px;color:var(--sec)">Termine aus einer Tabelle in den Kalender übernehmen</span></span>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;padding:13px 15px">
+      <span style="width:34px;height:34px;border-radius:9px;background:#0a84ff;display:grid;place-items:center;color:#fff;flex:none"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 6h16v12H4zM4 7l8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path></svg></span>
+      <span><span style="display:block;font-size:15px;font-weight:600">Outlook Kalender</span><span style="display:block;font-size:12px;color:var(--sec)">Deinen Outlook-Kalender einbinden</span></span>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ══════════ SUCHE ══════════ -->
+<sc-if value="{{ searchOpen }}">
+  <div onClick="{{ closeSearch }}" style="position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:60;animation:fadeIn .15s;display:flex;align-items:flex-start;justify-content:center;padding:8vh 16px 0">
+    <div onClick="{{ swallow }}" data-screen-label="Suche" style="background:var(--card);color:var(--fg);width:min(560px,100%);max-height:70vh;display:flex;flex-direction:column;border-radius:18px;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--sep)">
+        <svg viewBox="0 0 24 24" width="17" height="17" style="color:var(--sec);flex:none"><path d="M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <input value="{{ searchQ }}" onChange="{{ onSearchQ }}" onKeyDown="{{ searchKey }}" ref="{{ searchRef }}" placeholder="Suchen: Termine, Läufe, Spiele, Urlaub …" style="flex:1;border:none;background:none;font-size:16px;padding:0">
+        <button onClick="{{ closeSearch }}" aria-label="Schließen" style="width:26px;height:26px;border:none;border-radius:50%;background:var(--fill);cursor:pointer;display:grid;place-items:center;color:var(--sec);flex:none"><svg viewBox="0 0 24 24" width="11" height="11"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"></path></svg></button>
+      </div>
+      <div style="overflow-y:auto;padding:6px 8px 10px">
+        <sc-for list="{{ searchResults }}" as="r" hint-placeholder-count="0">
+          <div onClick="{{ r.go }}" style="display:flex;gap:12px;align-items:center;padding:10px 10px;border-radius:12px;cursor:pointer" style-hover="background:var(--fill)">
+            <div style="width:4px;align-self:stretch;border-radius:2px;background:{{ r.color }};flex:none"></div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:{{ r.color }}">{{ r.badge }}</span>
+                <span style="font-size:12px;color:var(--sec)">{{ r.dateLabel }}</span>
+              </div>
+              <div style="font-size:14px;font-weight:600;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</div>
+              <div style="font-size:12px;color:var(--sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.sub }}</div>
+            </div>
+            <svg viewBox="0 0 24 24" width="13" height="13" style="color:var(--sec);flex:none"><path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </div>
+        </sc-for>
+        <sc-if value="{{ searchEmpty }}">
+          <div style="text-align:center;padding:30px 20px;color:var(--sec);font-size:13px">{{ searchEmptyMsg }}</div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<!-- ══════════ DETAIL-SHEET ══════════ -->
+<sc-if value="{{ hasSheet }}">
+  <div onClick="{{ closeSheet }}" style="position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:50;animation:fadeIn .2s;display:flex;align-items:flex-end;justify-content:center">
+    <div onClick="{{ swallow }}" data-screen-label="Detail" style="background:var(--card);color:var(--fg);width:min(560px,100%);max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;animation:sheetUp .3s cubic-bezier(.32,.72,.35,1);padding:0 18px calc(26px + env(safe-area-inset-bottom))">
+      <div style="position:sticky;top:0;background:var(--card);padding:10px 0 10px;z-index:2">
+        <div style="width:36px;height:5px;border-radius:3px;background:var(--sep);margin:0 auto 12px"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <div style="min-width:0">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:{{ sheetColor }}">{{ sheetBadge }}</div>
+            <div style="font-size:19px;font-weight:700;letter-spacing:-.01em">{{ sheetTitle }}</div>
+            <div style="font-size:12px;color:var(--sec)">{{ sheetDate }}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex:none">
+            <button onClick="{{ closeSheet }}" aria-label="Schließen" style="width:30px;height:30px;border:none;border-radius:50%;background:var(--fill);cursor:pointer;display:grid;place-items:center;color:var(--sec);flex:none"><svg viewBox="0 0 24 24" width="13" height="13"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"></path></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PUBG -->
+      <sc-if value="{{ shPubg }}">
+        <sc-if value="{{ pubgListView }}">
+          <div style="font-size:13px;color:var(--sec);margin:4px 0 10px">Tagesrangliste · tippe auf einen Spieler für Details</div>
+          <div style="display:grid;grid-template-columns:22px 1fr 44px 40px 44px 40px 58px;gap:4px;font-size:11px;font-weight:600;color:var(--sec);padding:0 2px 6px;border-bottom:1px solid var(--sep)">
+            <span>#</span><span>Spieler</span><span style="text-align:right">Spiele</span><span style="text-align:right">Wins</span><span style="text-align:right">Kills</span><span style="text-align:right">K/D</span><span style="text-align:right">Weitester</span>
+          </div>
+          <sc-for list="{{ pubgRows }}" as="r" hint-placeholder-count="3">
+            <div onClick="{{ r.open }}" style="display:grid;grid-template-columns:22px 1fr 44px 40px 44px 40px 58px;gap:4px;align-items:center;padding:11px 2px;border-bottom:1px solid var(--sep);cursor:pointer;font-variant-numeric:tabular-nums;font-size:14px">
+              <span style="color:{{ r.rankColor }};font-weight:700">{{ r.rank }}</span>
+              <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name }}<sc-if value="{{ r.me }}"><span style="font-size:10px;font-weight:700;color:var(--acc);margin-left:5px">DU</span></sc-if></span>
+              <span style="text-align:right">{{ r.m }}</span><span style="text-align:right">{{ r.w }}</span><span style="text-align:right;font-weight:600">{{ r.k }}</span><span style="text-align:right">{{ r.kd }}</span><span style="text-align:right;color:var(--sec)">{{ r.lk }} m</span>
+            </div>
+          </sc-for>
+        </sc-if>
+        <sc-if value="{{ pubgPlayerView }}">
+          <button onClick="{{ pubgBack }}" style="border:none;background:none;color:var(--acc);font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:2px;padding:2px 0 10px"><svg viewBox="0 0 24 24" width="15" height="15"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>Rangliste</button>
+          <div style="font-size:22px;font-weight:700;letter-spacing:-.01em;margin-bottom:12px">{{ pubgSelName }}</div>
+          <div style="display:flex;background:var(--fill);border-radius:9px;padding:2px;margin-bottom:16px">
+            <sc-for list="{{ pubgTabs }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.on }}" style="flex:1;border:none;cursor:pointer;padding:7px 4px;border-radius:7px;font-size:13px;font-weight:600;background:{{ t.bg }};box-shadow:{{ t.sh }}">{{ t.label }}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ pubgLocked }}">
+            <div style="text-align:center;padding:36px 20px;color:var(--sec)">
+              <svg viewBox="0 0 24 24" width="28" height="28" style="margin-bottom:10px"><path d="M7 11V7a5 5 0 0110 0v4M6 11h12a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1v-8a1 1 0 011-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <div style="font-size:14px;font-weight:600">Langzeitstatistiken noch nicht verfügbar</div>
+              <div style="font-size:13px;margin-top:4px;line-height:1.5">Sie werden geladen, sobald sie für diesen Spieler abrufbar sind (Request-Limit der API).</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ pubgKpisVisible }}">
+            <div style="font-size:12px;color:var(--sec);margin-bottom:10px">{{ pubgTabHint }}</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">
+              <sc-for list="{{ pubgKpis }}" as="k" hint-placeholder-count="7">
+                <div style="background:var(--fill);border-radius:12px;padding:12px 10px">
+                  <div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em">{{ k.v }}</div>
+                  <div style="font-size:11px;color:var(--sec);margin-top:2px">{{ k.l }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </sc-if>
+      </sc-if>
+
+      <!-- Fußball (WM + Bundesliga) -->
+      <sc-if value="{{ shMatch }}">
+        <div style="display:flex;align-items:center;justify-content:center;gap:18px;padding:10px 0 16px">
+          <div style="flex:1;text-align:right;font-size:16px;font-weight:600">{{ mA }}</div>
+          <div style="text-align:center">
+            <div style="font-size:34px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em">{{ mScore }}</div>
+            <div style="font-size:11px;font-weight:700;color:{{ mStatusColor }};animation:{{ mStatusAnim }}">{{ mStatus }}</div>
+          </div>
+          <div style="flex:1;font-size:16px;font-weight:600">{{ mB }}</div>
+        </div>
+        <div style="display:flex;background:var(--fill);border-radius:9px;padding:2px;margin-bottom:16px">
+          <sc-for list="{{ matchTabs }}" as="t" hint-placeholder-count="2">
+            <button onClick="{{ t.on }}" style="flex:1;border:none;cursor:pointer;padding:7px 4px;border-radius:7px;font-size:13px;font-weight:600;background:{{ t.bg }};box-shadow:{{ t.sh }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ mGameView }}">
+          <sc-if value="{{ mUpcoming }}"><div style="text-align:center;padding:30px 20px;color:var(--sec);font-size:14px">Anpfiff um {{ mTime }} Uhr.</div></sc-if>
+          <sc-for list="{{ mEvents }}" as="ev" hint-placeholder-count="4">
+            <div style="display:flex;gap:12px;align-items:center;padding:9px 2px;border-bottom:1px solid var(--sep)">
+              <span style="width:32px;font-size:13px;color:var(--sec);font-variant-numeric:tabular-nums;text-align:right;flex:none">{{ ev.min }}'</span>
+              <span style="width:20px;height:20px;border-radius:{{ ev.r }};background:{{ ev.bg }};flex:none;display:grid;place-items:center;font-size:10px;font-weight:800;color:{{ ev.fg }}">{{ ev.glyph }}</span>
+              <span style="flex:1;font-size:14px"><span style="font-weight:600">{{ ev.text }}</span><span style="color:var(--sec)"> · {{ ev.team }}</span></span>
+              <sc-if value="{{ ev.score }}"><span style="font-size:14px;font-weight:700;font-variant-numeric:tabular-nums">{{ ev.score }}</span></sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ mForms }}">
+            <div style="font-size:13px;font-weight:600;color:var(--sec);letter-spacing:.05em;margin:20px 0 8px">FORM · LETZTE 5 SPIELE</div>
+            <sc-for list="{{ mFormRows }}" as="f" hint-placeholder-count="2">
+              <div style="padding:10px 0;border-bottom:1px solid var(--sep)">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <span style="font-size:14px;font-weight:600">{{ f.team }}</span>
+                  <span style="display:flex;gap:4px">
+                    <sc-for list="{{ f.chips }}" as="c" hint-placeholder-count="5"><span style="width:22px;height:22px;border-radius:50%;background:{{ c.bg }};color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700">{{ c.t }}</span></sc-for>
+                  </span>
+                </div>
+                <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">
+                  <sc-for list="{{ f.last }}" as="lm" hint-placeholder-count="3"><span style="font-size:12px;color:var(--sec)">{{ lm }}</span></sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </sc-if>
+        </sc-if>
+        <sc-if value="{{ mStatsView }}">
+          <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:12px">
+            <sc-for list="{{ statCats }}" as="s" hint-placeholder-count="5">
+              <button onClick="{{ s.on }}" style="border:none;cursor:pointer;white-space:nowrap;padding:7px 13px;border-radius:16px;font-size:13px;font-weight:600;background:{{ s.bg }};color:{{ s.fg }}">{{ s.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:26px minmax(0,1.2fr) minmax(0,1fr) auto;gap:2px 10px;align-items:center;font-variant-numeric:tabular-nums">
+            <span style="font-size:11px;font-weight:600;color:var(--sec);text-align:right;padding-bottom:5px;border-bottom:1px solid var(--sep)">#</span>
+            <span style="font-size:11px;font-weight:600;color:var(--sec);padding-bottom:5px;border-bottom:1px solid var(--sep)">{{ statNameHead }}</span>
+            <span style="font-size:11px;font-weight:600;color:var(--sec);padding-bottom:5px;border-bottom:1px solid var(--sep)">{{ statSubHead }}</span>
+            <span style="font-size:11px;font-weight:600;color:var(--sec);text-align:right;padding-bottom:5px;border-bottom:1px solid var(--sep)">{{ statValHead }}</span>
+            <sc-for list="{{ statRows }}" as="r" hint-placeholder-count="10">
+              <span style="color:{{ r.rankColor }};font-size:13px;font-weight:700;text-align:right;padding:5px 0">{{ r.rank }}</span>
+              <span style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 0">{{ r.name }}</span>
+              <span style="font-size:12px;color:var(--sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 0">{{ r.sub }}</span>
+              <span style="font-size:13px;font-weight:700;text-align:right;padding:5px 0;white-space:nowrap">{{ r.val }}</span>
+            </sc-for>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <!-- Quiz -->
+      <sc-if value="{{ shQuiz }}">
+        <sc-if value="{{ quizDoneView }}">
+          <div style="text-align:center;padding:30px 20px">
+            <span style="width:52px;height:52px;border-radius:50%;background:var(--good);display:inline-grid;place-items:center;color:#fff;margin-bottom:12px"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            <div style="font-size:17px;font-weight:700">Quiz erledigt</div>
+            <div style="font-size:14px;color:var(--sec);margin-top:4px">{{ quizResult }}</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ quizPlayView }}">
+          <div style="font-size:12px;font-weight:600;color:var(--sec);margin:2px 0 6px">FRAGE {{ quizNum }} VON {{ quizTotal }} · {{ quizTopic }}</div>
+          <div style="font-size:17px;font-weight:700;line-height:1.4;margin-bottom:14px">{{ quizQ }}</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ quizOpts }}" as="o" hint-placeholder-count="4">
+              <button onClick="{{ o.on }}" style="text-align:left;border:1.5px solid {{ o.border }};background:{{ o.bg }};color:{{ o.fg }};border-radius:12px;padding:12px 14px;font-size:15px;font-weight:500;cursor:pointer;transition:background .15s">{{ o.label }}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ quizNextVisible }}">
+            <button onClick="{{ quizNext }}" style="width:100%;margin-top:14px;height:44px;border:none;border-radius:12px;background:var(--acc);color:#fff;font-size:15px;font-weight:600;cursor:pointer">{{ quizNextLabel }}</button>
+          </sc-if>
+        </sc-if>
+      </sc-if>
+
+      <!-- Strava -->
+      <sc-if value="{{ shStrava }}">
+        <div style="display:flex;background:var(--fill);border-radius:9px;padding:2px;margin-bottom:16px">
+          <sc-for list="{{ stravaTabs }}" as="t" hint-placeholder-count="2">
+            <button onClick="{{ t.on }}" style="flex:1;border:none;cursor:pointer;padding:7px 4px;border-radius:7px;font-size:13px;font-weight:600;background:{{ t.bg }};box-shadow:{{ t.sh }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ stravaMapVisible }}">
+          <div style="height:140px;border-radius:12px;margin-bottom:12px;background:repeating-linear-gradient(45deg,var(--fill),var(--fill) 8px,transparent 8px,transparent 16px);display:grid;place-items:center"><span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--sec)">Streckenkarte · Strava</span></div>
+        </sc-if>
+        <div style="font-size:12px;color:var(--sec);margin-bottom:10px">{{ stravaHint }}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px">
+          <sc-for list="{{ stravaKpis }}" as="k" hint-placeholder-count="6">
+            <div style="background:var(--fill);border-radius:12px;padding:12px 10px">
+              <div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em">{{ k.v }}</div>
+              <div style="font-size:11px;color:var(--sec);margin-top:2px">{{ k.l }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- UFC -->
+      <sc-if value="{{ shUfc }}">
+        <div style="display:flex;background:var(--fill);border-radius:9px;padding:2px;margin-bottom:14px">
+          <sc-for list="{{ ufcTabs }}" as="t" hint-placeholder-count="2">
+            <button onClick="{{ t.on }}" style="flex:1;border:none;cursor:pointer;padding:7px 4px;border-radius:7px;font-size:13px;font-weight:600;background:{{ t.bg }};box-shadow:{{ t.sh }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ ufcCardView }}">
+          <div style="font-size:12px;color:var(--sec);margin-bottom:4px">{{ ufcHint }}</div>
+          <sc-for list="{{ ufcBouts }}" as="b" hint-placeholder-count="5">
+            <div style="padding:11px 2px;border-bottom:1px solid var(--sep)">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span style="font-size:10px;font-weight:800;letter-spacing:.07em;color:#bf9b30">{{ b.tag }}</span>
+                <span style="font-size:11px;color:var(--sec)">{{ b.wclass }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:5px">
+                <span style="flex:1;min-width:0;text-align:right;font-size:14px;font-weight:{{ b.aW }};color:{{ b.aC }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.a }}</span>
+                <span style="font-size:10px;color:var(--sec);font-weight:800;flex:none">VS</span>
+                <span style="flex:1;min-width:0;font-size:14px;font-weight:{{ b.bW }};color:{{ b.bC }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.bName }}</span>
+              </div>
+              <sc-if value="{{ b.result }}"><div style="text-align:center;font-size:12px;color:var(--sec);margin-top:4px">{{ b.result }}</div></sc-if>
+            </div>
+          </sc-for>
+        </sc-if>
+        <sc-if value="{{ ufcRankView }}">
+          <div style="font-size:12px;color:var(--sec);margin-bottom:8px">Pound-for-Pound · Top 10</div>
+          <div style="display:grid;grid-template-columns:26px minmax(0,1.2fr) minmax(0,1fr) auto;gap:2px 10px;align-items:center;font-variant-numeric:tabular-nums">
+            <span style="font-size:11px;font-weight:600;color:var(--sec);text-align:right;padding-bottom:5px;border-bottom:1px solid var(--sep)">#</span>
+            <span style="font-size:11px;font-weight:600;color:var(--sec);padding-bottom:5px;border-bottom:1px solid var(--sep)">Kämpfer</span>
+            <span style="font-size:11px;font-weight:600;color:var(--sec);padding-bottom:5px;border-bottom:1px solid var(--sep)">Gewichtsklasse</span>
+            <span style="font-size:11px;font-weight:600;color:var(--sec);text-align:right;padding-bottom:5px;border-bottom:1px solid var(--sep)">Bilanz</span>
+            <sc-for list="{{ ufcRanks }}" as="r" hint-placeholder-count="10">
+              <span style="color:{{ r.posColor }};font-size:13px;font-weight:700;text-align:right;padding:5px 0">{{ r.pos }}</span>
+              <span style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 0">{{ r.name }}</span>
+              <span style="font-size:12px;color:var(--sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 0">{{ r.sub }}</span>
+              <span style="font-size:13px;font-weight:700;text-align:right;padding:5px 0;white-space:nowrap">{{ r.val }}</span>
+            </sc-for>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <!-- Formel 1 -->
+      <sc-if value="{{ shF1 }}">
+        <div style="display:flex;background:var(--fill);border-radius:9px;padding:2px;margin-bottom:14px">
+          <sc-for list="{{ f1Tabs }}" as="t" hint-placeholder-count="2">
+            <button onClick="{{ t.on }}" style="flex:1;border:none;cursor:pointer;padding:7px 4px;border-radius:7px;font-size:13px;font-weight:600;background:{{ t.bg }};box-shadow:{{ t.sh }}">{{ t.label }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ f1SessionView }}">
+          <div style="font-size:12px;color:var(--sec);margin-bottom:8px">{{ f1Hint }}</div>
+          <sc-if value="{{ f1Upcoming }}"><div style="text-align:center;padding:30px 20px;color:var(--sec);font-size:14px">Start um {{ f1Time }} Uhr.</div></sc-if>
+          <sc-if value="{{ f1HasRows }}">
+            <div style="display:grid;grid-template-columns:26px minmax(0,1.2fr) minmax(0,1fr) auto;gap:2px 10px;align-items:center;font-variant-numeric:tabular-nums">
+              <span style="font-size:11px;font-weight:600;color:var(--sec);text-align:right;padding-bottom:5px;border-bottom:1px solid var(--sep)">#</span>
+              <span style="font-size:11px;font-weight:600;color:var(--sec);padding-bottom:5px;border-bottom:1px solid var(--sep)">Fahrer</span>
+              <span style="font-size:11px;font-weight:600;color:var(--sec);padding-bottom:5px;border-bottom:1px solid var(--sep)">Team</span>
+              <span style="font-size:11px;font-weight:600;color:var(--sec);text-align:right;padding-bottom:5px;border-bottom:1px solid var(--sep)">Zeit</span>
+              <sc-for list="{{ f1Rows }}" as="r" hint-placeholder-count="10">
+                <span style="color:{{ r.posColor }};font-size:13px;font-weight:700;text-align:right;padding:5px 0">{{ r.pos }}</span>
+                <span style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 0">{{ r.name }}</span>
+                <span style="font-size:12px;color:var(--sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 0">{{ r.team }}</span>
+                <span style="font-size:13px;font-weight:700;text-align:right;padding:5px 0;white-space:nowrap">{{ r.val }}</span>
+              </sc-for>
+            </div>
+          </sc-if>
+        </sc-if>
+        <sc-if value="{{ f1StandView }}">
+          <div style="font-size:12px;color:var(--sec);margin-bottom:8px">Fahrerwertung · Saison 2026</div>
+          <div style="display:grid;grid-template-columns:26px minmax(0,1.2fr) minmax(0,1fr) auto;gap:2px 10px;align-items:center;font-variant-numeric:tabular-nums">
+            <span style="font-size:11px;font-weight:600;color:var(--sec);text-align:right;padding-bottom:5px;border-bottom:1px solid var(--sep)">#</span>
+            <span style="font-size:11px;font-weight:600;color:var(--sec);padding-bottom:5px;border-bottom:1px solid var(--sep)">Fahrer</span>
+            <span style="font-size:11px;font-weight:600;color:var(--sec);padding-bottom:5px;border-bottom:1px solid var(--sep)">Team</span>
+            <span style="font-size:11px;font-weight:600;color:var(--sec);text-align:right;padding-bottom:5px;border-bottom:1px solid var(--sep)">Punkte</span>
+            <sc-for list="{{ f1Stand }}" as="r" hint-placeholder-count="12">
+              <span style="color:{{ r.posColor }};font-size:13px;font-weight:700;text-align:right;padding:5px 0">{{ r.pos }}</span>
+              <span style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 0">{{ r.name }}</span>
+              <span style="font-size:12px;color:var(--sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 0">{{ r.team }}</span>
+              <span style="font-size:13px;font-weight:700;text-align:right;padding:5px 0;white-space:nowrap">{{ r.val }}</span>
+            </sc-for>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ canExport }}">
+        <div style="position:sticky;bottom:0;background:linear-gradient(to top,var(--card) 70%,transparent);padding:18px 0 2px;margin-top:14px">
+          <button onClick="{{ exportCalendar }}" style="width:100%;height:50px;border:none;border-radius:14px;background:{{ exportBg }};color:{{ exportFg }};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px;font-weight:600">
+            <sc-if value="{{ exportedDone }}"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+            <sc-if value="{{ exportNotDone }}"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M8 3v4M16 3v4M4 9h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zM12 13v5M9.5 15.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+            {{ exportLabel }}
+          </button>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    let cfg = null, done = {}, theme = null;
+    try { cfg = JSON.parse(localStorage.getItem('kal.cfg')); } catch (e) {}
+    try { done = JSON.parse(localStorage.getItem('kal.done')) || {}; } catch (e) {}
+    try { theme = localStorage.getItem('kal.theme'); } catch (e) {}
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    this.today = today;
+    const dow = (today.getDay() + 6) % 7;
+    const def = this.defaults();
+    if (cfg) cfg = { ...def, ...cfg, modules: { ...def.modules, ...(cfg.modules || {}) } };
+    this.state = {
+      theme: theme || 'hell',
+      screen: 'week', weekOffset: 0, selDay: dow,
+      sheet: null, pubgSel: null, pubgTab: 'tag',
+      matchTab: 'spiel', statCat: 'tore', stravaTab: 'lauf', ufcTab: 'card', f1Tab: 'session',
+      quizIdx: 0, quizPicked: null, quizScore: 0,
+      cfg: cfg || def,
+      cfgOpen: null, friendInput: '', aktInput: '', aktDays: [],
+      urlOrt: '', urlVon: '', urlBis: '',
+      searchOpen: false, searchQ: '',
+      w: (typeof window !== 'undefined') ? window.innerWidth : 400
+    };
+  }
+  defaults() {
+    return {
+      modules: { wetter: true, pubg: true, wm: true, buli: true, quiz: false, akt: false, strava: true, urlaub: true, ufc: true, f1: true },
+      pubg: { me: 'ShadowHawk', friends: ['Maxi_92', 'NightOwl'] },
+      quiz: { days: [0, 2, 4], topics: ['Geografie', 'Geschichte'] },
+      akt: { list: [{ id: 1, name: '30 Min. Joggen', days: [1, 5] }] },
+      urlaub: { list: [] }
+    };
+  }
+  moduleDefault(key) { return JSON.parse(JSON.stringify(this.defaults()[key] || null)); }
+  componentDidMount() {
+    this._rs = () => this.setState({ w: window.innerWidth });
+    window.addEventListener('resize', this._rs);
+    this._kd = (e) => {
+      if (this.state.searchOpen) { if (e.key === 'Escape') this.setState({ searchOpen: false }); return; }
+      if (this.state.screen !== 'week' || this.state.sheet) return;
+      const typing = /INPUT|TEXTAREA/.test((e.target && e.target.tagName) || '');
+      if (!typing && (e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key === 'k'))) {
+        e.preventDefault();
+        this.setState({ searchOpen: true, searchQ: '' });
+        return;
+      }
+      if (e.key === 'ArrowRight') this.shiftDay(1);
+      if (e.key === 'ArrowLeft') this.shiftDay(-1);
+    };
+    window.addEventListener('keydown', this._kd);
+    this.applyTheme();
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this._rs); window.removeEventListener('keydown', this._kd); }
+  componentDidUpdate() { this.applyTheme(); }
+  applyTheme() {
+    document.documentElement.setAttribute('data-theme', this.state.theme);
+  }
+  saveCfg(cfg) { this.setState({ cfg }); try { localStorage.setItem('kal.cfg', JSON.stringify(cfg)); } catch (e) {} }
+  mutCfg(fn) { const c = JSON.parse(JSON.stringify(this.state.cfg)); fn(c); this.saveCfg(c); }
+  saveDone(done) { try { localStorage.setItem('kal.done', JSON.stringify(done)); } catch (e) {} this.forceUpdate(); }
+  getDone() { try { return JSON.parse(localStorage.getItem('kal.done')) || {}; } catch (e) { return {}; } }
+
+  // ── Helpers ──
+  H(s) { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+  R(seed) { let s = seed >>> 0; return () => { s = (s * 1103515245 + 12345) >>> 0; return s / 4294967296; }; }
+  key(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  weekStart(off) { const dow = (this.today.getDay() + 6) % 7; return this.addDays(this.today, -dow + off * 7); }
+  diff(d) { return Math.round((d - this.today) / 86400000); }
+  fmtLong(d) { return d.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }); }
+
+  // ── Wetter (inkl. Urlaubsort) ──
+  vacationFor(d) {
+    const cfg = this.state.cfg;
+    if (!cfg.modules.urlaub || !cfg.urlaub) return null;
+    const k = this.key(d);
+    return (cfg.urlaub.list || []).find(u => u.von && u.bis && k >= u.von && k <= u.bis) || null;
+  }
+  weather(d) {
+    const vac = this.vacationFor(d);
+    const off = this.diff(d);
+    if (!vac && off > 5) return null;
+    const r = this.R(this.H('wx' + (vac ? vac.ort.toLowerCase() : '') + this.key(d)));
+    const v = r();
+    const c = vac ? (v < 0.55 ? 0 : v < 0.8 ? 1 : v < 0.93 ? 2 : 3) : (v < 0.42 ? 0 : v < 0.68 ? 1 : v < 0.88 ? 2 : 3);
+    const P = [
+      'M12 8.2a3.8 3.8 0 100 7.6 3.8 3.8 0 000-7.6zM12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4',
+      'M15 4.6a3.4 3.4 0 013.1 4.7M7.5 20a4 4 0 01-.4-8 6 6 0 0111.4-1.3A4.2 4.2 0 0117.8 20z',
+      'M7.5 19a4 4 0 01-.4-8 6 6 0 0111.4-1.3A4.2 4.2 0 0117.8 19z',
+      'M7.5 15a4 4 0 01-.4-8 6 6 0 0111.4-1.3A4.2 4.2 0 0117.8 15zM8.6 18l-1 2.6M12.6 18l-1 2.6M16.6 18l-1 2.6'
+    ];
+    const L = ['Sonnig', 'Teils sonnig', 'Bewölkt', 'Regen'];
+    const C = ['#ff9f0a', '#ff9f0a', '#8e8e93', '#0a84ff'];
+    const vac2 = this.vacationFor(d);
+    return { path: P[c], label: L[c], color: C[c], t: vac2 ? 23 + Math.floor(r() * 10) : 19 + Math.floor(r() * 12), loc: vac2 ? vac2.ort : null };
+  }
+
+  // ── Strava ──
+  fmtPace(s) { s = Math.round(s); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  fmtDur(s) { const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h ? h + ' h ' + m + ' min' : m + ' min'; }
+  stravaRun(d) {
+    if (this.diff(d) > 0) return null;
+    const r = this.R(this.H('sv' + this.key(d)));
+    if (r() > 0.55) return null;
+    const km = Math.round((3 + r() * 11) * 10) / 10;
+    const pace = Math.round(270 + r() * 110);
+    const dur = Math.round(km * pace);
+    return {
+      km, pace, dur,
+      hm: Math.round(km * (2 + r() * 13)),
+      hr: Math.round(138 + r() * 28),
+      kcal: Math.round(km * 63),
+      start: r() < 0.5 ? '07:15' : '18:45',
+      pr: r() < 0.14
+    };
+  }
+  stravaWeek(refDate) {
+    const dow = (refDate.getDay() + 6) % 7;
+    const mon = this.addDays(refDate, -dow);
+    const agg = { n: 0, km: 0, dur: 0, hm: 0, longest: 0 };
+    for (let i = 0; i < 7; i++) {
+      const d = this.addDays(mon, i);
+      if (this.diff(d) > 0) break;
+      const run = this.stravaRun(d);
+      if (run) { agg.n++; agg.km += run.km; agg.dur += run.dur; agg.hm += run.hm; agg.longest = Math.max(agg.longest, run.km); }
+    }
+    return agg;
+  }
+
+  // ── UFC ──
+  ufcEvents() {
+    return [
+      { id: 'ufc1', off: -6, name: 'UFC Fight Night', main: 'Silva vs. Kovalenko', time: '03:00' },
+      { id: 'ufc2', off: 1, name: 'UFC 320', main: 'Machado vs. Reyes', time: '04:00' }
+    ];
+  }
+  ufcCard(ev) {
+    const CARDS = {
+      ufc1: [
+        { w: 'Mittelgewicht', a: 'R. Silva', b: 'D. Kovalenko' },
+        { w: 'Weltergewicht', a: 'J. Carter', b: 'M. Alvarez' },
+        { w: 'Bantamgewicht', a: 'K. Tanaka', b: 'L. Moreau' },
+        { w: 'Leichtgewicht', a: 'A. Petrov', b: 'C. Nwosu' },
+        { w: 'Frauen-Strohgewicht', a: 'M. Santos', b: 'E. Kowalska' }
+      ],
+      ufc2: [
+        { w: 'Leichtgewicht · Titelkampf', a: 'I. Machado', b: 'S. Reyes' },
+        { w: 'Schwergewicht', a: 'T. Volkov', b: 'B. Okafor' },
+        { w: 'Federgewicht', a: 'D. Marchetti', b: 'Y. Aliyev' },
+        { w: 'Fliegengewicht', a: 'A. Duarte', b: 'J. Park' },
+        { w: 'Weltergewicht', a: 'N. Ferreira', b: 'O. Smirnov' }
+      ]
+    };
+    const past = ev.off < 0;
+    const r = this.R(this.H('ufc' + ev.id));
+    return (CARDS[ev.id] || []).map((bout, i) => {
+      if (!past) return bout;
+      const winner = r() < 0.5 ? 'a' : 'b';
+      const mv = r();
+      const maxR = i === 0 ? 5 : 3;
+      const method = mv < 0.4 ? 'KO/TKO' : mv < 0.7 ? 'Submission' : 'Einstimmige Entscheidung';
+      const round = method === 'Einstimmige Entscheidung' ? maxR : 1 + Math.floor(r() * maxR);
+      return { ...bout, winner, method, round };
+    });
+  }
+  ufcP4P() {
+    return [
+      ['I. Machado', 'Leichtgewicht', '27-1'], ['R. Silva', 'Mittelgewicht', '24-0'],
+      ['T. Volkov', 'Schwergewicht', '22-3'], ['A. Duarte', 'Fliegengewicht', '21-2'],
+      ['S. Reyes', 'Leichtgewicht', '19-1'], ['J. Carter', 'Weltergewicht', '20-4'],
+      ['D. Marchetti', 'Federgewicht', '18-2'], ['K. Tanaka', 'Bantamgewicht', '17-3'],
+      ['B. Okafor', 'Schwergewicht', '16-1'], ['M. Alvarez', 'Weltergewicht', '19-5']
+    ];
+  }
+
+  // ── Formel 1 ──
+  f1Races() {
+    return [
+      { id: 'f1a', gp: 'GP Großbritannien', circuit: 'Silverstone Circuit', qOff: -6, rOff: -5, qTime: '16:00', rTime: '16:00' },
+      { id: 'f1b', gp: 'GP Belgien', circuit: 'Spa-Francorchamps', qOff: 1, rOff: 2, qTime: '15:00', rTime: '15:00' }
+    ];
+  }
+  f1Drivers() {
+    return [
+      ['M. Verstappen', 'Red Bull'], ['L. Norris', 'McLaren'], ['O. Piastri', 'McLaren'],
+      ['C. Leclerc', 'Ferrari'], ['L. Hamilton', 'Ferrari'], ['G. Russell', 'Mercedes'],
+      ['K. Antonelli', 'Mercedes'], ['F. Alonso', 'Aston Martin'], ['C. Sainz', 'Williams'],
+      ['A. Albon', 'Williams'], ['P. Gasly', 'Alpine'], ['N. Hülkenberg', 'Audi']
+    ];
+  }
+  f1Order(seed) {
+    return this.f1Drivers().map(d => ({ d, h: this.H(seed + d[0]) })).sort((a, b) => a.h - b.h).map(x => x.d);
+  }
+  f1Standings() {
+    return this.f1Drivers().map(d => {
+      const r = this.R(this.H('f1pts' + d[0]));
+      return { name: d[0], team: d[1], pts: Math.floor(40 + r() * 220) };
+    }).sort((a, b) => b.pts - a.pts);
+  }
+
+  // ── PUBG ──
+  pubgPlayers() { const p = this.state.cfg.pubg; return [p.me, ...p.friends].filter(Boolean); }
+  pubgDay(d) {
+    if (this.diff(d) > 0) return [];
+    const k = this.key(d);
+    const rows = this.pubgPlayers().map(name => {
+      const r = this.R(this.H('pg' + name + k));
+      if (r() > 0.62) return null;
+      const m = 1 + Math.floor(r() * 7);
+      const w = Math.floor(r() * m * 0.4);
+      const kills = Math.floor(m * (0.6 + r() * 3.2));
+      const deaths = Math.max(1, m - w);
+      return {
+        name, m, w, k: kills, kd: (kills / deaths).toFixed(2),
+        hs: Math.round(18 + r() * 38), as: Math.floor(m * r() * 2), rev: Math.floor(m * r() * 1.4),
+        lk: Math.round(60 + r() * 380)
+      };
+    }).filter(Boolean);
+    return rows.sort((a, b) => b.k - a.k);
+  }
+  pubgWeek(name, refDate) {
+    const dow = (refDate.getDay() + 6) % 7;
+    const mon = this.addDays(refDate, -dow);
+    const agg = { m: 0, w: 0, k: 0, as: 0, rev: 0, lk: 0, hsSum: 0, days: 0 };
+    for (let i = 0; i < 7; i++) {
+      const d = this.addDays(mon, i);
+      if (this.diff(d) > 0) break;
+      const row = this.pubgDay(d).find(r => r.name === name);
+      if (row) { agg.m += row.m; agg.w += row.w; agg.k += row.k; agg.as += row.as; agg.rev += row.rev; agg.lk = Math.max(agg.lk, row.lk); agg.hsSum += row.hs; agg.days++; }
+    }
+    return { m: agg.m, w: agg.w, k: agg.k, as: agg.as, rev: agg.rev, lk: agg.lk, hs: agg.days ? Math.round(agg.hsSum / agg.days) : 0, kd: (agg.k / Math.max(1, agg.m - agg.w)).toFixed(2) };
+  }
+  pubgRecords(name) {
+    if (name === 'NightOwl') return null;
+    const r = this.R(this.H('rec' + name));
+    return {
+      wins: 40 + Math.floor(r() * 400), kills: 800 + Math.floor(r() * 6000),
+      kd: (0.8 + r() * 2.4).toFixed(2), lk: Math.round(280 + r() * 300),
+      rev: 60 + Math.floor(r() * 500), mk: 6 + Math.floor(r() * 12)
+    };
+  }
+
+  // ── Fußball ──
+  wmMatches() {
+    return [
+      { id: 'wm1', off: -3, a: 'Niederlande', b: 'Japan', sa: 3, sb: 2, time: '18:00', round: 'Achtelfinale' },
+      { id: 'wm2', off: -2, a: 'Deutschland', b: 'Frankreich', sa: 2, sb: 1, time: '21:00', round: 'Achtelfinale' },
+      { id: 'wm3', off: 0, a: 'Spanien', b: 'England', sa: 1, sb: 1, time: '18:00', round: 'Viertelfinale', live: 63 },
+      { id: 'wm4', off: 1, a: 'Brasilien', b: 'Argentinien', time: '21:00', round: 'Viertelfinale' },
+      { id: 'wm5', off: 2, a: 'Portugal', b: 'Marokko', time: '18:00', round: 'Viertelfinale' }
+    ];
+  }
+  buliMatches() {
+    return [
+      { id: 'bl1', off: -4, a: 'FC Bayern', b: 'Borussia Dortmund', sa: 3, sb: 1, time: '18:30', round: '1. Spieltag' },
+      { id: 'bl2', off: -1, a: 'RB Leipzig', b: '1. FC Köln', sa: 2, sb: 2, time: '15:30', round: '1. Spieltag' },
+      { id: 'bl3', off: 3, a: 'Bayer Leverkusen', b: 'VfB Stuttgart', time: '15:30', round: '2. Spieltag' }
+    ];
+  }
+  matchEvents(m) {
+    if (m.sa == null) return [];
+    const NAMES = ['L. Martín', 'J. Costa', 'T. Weber', 'M. Silva', 'A. Dubois', 'R. Sato', 'C. Torres', 'D. Meyer', 'P. Rossi', 'K. Novák'];
+    const r = this.R(this.H('ev' + m.id));
+    const evs = [];
+    const maxMin = m.live || 90;
+    for (let i = 0; i < m.sa; i++) evs.push({ team: m.a, side: 'a', type: 'goal', min: 4 + Math.floor(r() * (maxMin - 6)), name: NAMES[Math.floor(r() * NAMES.length)] });
+    for (let i = 0; i < (m.sb || 0); i++) evs.push({ team: m.b, side: 'b', type: 'goal', min: 4 + Math.floor(r() * (maxMin - 6)), name: NAMES[Math.floor(r() * NAMES.length)] });
+    const yc = 2 + Math.floor(r() * 3);
+    for (let i = 0; i < yc; i++) evs.push({ team: r() < 0.5 ? m.a : m.b, type: 'yellow', min: 10 + Math.floor(r() * (maxMin - 12)), name: NAMES[Math.floor(r() * NAMES.length)] });
+    if (r() < 0.25) evs.push({ team: r() < 0.5 ? m.a : m.b, type: 'red', min: 30 + Math.floor(r() * (maxMin - 32)), name: NAMES[Math.floor(r() * NAMES.length)] });
+    evs.sort((x, y) => x.min - y.min);
+    let sa = 0, sb = 0;
+    return evs.map(e => {
+      if (e.type === 'goal') { if (e.side === 'a') sa++; else sb++; e.score = sa + ':' + sb; }
+      return e;
+    });
+  }
+  form(team) {
+    const r = this.R(this.H('form' + team));
+    const OPP = ['Werder Bremen', 'SC Freiburg', 'FSV Mainz 05', 'FC Augsburg', 'Union Berlin', 'Eintracht Frankfurt'];
+    const chips = [], last = [];
+    for (let i = 0; i < 5; i++) {
+      const v = r();
+      const out = v < 0.45 ? 'S' : v < 0.7 ? 'U' : 'N';
+      chips.push(out);
+      if (i < 3) {
+        const gf = out === 'S' ? 1 + Math.floor(r() * 3) : Math.floor(r() * 2);
+        const ga = out === 'S' ? Math.floor(r() * gf) : out === 'U' ? gf : gf + 1 + Math.floor(r() * 2);
+        last.push(gf + ':' + ga + ' ' + (r() < 0.5 ? 'gegen ' : 'bei ') + OPP[Math.floor(r() * OPP.length)]);
+      }
+    }
+    return { chips, last };
+  }
+  topLists(scope) {
+    const WM = [['K. Mbappé', 'Frankreich'], ['H. Kane', 'England'], ['J. Musiala', 'Deutschland'], ['Vinícius Jr.', 'Brasilien'], ['L. Messi', 'Argentinien'], ['F. Wirtz', 'Deutschland'], ['Lamine Yamal', 'Spanien'], ['J. Bellingham', 'England'], ['C. Pulisic', 'USA'], ['V. Osimhen', 'Nigeria'], ['B. Fernandes', 'Portugal'], ['A. Hakimi', 'Marokko']];
+    const BL = [['H. Kane', 'FC Bayern'], ['S. Guirassy', 'Borussia Dortmund'], ['P. Schick', 'Bayer Leverkusen'], ['L. Openda', 'RB Leipzig'], ['J. Burkardt', 'FSV Mainz 05'], ['O. Marmoush', 'Eintracht Frankfurt'], ['M. Olise', 'FC Bayern'], ['J. Frimpong', 'Bayer Leverkusen'], ['D. Undav', 'VfB Stuttgart'], ['V. Grifo', 'SC Freiburg'], ['R. Sallai', 'SC Freiburg'], ['K. Adeyemi', 'Borussia Dortmund']];
+    const pool = scope === 'wm' ? WM : BL;
+    const mk = (kind, base, fmt) => {
+      const arr = pool.map(p => ({ p, h: this.H(kind + scope + p[0]) })).sort((a, b) => a.h - b.h).slice(0, 10);
+      return arr.map((x, i) => {
+        const r = this.R(x.h);
+        return { rank: i + 1, name: x.p[0], sub: x.p[1], val: fmt ? fmt(base - Math.floor(i * 0.6), r) : String(Math.max(1, base - Math.floor(i * 0.7))) };
+      });
+    };
+    const nations = scope === 'wm'
+      ? [['Frankreich', 14], ['Deutschland', 13], ['Brasilien', 12], ['Spanien', 12], ['England', 11], ['Argentinien', 10], ['Portugal', 9], ['Niederlande', 9], ['Marokko', 7], ['Japan', 6]]
+      : [['FC Bayern', 9], ['Bayer Leverkusen', 7], ['RB Leipzig', 6], ['Borussia Dortmund', 6], ['Eintracht Frankfurt', 5], ['VfB Stuttgart', 5], ['SC Freiburg', 4], ['1. FC Köln', 3], ['Union Berlin', 3], ['Werder Bremen', 2]];
+    return {
+      tore: mk('t', scope === 'wm' ? 7 : 9),
+      assists: mk('a', scope === 'wm' ? 5 : 7),
+      scorer: (() => {
+        const arr = pool.map(p => ({ p, h: this.H('s' + scope + p[0]) })).sort((a, b) => a.h - b.h).slice(0, 10);
+        const base = scope === 'wm' ? 10 : 14;
+        return arr.map((x, i) => {
+          const r = this.R(x.h);
+          const total = Math.max(2, base - Math.floor(i * 0.6));
+          const goals = Math.max(1, Math.round(total * (0.45 + r() * 0.35)));
+          const assists = Math.max(0, total - goals);
+          return { rank: i + 1, name: x.p[0], sub: goals + ' Tore · ' + assists + ' Assists', val: String(total) };
+        });
+      })(),
+      karten: mk('k', 5, (v, r) => Math.max(1, v) + ' G · ' + (r() < 0.3 ? 1 : 0) + ' R'),
+      nationen: nations.map((n, i) => ({ rank: i + 1, name: n[0], sub: scope === 'wm' ? 'Nation' : 'Verein', val: String(n[1]) }))
+    };
+  }
+
+  // ── Quiz ──
+  quizPool() {
+    return {
+      'Geschichte': [
+        { q: 'In welchem Jahr fiel die Berliner Mauer?', a: ['1985', '1989', '1991', '1993'], c: 1 },
+        { q: 'Wer war der erste Bundeskanzler der BRD?', a: ['Willy Brandt', 'Ludwig Erhard', 'Konrad Adenauer', 'Kurt Kiesinger'], c: 2 }],
+      'Geografie': [
+        { q: 'Welcher ist der längste Fluss Europas?', a: ['Donau', 'Rhein', 'Wolga', 'Elbe'], c: 2 },
+        { q: 'Was ist die Hauptstadt von Australien?', a: ['Sydney', 'Melbourne', 'Canberra', 'Perth'], c: 2 }],
+      'Naturwissenschaft': [
+        { q: 'Welches chemische Element hat das Symbol „Au"?', a: ['Silber', 'Gold', 'Aluminium', 'Kupfer'], c: 1 },
+        { q: 'Wie viele Planeten hat unser Sonnensystem?', a: ['7', '8', '9', '10'], c: 1 }],
+      'Sport': [
+        { q: 'Wie viele Spieler stehen beim Fußball pro Team auf dem Platz?', a: ['10', '11', '12', '9'], c: 1 },
+        { q: 'In welcher Sportart gibt es den Begriff „Ace"?', a: ['Golf', 'Tennis', 'Rudern', 'Boxen'], c: 1 }],
+      'Kunst & Kultur': [
+        { q: 'Wer malte die „Mona Lisa"?', a: ['Michelangelo', 'Raffael', 'Leonardo da Vinci', 'Botticelli'], c: 2 },
+        { q: 'Aus welchem Land stammt der Tango?', a: ['Spanien', 'Brasilien', 'Argentinien', 'Mexiko'], c: 2 }],
+      'Technik': [
+        { q: 'Wofür steht die Abkürzung „CPU"?', a: ['Central Processing Unit', 'Computer Personal Unit', 'Central Program Utility', 'Core Processor Update'], c: 0 },
+        { q: 'Welches Unternehmen entwickelte das iPhone?', a: ['Samsung', 'Apple', 'Nokia', 'Google'], c: 1 }]
+    };
+  }
+  quizQs(dateKey) {
+    const pool = this.quizPool();
+    const topics = this.state.cfg.quiz.topics.length ? this.state.cfg.quiz.topics : Object.keys(pool);
+    const r = this.R(this.H('qz' + dateKey));
+    const qs = [];
+    for (let i = 0; i < 3; i++) {
+      const t = topics[Math.floor(r() * topics.length)];
+      const q = pool[t][Math.floor(r() * pool[t].length)];
+      if (qs.find(x => x.q === q.q)) { i--; continue; }
+      qs.push({ ...q, topic: t });
+      if (qs.length >= 3) break;
+    }
+    return qs;
+  }
+
+  // ── Einträge pro Tag ──
+  entriesFor(d) {
+    const cfg = this.state.cfg, off = this.diff(d), k = this.key(d), done = this.getDone();
+    const wd = (d.getDay() + 6) % 7;
+    const out = [];
+    if (cfg.modules.quiz && cfg.quiz.days.includes(wd)) {
+      const dn = done['quiz:' + k];
+      out.push({
+        type: 'quiz', time: '08:00', title: 'Allgemeinwissens-Quiz',
+        sub: cfg.quiz.topics.join(', ') || 'Alle Themen', color: '#5e5ce6', badge: 'QUIZ',
+        chip: dn ? 'Erledigt' : off < 0 ? 'Verpasst' : off === 0 ? 'Offen' : '',
+        chipKind: dn ? 'good' : off < 0 ? 'bad' : 'acc',
+        open: () => this.setState({ sheet: { type: 'quiz', k, d: this.fmtLong(d) }, quizIdx: 0, quizPicked: null, quizScore: 0 })
+      });
+    }
+    if (cfg.modules.akt) {
+      cfg.akt.list.forEach(a => {
+        if (!a.days.includes(wd)) return;
+        const dk = 'akt:' + a.id + ':' + k;
+        out.push({
+          type: 'akt', time: '18:00', title: a.name, sub: 'Wöchentliche Aktivität', color: '#30d158', badge: 'AKTIVITÄT',
+          check: true, done: !!done[dk],
+          toggle: (e) => { e.stopPropagation(); const dn = this.getDone(); dn[dk] = !dn[dk]; this.saveDone(dn); }
+        });
+      });
+    }
+    if (cfg.modules.strava) {
+      const run = this.stravaRun(d);
+      if (run) out.push({
+        type: 'strava', time: run.start, title: run.km.toLocaleString('de-DE') + ' km Lauf',
+        sub: 'Pace ' + this.fmtPace(run.pace) + ' /km · ' + this.fmtDur(run.dur), color: '#fc4c02', badge: 'STRAVA',
+        chip: run.pr ? 'PR' : '', chipKind: 'good',
+        open: () => this.setState({ sheet: { type: 'strava', k, d: this.fmtLong(d), date: d, run }, stravaTab: 'lauf' })
+      });
+    }
+    if (cfg.modules.ufc) this.ufcEvents().forEach(ev => {
+      const md = this.addDays(this.today, ev.off);
+      if (this.key(md) !== k) return;
+      const past = ev.off < 0;
+      out.push({
+        type: 'ufc', time: ev.time, title: ev.name + ': ' + ev.main,
+        sub: past ? 'Ergebnisse verfügbar' : 'Main Card ab ' + ev.time + ' Uhr', color: '#bf9b30', badge: 'UFC',
+        chip: past ? 'Beendet' : '', chipKind: 'sec',
+        open: () => this.setState({ sheet: { type: 'ufc', ev, k, d: this.fmtLong(md), date: md }, ufcTab: 'card' })
+      });
+    });
+    if (cfg.modules.f1) this.f1Races().forEach(rc => {
+      [['quali', rc.qOff, rc.qTime, 'Qualifying'], ['rennen', rc.rOff, rc.rTime, 'Rennen']].forEach(([kind, off2, time, label]) => {
+        const md = this.addDays(this.today, off2);
+        if (this.key(md) !== k) return;
+        out.push({
+          type: 'f1', time, title: label + ' · ' + rc.gp,
+          sub: 'Formel 1 · ' + rc.circuit, color: '#e10600', badge: 'FORMEL 1',
+          chip: off2 < 0 ? 'Ergebnis' : '', chipKind: 'sec',
+          open: () => this.setState({ sheet: { type: 'f1', rc, kind, off: off2, k, d: this.fmtLong(md), date: md }, f1Tab: 'session' })
+        });
+      });
+    });
+    const vac = this.vacationFor(d);
+    if (vac) {
+      const fmtK = s => { const p = s.split('-'); return p[2] + '.' + p[1] + '.'; };
+      out.push({
+        type: 'urlaub', time: '', title: 'Urlaub in ' + vac.ort,
+        sub: fmtK(vac.von) + ' – ' + fmtK(vac.bis) + ' · Wetter zeigt ' + vac.ort, color: '#64d2ff', badge: 'URLAUB'
+      });
+    }
+    if (cfg.modules.pubg) {
+      const rows = this.pubgDay(d);
+      if (rows.length) {
+        out.push({
+          type: 'pubg', time: '20:30', title: rows.length + (rows.length === 1 ? ' Spieler war' : ' Spieler waren') + ' aktiv',
+          sub: rows[0].name + ' führt mit ' + rows[0].k + ' Kills', color: '#ff9f0a', badge: 'PUBG',
+          open: () => this.setState({ sheet: { type: 'pubg', k, d: this.fmtLong(d), date: d }, pubgSel: null, pubgTab: 'tag' })
+        });
+      }
+    }
+    const pushMatch = (m, scope) => {
+      const md = this.addDays(this.today, m.off);
+      if (this.key(md) !== k) return;
+      const live = !!m.live, fin = m.sa != null && !live;
+      out.push({
+        type: scope, time: m.time, title: m.a + (m.sa != null ? '  ' + m.sa + ':' + m.sb + '  ' : '  –  ') + m.b,
+        sub: (scope === 'wm' ? 'WM 2026 · ' : 'Bundesliga · ') + m.round,
+        color: scope === 'wm' ? '#af52de' : '#ff375f', badge: scope === 'wm' ? 'WM' : 'BUNDESLIGA',
+        chip: live ? '● LIVE ' + m.live + "'" : fin ? 'Endstand' : '', chipKind: live ? 'live' : 'sec',
+        open: () => this.setState({ sheet: { type: scope, m, d: this.fmtLong(md) }, matchTab: 'spiel', statCat: 'tore' })
+      });
+    };
+    if (cfg.modules.wm) this.wmMatches().forEach(m => pushMatch(m, 'wm'));
+    if (cfg.modules.buli) this.buliMatches().forEach(m => pushMatch(m, 'buli'));
+    out.sort((a, b) => a.time.localeCompare(b.time));
+    return out;
+  }
+
+  decorate(e) {
+    const CH = { good: ['rgba(48,209,88,.16)', '#30d158'], bad: ['rgba(255,69,58,.14)', '#ff453a'], acc: ['rgba(10,132,255,.14)', 'var(--acc)'], live: ['rgba(255,69,58,.14)', '#ff453a'], sec: ['var(--fill)', 'var(--sec)'] };
+    const c = CH[e.chipKind] || CH.sec;
+    return {
+      ...e, cursor: e.open ? 'pointer' : 'default', open: e.open || (() => {}),
+      chipBg: c[0], chipFg: c[1], chipAnim: e.chipKind === 'live' ? 'livePulse 1.6s infinite' : 'none',
+      ckBorder: e.done ? '#30d158' : 'var(--sep)', ckBg: e.done ? '#30d158' : 'transparent',
+      ckFg: e.done ? '#fff' : 'var(--sec)', ckLabel: e.done ? '✓ Erledigt' : 'Abhaken'
+    };
+  }
+
+  // ── Kalenderexport (.ics) ──
+  exportedKeys() { try { return JSON.parse(localStorage.getItem('kal.exported')) || {}; } catch (e) { return {}; } }
+  markExported(id) { const e = this.exportedKeys(); e[id] = true; try { localStorage.setItem('kal.exported', JSON.stringify(e)); } catch (er) {} this.forceUpdate(); }
+  downloadIcs(id, title, date, hh, mm, durMin, desc) {
+    const pad = n => String(n).padStart(2, '0');
+    const start = new Date(date); start.setHours(hh, mm, 0, 0);
+    const end = new Date(start.getTime() + durMin * 60000);
+    const fmt = d => d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + 'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00';
+    const esc = s => String(s).replace(/[\n]/g, '\\n');
+    const ics = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kalender//DE', 'BEGIN:VEVENT',
+      'UID:' + id + '@kalender-app', 'DTSTAMP:' + fmt(new Date()),
+      'DTSTART:' + fmt(start), 'DTEND:' + fmt(end),
+      'SUMMARY:' + esc(title), 'DESCRIPTION:' + esc(desc || ''), 'END:VEVENT', 'END:VCALENDAR'
+    ].join('\r\n');
+    const blob = new Blob([ics], { type: 'text/calendar' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = title.replace(/[^a-z0-9äöüß]+/gi, '_') + '.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+    this.markExported(id);
+  }
+
+  shiftDay(dir) {
+    let s = this.state.selDay + dir, w = this.state.weekOffset;
+    if (s > 6) { s = 0; w++; } if (s < 0) { s = 6; w--; }
+    this.setState({ selDay: s, weekOffset: w });
+  }
+
+  renderVals() {
+    const st = this.state, cfg = st.cfg;
+    const isDesktop = st.w >= 900;
+    const mon = this.weekStart(st.weekOffset);
+    const done = this.getDone();
+    const WDS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = this.addDays(mon, i);
+      const isToday = this.diff(d) === 0, sel = i === st.selDay;
+      const wx = cfg.modules.wetter ? this.weather(d) : null;
+      const entries = this.entriesFor(d).map(e => this.decorate(e));
+      const colors = [...new Set(entries.map(e => e.color))].slice(0, 4);
+      days.push({
+        wd: WDS[i], num: d.getDate(),
+        select: () => this.setState({ selDay: i }),
+        pillBg: sel && !isDesktop ? 'var(--card)' : 'transparent',
+        wdColor: isToday ? 'var(--acc)' : 'var(--sec)',
+        numBg: isToday ? 'var(--acc)' : 'transparent',
+        numColor: isToday ? '#fff' : 'var(--fg)',
+        hasWeather: !!wx, noWeather: cfg.modules.wetter && !wx,
+        wPath: wx ? wx.path : '', wColor: wx ? wx.color : '', temp: wx ? wx.t : '',
+        dots: colors.map(c => ({ c })),
+        entries, colBg: isToday ? 'var(--fill)' : 'transparent'
+      });
+    }
+    const selDate = this.addDays(mon, st.selDay);
+    const selWx = cfg.modules.wetter ? this.weather(selDate) : null;
+    const selOff = this.diff(selDate);
+    const selEntries = days[st.selDay].entries;
+
+    // KW
+    const jan = new Date(mon.getFullYear(), 0, 1);
+    const kw = Math.ceil(((mon - jan) / 86400000 + jan.getDay() + 1) / 7);
+
+    // Sheet
+    const sh = st.sheet;
+    const shPubg = sh && sh.type === 'pubg';
+    const shWm = sh && sh.type === 'wm';
+    const shBuli = sh && sh.type === 'buli';
+    const shMatch = shWm || shBuli;
+    const shQuiz = sh && sh.type === 'quiz';
+    const shStrava = sh && sh.type === 'strava';
+    const shUfc = sh && sh.type === 'ufc';
+    const shF1 = sh && sh.type === 'f1';
+
+    const v = {
+      isWeek: st.screen === 'week', isConfig: st.screen === 'config', isAccount: st.screen === 'account',
+      isMobile: !isDesktop, isDesktop,
+      monthLabel: mon.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }),
+      kwLabel: 'KW ' + kw,
+      days, selEntries, selEmpty: selEntries.length === 0,
+      selDayTitle: (selOff === 0 ? 'Heute · ' : selOff === 1 ? 'Morgen · ' : selOff === -1 ? 'Gestern · ' : '') + this.fmtLong(selDate),
+      selDayWeather: selWx ? (selWx.loc ? selWx.loc + ' · ' : '') + selWx.label + ', ' + selWx.t + '°' : '',
+      prevWeek: () => this.setState({ weekOffset: st.weekOffset - 1 }),
+      nextWeek: () => this.setState({ weekOffset: st.weekOffset + 1 }),
+      goToday: () => this.setState({ weekOffset: 0, selDay: (this.today.getDay() + 6) % 7 }),
+      openConfig: () => this.setState({ screen: 'config' }),
+      openAccount: () => this.setState({ screen: 'account' }),
+      goWeek: () => this.setState({ screen: 'week' }),
+      noop: () => {},
+      tStart: (e) => { this._x = e.touches[0].clientX; this._y = e.touches[0].clientY; },
+      tEnd: (e) => {
+        const dx = e.changedTouches[0].clientX - this._x, dy = e.changedTouches[0].clientY - this._y;
+        if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) this.shiftDay(dx < 0 ? 1 : -1);
+      },
+      hasSheet: !!sh,
+      closeSheet: () => this.setState({ sheet: null }),
+      swallow: (e) => e.stopPropagation(),
+      searchOpen: st.searchOpen, searchQ: st.searchQ,
+      openSearch: () => this.setState({ searchOpen: true, searchQ: '' }),
+      closeSearch: () => this.setState({ searchOpen: false }),
+      onSearchQ: (e) => this.setState({ searchQ: e.target.value }),
+      searchKey: (e) => { if (e.key === 'Escape') this.setState({ searchOpen: false }); },
+      searchRef: (el) => { if (el && !this._sf) { this._sf = true; setTimeout(() => el.focus(), 30); } if (!el) this._sf = false; },
+      shPubg, shMatch, shQuiz, shStrava, shUfc, shF1,
+      themeOpts: ['hell', 'dunkel'].map(t => ({
+        label: t === 'hell' ? 'Hell' : 'Dunkel',
+        on: () => { this.setState({ theme: t }); try { localStorage.setItem('kal.theme', t); } catch (e) {} },
+        bg: st.theme === t ? 'var(--card)' : 'transparent',
+        sh: st.theme === t ? '0 1px 3px rgba(0,0,0,.15)' : 'none'
+      }))
+    };
+
+    // ── Suche ──
+    v.searchResults = [];
+    if (st.searchOpen) {
+      const q = st.searchQ.trim().toLowerCase();
+      if (q.length >= 2) {
+        const results = [];
+        const dowToday = (this.today.getDay() + 6) % 7;
+        for (let off = -28; off <= 28 && results.length < 30; off++) {
+          const d = this.addDays(this.today, off);
+          for (const e of this.entriesFor(d)) {
+            if (results.length >= 30) break;
+            const hay = (e.title + ' ' + (e.sub || '') + ' ' + e.badge + ' ' + this.fmtLong(d)).toLowerCase();
+            if (!hay.includes(q)) continue;
+            const abs = dowToday + off;
+            const wOff = Math.floor(abs / 7);
+            const sDay = ((abs % 7) + 7) % 7;
+            results.push({
+              badge: e.badge, color: e.color, title: e.title, sub: e.sub || '',
+              dateLabel: (off === 0 ? 'Heute · ' : off === 1 ? 'Morgen · ' : off === -1 ? 'Gestern · ' : '') + d.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }),
+              go: () => {
+                this.setState({ searchOpen: false, screen: 'week', weekOffset: wOff, selDay: sDay });
+                if (e.open) e.open();
+              }
+            });
+          }
+        }
+        v.searchResults = results;
+        v.searchEmpty = results.length === 0;
+        v.searchEmptyMsg = 'Keine Treffer für \u201e' + st.searchQ.trim() + '\u201c (±4 Wochen).';
+      } else {
+        v.searchEmpty = true;
+        v.searchEmptyMsg = 'Mindestens 2 Zeichen eingeben – durchsucht alle Einträge der letzten und nächsten 4 Wochen.';
+      }
+    }
+
+    // ── Konfiguration ──
+    const MODS = {
+      wetter: { name: 'Wetter', desc: 'Wetterlage in der Wochenübersicht', color: '#ff9f0a', icon: 'M12 8.2a3.8 3.8 0 100 7.6 3.8 3.8 0 000-7.6zM12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4', hasCfg: false },
+      pubg: { name: 'PUBG', desc: 'Spiele und Statistiken deiner Freunde', color: '#ff9f0a', icon: 'M12 2.5v3.5M12 18v3.5M2.5 12H6M18 12h3.5M12 7.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z', hasCfg: true },
+      wm: { name: 'WM 2026', desc: 'Live-Ergebnisse und Turnierstatistiken', color: '#af52de', icon: 'M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0zM7 5H4v2a3 3 0 003 3M17 5h3v2a3 3 0 01-3-3', hasCfg: false },
+      buli: { name: 'Bundesliga', desc: 'Spieltage, Ergebnisse und Form', color: '#ff375f', icon: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 8.4l3.4 2.5-1.3 4h-4.2l-1.3-4zM12 3v5.4M4.4 15l3.5-.1M19.6 15l-3.5-.1', hasCfg: false },
+      quiz: { name: 'Tägliches Quiz', desc: 'Allgemeinwissen an deinen Wunschtagen', color: '#5e5ce6', icon: 'M9.2 9a3 3 0 015.6 1c0 2-3 2.4-3 4M12 17.5v.1M12 3a9 9 0 100 18 9 9 0 000-18z', hasCfg: true },
+      akt: { name: 'Eigene Aktivitäten', desc: 'Wöchentliche Vorhaben zum Abhaken', color: '#30d158', icon: 'M20 6L9 17l-5-5', hasCfg: true },
+      strava: { name: 'Strava', desc: 'Läufe und Laufstatistiken im Kalender', color: '#fc4c02', icon: 'M5 20a2 2 0 100-4 2 2 0 000 4zM19 8a2 2 0 100-4 2 2 0 000 4zM7 18h7a4 4 0 000-8h-4a3 3 0 010-6h7', hasCfg: false },
+      ufc: { name: 'UFC', desc: 'Events, Fight Cards und Ergebnisse', color: '#bf9b30', icon: 'M8 3h8l5 5v8l-5 5H8l-5-5V8z', hasCfg: false },
+      f1: { name: 'Formel 1', desc: 'Rennwochenenden und WM-Stand', color: '#e10600', icon: 'M5 21V4M5 4h14l-3 4 3 4H5', hasCfg: false },
+      urlaub: { name: 'Urlaub', desc: 'Urlaube mit Wetter am Zielort', color: '#64d2ff', icon: 'M6 8h12a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2zM9 8V6a3 3 0 016 0v2M9 12v6M15 12v6', hasCfg: true }
+    };
+    v.myModules = Object.keys(MODS).filter(k => cfg.modules[k]).map(k => {
+      const m = MODS[k], open = st.cfgOpen === k;
+      return {
+        name: m.name, desc: m.desc, color: m.color, icon: m.icon, hasCfg: true,
+        open, chev: open ? '90deg' : '0deg',
+        isPubg: open && k === 'pubg', isQuiz: open && k === 'quiz', isAkt: open && k === 'akt',
+        isUrlaub: open && k === 'urlaub',
+        expand: () => this.setState({ cfgOpen: open ? null : k }),
+        reset: () => this.mutCfg(c => { if (this.defaults()[k]) c[k] = this.moduleDefault(k); }),
+        removeMod: () => this.mutCfg(c => { c.modules[k] = false; })
+      };
+    });
+    v.noModules = v.myModules.length === 0;
+
+    const market = [];
+    Object.keys(MODS).forEach(k => {
+      if (!cfg.modules[k]) market.push({
+        name: MODS[k].name, desc: MODS[k].desc, color: MODS[k].color, icon: MODS[k].icon,
+        addable: true, opacity: 1, cursor: 'default', tap: () => {},
+        add: () => this.mutCfg(c => { c.modules[k] = true; })
+      });
+    });
+    market.push(
+      { name: 'Google Sheets', desc: 'Termine aus einer Tabelle übernehmen', color: '#8e8e93', icon: 'M4 4h16v16H4zM4 10h16M10 4v16', locked: true, opacity: 0.55, cursor: 'pointer', tag: 'ACCOUNT', tagBg: 'var(--fill)', tagFg: 'var(--sec)', tap: () => this.setState({ screen: 'account' }) },
+      { name: 'Outlook Kalender', desc: 'Deinen Outlook-Kalender einbinden', color: '#8e8e93', icon: 'M4 6h16v12H4zM4 7l8 6 8-6', locked: true, opacity: 0.55, cursor: 'pointer', tag: 'ACCOUNT', tagBg: 'var(--fill)', tagFg: 'var(--sec)', tap: () => this.setState({ screen: 'account' }) }
+    );
+    market.push(
+      { name: 'News-Briefing', desc: 'Tägliche Schlagzeilen zum Start in den Tag', color: '#8e8e93', icon: 'M4 5h16v14H4zM8 9h8M8 12h8M8 15h5', opacity: 0.45, cursor: 'default', tag: 'IN ENTWICKLUNG', tagBg: 'rgba(94,92,230,.15)', tagFg: '#5e5ce6', tap: () => {} }
+    );
+    v.marketItems = market;
+
+    // PUBG-Konfig
+    v.pubgMe = cfg.pubg.me;
+    v.onPubgMe = (e) => this.mutCfg(c => { c.pubg.me = e.target.value; });
+    v.pubgFriends = cfg.pubg.friends.map((f, i) => ({ name: f, remove: () => this.mutCfg(c => { c.pubg.friends.splice(i, 1); }) }));
+    v.friendInput = st.friendInput;
+    v.onFriendInput = (e) => this.setState({ friendInput: e.target.value });
+    const addF = () => { const n = st.friendInput.trim(); if (n) { this.mutCfg(c => { c.pubg.friends.push(n); }); this.setState({ friendInput: '' }); } };
+    v.addFriend = addF;
+    v.friendKey = (e) => { if (e.key === 'Enter') addF(); };
+
+    // Quiz-Konfig
+    v.quizDayOpts = WDS.map((l, i) => ({
+      label: l, on: () => this.mutCfg(c => { const a = c.quiz.days; a.includes(i) ? c.quiz.days = a.filter(x => x !== i) : a.push(i); }),
+      bg: cfg.quiz.days.includes(i) ? 'var(--acc)' : 'var(--fill)', fg: cfg.quiz.days.includes(i) ? '#fff' : 'var(--fg)'
+    }));
+    v.topicOpts = Object.keys(this.quizPool()).map(t => {
+      const on = cfg.quiz.topics.includes(t);
+      return {
+        label: t, on: () => this.mutCfg(c => { const a = c.quiz.topics; on ? c.quiz.topics = a.filter(x => x !== t) : a.push(t); }),
+        border: on ? 'var(--acc)' : 'var(--sep)', bg: on ? 'rgba(10,132,255,.12)' : 'transparent', fg: on ? 'var(--acc)' : 'var(--fg)'
+      };
+    });
+
+    // Aktivitäten-Konfig
+    v.aktRows = cfg.akt.list.map(a => ({
+      name: a.name, daysLabel: a.days.map(i => WDS[i]).join(', '),
+      remove: () => this.mutCfg(c => { c.akt.list = c.akt.list.filter(x => x.id !== a.id); })
+    }));
+    v.aktInput = st.aktInput;
+    v.onAktInput = (e) => this.setState({ aktInput: e.target.value });
+    v.aktDayOpts = WDS.map((l, i) => ({
+      label: l.slice(0, 1), on: () => this.setState({ aktDays: st.aktDays.includes(i) ? st.aktDays.filter(x => x !== i) : [...st.aktDays, i] }),
+      bg: st.aktDays.includes(i) ? 'var(--acc)' : 'var(--fill)', fg: st.aktDays.includes(i) ? '#fff' : 'var(--fg)'
+    }));
+    v.addAkt = () => {
+      const n = st.aktInput.trim();
+      if (!n || !st.aktDays.length) return;
+      this.mutCfg(c => { c.akt.list.push({ id: Date.now(), name: n, days: st.aktDays }); });
+      this.setState({ aktInput: '', aktDays: [] });
+    };
+
+
+    // Urlaub-Konfig
+    const fmtIso = s => { if (!s) return ''; const p = s.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; };
+    v.urlaubRows = (cfg.urlaub.list || []).map(u => ({
+      ort: u.ort, range: fmtIso(u.von) + ' – ' + fmtIso(u.bis),
+      remove: () => this.mutCfg(c => { c.urlaub.list = c.urlaub.list.filter(x => x.id !== u.id); })
+    }));
+    v.noUrlaube = v.urlaubRows.length === 0;
+    v.urlOrt = st.urlOrt; v.urlVon = st.urlVon; v.urlBis = st.urlBis;
+    v.onUrlOrt = (e) => this.setState({ urlOrt: e.target.value });
+    v.onUrlVon = (e) => this.setState({ urlVon: e.target.value });
+    v.onUrlBis = (e) => this.setState({ urlBis: e.target.value });
+    v.addUrlaub = () => {
+      const ort = st.urlOrt.trim();
+      if (!ort || !st.urlVon || !st.urlBis) return;
+      const von = st.urlVon <= st.urlBis ? st.urlVon : st.urlBis;
+      const bis = st.urlVon <= st.urlBis ? st.urlBis : st.urlVon;
+      this.mutCfg(c => { c.urlaub.list.push({ id: Date.now(), ort, von, bis }); });
+      this.setState({ urlOrt: '', urlVon: '', urlBis: '' });
+    };
+
+    // ── Sheet-Inhalte ──
+    v.sheetBadge = ''; v.sheetTitle = ''; v.sheetDate = sh ? sh.d : ''; v.sheetColor = 'var(--sec)';
+    v.canExport = false;
+    const exported = this.exportedKeys();
+    const setupExport = (id, label, date, hh, mm, dur, desc) => {
+      const done = !!exported[id];
+      v.canExport = true;
+      v.exportedDone = done; v.exportNotDone = !done;
+      v.exportLabel = done ? 'Im Kalender gespeichert' : 'Zum Kalender hinzufügen';
+      v.exportBg = done ? 'rgba(48,209,88,.15)' : 'var(--acc)';
+      v.exportFg = done ? '#30d158' : '#fff';
+      v.exportCalendar = () => this.downloadIcs(id, sh.title || v.sheetTitle, date, hh, mm, dur, desc);
+    };
+    if (shPubg) {
+      v.sheetBadge = 'PUBG'; v.sheetColor = '#ff9f0a'; v.sheetTitle = 'Tagesübersicht';
+      const rows = this.pubgDay(sh.date);
+      v.pubgListView = !st.pubgSel;
+      v.pubgPlayerView = !!st.pubgSel;
+      v.pubgRows = rows.map((r, i) => ({
+        ...r, rank: i + 1, rankColor: i === 0 ? '#ff9f0a' : 'var(--sec)', me: r.name === cfg.pubg.me,
+        open: () => this.setState({ pubgSel: r.name, pubgTab: 'tag' })
+      }));
+      if (st.pubgSel) {
+        v.pubgSelName = st.pubgSel;
+        v.pubgBack = () => this.setState({ pubgSel: null });
+        v.pubgTabs = [['tag', 'Tag'], ['woche', 'Woche'], ['rekorde', 'Rekorde']].map(([id, label]) => ({
+          label, on: () => this.setState({ pubgTab: id }),
+          bg: st.pubgTab === id ? 'var(--card)' : 'transparent',
+          sh: st.pubgTab === id ? '0 1px 3px rgba(0,0,0,.15)' : 'none'
+        }));
+        const day = rows.find(r => r.name === st.pubgSel);
+        let kpis = [], hint = '', locked = false;
+        if (st.pubgTab === 'tag' && day) {
+          hint = 'Statistik für diesen Tag';
+          kpis = [['Matches', day.m], ['Wins', day.w], ['Kills', day.k], ['Headshot-Quote', day.hs + ' %'], ['Assists', day.as], ['Revives', day.rev], ['Longest Kill', day.lk + ' m']];
+        } else if (st.pubgTab === 'woche') {
+          const wk = this.pubgWeek(st.pubgSel, sh.date);
+          hint = 'Woche des Kalendereintrags (bis heute)';
+          kpis = [['Matches', wk.m], ['Wins', wk.w], ['Kills', wk.k], ['K/D', wk.kd], ['Headshot-Quote', wk.hs + ' %'], ['Assists', wk.as], ['Revives', wk.rev], ['Longest Kill', wk.lk + ' m']];
+        } else if (st.pubgTab === 'rekorde') {
+          const rec = this.pubgRecords(st.pubgSel);
+          if (!rec) locked = true;
+          else {
+            hint = 'Persönliche Rekorde (Lifetime)';
+            kpis = [['Wins', rec.wins], ['Kills', rec.kills], ['K/D', rec.kd], ['Longest Shot', rec.lk + ' m'], ['Revives', rec.rev], ['Meiste Kills / Match', rec.mk]];
+          }
+        }
+        v.pubgLocked = locked;
+        v.pubgKpisVisible = !locked;
+        v.pubgTabHint = hint;
+        v.pubgKpis = kpis.map(([l, val]) => ({ l, v: String(val) }));
+      }
+      setupExport('pubg:' + sh.k, 'PUBG – Tagesübersicht', sh.date, 20, 30, 60, this.pubgPlayers().join(', '));
+    }
+    if (shMatch) {
+      const m = sh.m, scope = sh.type;
+      const live = !!m.live, fin = m.sa != null && !live, upcoming = m.sa == null;
+      v.sheetBadge = scope === 'wm' ? 'WM 2026 · ' + m.round : 'BUNDESLIGA · ' + m.round;
+      v.sheetColor = scope === 'wm' ? '#af52de' : '#ff375f';
+      v.sheetTitle = m.a + ' – ' + m.b;
+      v.mA = m.a; v.mB = m.b; v.mTime = m.time;
+      v.mScore = upcoming ? m.time : m.sa + ':' + m.sb;
+      v.mStatus = live ? '● LIVE · ' + m.live + '. Min' : fin ? 'Endstand' : 'Anstoß';
+      v.mStatusColor = live ? '#ff453a' : 'var(--sec)';
+      v.mStatusAnim = live ? 'livePulse 1.6s infinite' : 'none';
+      v.matchTabs = [['spiel', 'Spielverlauf'], ['stats', scope === 'wm' ? 'Turnier' : 'Liga']].map(([id, label]) => ({
+        label, on: () => this.setState({ matchTab: id }),
+        bg: st.matchTab === id ? 'var(--card)' : 'transparent',
+        sh: st.matchTab === id ? '0 1px 3px rgba(0,0,0,.15)' : 'none'
+      }));
+      v.mGameView = st.matchTab === 'spiel';
+      v.mStatsView = st.matchTab === 'stats';
+      v.mUpcoming = upcoming;
+      v.mEvents = this.matchEvents(m).map(e => ({
+        min: e.min, team: e.team,
+        glyph: e.type === 'goal' ? '⚽' : '', text: e.type === 'goal' ? 'Tor – ' + e.name : e.type === 'yellow' ? 'Gelbe Karte – ' + e.name : 'Rote Karte – ' + e.name,
+        r: e.type === 'goal' ? '50%' : '3px',
+        bg: e.type === 'goal' ? 'var(--fill)' : e.type === 'yellow' ? '#ffd60a' : '#ff453a',
+        fg: 'var(--fg)', score: e.score || ''
+      }));
+      v.mForms = scope === 'buli';
+      v.mFormRows = scope === 'buli' ? [m.a, m.b].map(team => {
+        const f = this.form(team);
+        return {
+          team, chips: f.chips.map(t => ({ t, bg: t === 'S' ? '#30d158' : t === 'U' ? '#8e8e93' : '#ff453a' })),
+          last: f.last
+        };
+      }) : [];
+      const lists = this.topLists(scope);
+      const CATS = [['tore', 'Tore'], ['assists', 'Assists'], ['scorer', 'Scorer'], ['karten', 'Karten'], ['nationen', scope === 'wm' ? 'Nationen' : 'Vereine']];
+      v.statCats = CATS.map(([id, label]) => ({
+        label, on: () => this.setState({ statCat: id }),
+        bg: st.statCat === id ? 'var(--acc)' : 'var(--fill)', fg: st.statCat === id ? '#fff' : 'var(--fg)'
+      }));
+      v.statRows = (lists[st.statCat] || []).map(r => ({ ...r, rankColor: r.rank <= 3 ? 'var(--acc)' : 'var(--sec)' }));
+      const HEADS = { tore: 'Tore', assists: 'Assists', scorer: 'Punkte', karten: 'Karten', nationen: 'Tore' };
+      v.statValHead = HEADS[st.statCat] || '';
+      v.statSubHead = st.statCat === 'scorer' ? 'Zusammensetzung' : (scope === 'wm' ? 'Nation' : 'Verein');
+      v.statNameHead = 'Spieler';
+      if (st.statCat === 'nationen') {
+        v.statRows = v.statRows.map(r => ({ ...r, sub: '' }));
+        v.statSubHead = '';
+        v.statNameHead = scope === 'wm' ? 'Nation' : 'Verein';
+      }
+      const [mh, mm2] = m.time.split(':').map(Number);
+      setupExport(scope + ':' + m.id, m.a + ' – ' + m.b, this.addDays(this.today, m.off), mh, mm2, 105, (scope === 'wm' ? 'WM 2026 · ' : 'Bundesliga · ') + m.round);
+    }
+    if (shQuiz) {
+      v.sheetBadge = 'QUIZ'; v.sheetColor = '#5e5ce6'; v.sheetTitle = 'Allgemeinwissens-Quiz';
+      const dn = done['quiz:' + sh.k];
+      v.quizDoneView = !!dn;
+      v.quizPlayView = !dn;
+      if (dn) v.quizResult = (dn.s != null ? dn.s + ' von ' + dn.n + ' Fragen richtig beantwortet.' : 'Gut gemacht!');
+      else {
+        const qs = this.quizQs(sh.k);
+        const q = qs[st.quizIdx];
+        v.quizNum = st.quizIdx + 1; v.quizTotal = qs.length;
+        v.quizTopic = q.topic.toUpperCase(); v.quizQ = q.q;
+        v.quizOpts = q.a.map((label, i) => {
+          const picked = st.quizPicked != null;
+          let border = 'var(--sep)', bg = 'transparent', fg = 'var(--fg)';
+          if (picked && i === q.c) { border = '#30d158'; bg = 'rgba(48,209,88,.12)'; fg = '#30d158'; }
+          else if (picked && i === st.quizPicked) { border = '#ff453a'; bg = 'rgba(255,69,58,.10)'; fg = '#ff453a'; }
+          return { label, border, bg, fg, on: () => { if (st.quizPicked == null) this.setState({ quizPicked: i, quizScore: st.quizScore + (i === q.c ? 1 : 0) }); } };
+        });
+        v.quizNextVisible = st.quizPicked != null;
+        v.quizNextLabel = st.quizIdx < qs.length - 1 ? 'Weiter' : 'Abschließen';
+        v.quizNext = () => {
+          if (st.quizIdx < qs.length - 1) this.setState({ quizIdx: st.quizIdx + 1, quizPicked: null });
+          else { const d2 = this.getDone(); d2['quiz:' + sh.k] = { s: st.quizScore, n: qs.length }; this.saveDone(d2); }
+        };
+      }
+      const [qy, qmn, qd] = sh.k.split('-').map(Number);
+      setupExport('quiz:' + sh.k, 'Allgemeinwissens-Quiz', new Date(qy, qmn - 1, qd), 8, 0, 15, cfg.quiz.topics.join(', ') || 'Alle Themen');
+    }
+    if (shStrava) {
+      const run = sh.run;
+      v.sheetBadge = 'STRAVA'; v.sheetColor = '#fc4c02'; v.sheetTitle = run.km.toLocaleString('de-DE') + ' km Lauf';
+      v.stravaTabs = [['lauf', 'Lauf'], ['woche', 'Woche']].map(([id, label]) => ({
+        label, on: () => this.setState({ stravaTab: id }),
+        bg: st.stravaTab === id ? 'var(--card)' : 'transparent',
+        sh: st.stravaTab === id ? '0 1px 3px rgba(0,0,0,.15)' : 'none'
+      }));
+      v.stravaMapVisible = st.stravaTab === 'lauf';
+      let kpis;
+      if (st.stravaTab === 'lauf') {
+        v.stravaHint = 'Aufgezeichneter Lauf · Start ' + run.start + ' Uhr';
+        kpis = [['Distanz', run.km.toLocaleString('de-DE') + ' km'], ['Zeit', this.fmtDur(run.dur)], ['Pace', this.fmtPace(run.pace) + ' /km'], ['Höhenmeter', run.hm + ' m'], ['Ø Puls', run.hr + ' bpm'], ['Kalorien', run.kcal]];
+      } else {
+        const wk = this.stravaWeek(sh.date);
+        v.stravaHint = 'Woche des Kalendereintrags (bis heute)';
+        kpis = [['Läufe', wk.n], ['Distanz', (Math.round(wk.km * 10) / 10).toLocaleString('de-DE') + ' km'], ['Zeit', this.fmtDur(wk.dur)], ['Ø Pace', wk.km ? this.fmtPace(wk.dur / wk.km) + ' /km' : '–'], ['Höhenmeter', wk.hm + ' m'], ['Längster Lauf', wk.longest.toLocaleString('de-DE') + ' km']];
+      }
+      v.stravaKpis = kpis.map(([l, val]) => ({ l, v: String(val) }));
+      const [rh, rm] = run.start.split(':').map(Number);
+      setupExport('strava:' + sh.k, 'Lauf speichern', sh.date, rh, rm, Math.round(run.dur / 60), run.km + ' km · Pace ' + this.fmtPace(run.pace) + ' /km');
+    }
+    if (shUfc) {
+      const ev = sh.ev, past = ev.off < 0;
+      v.sheetBadge = 'UFC'; v.sheetColor = '#bf9b30'; v.sheetTitle = ev.name + ' · ' + ev.main;
+      v.ufcTabs = [['card', 'Kampfkarte'], ['rank', 'P4P-Ranking']].map(([id, label]) => ({
+        label, on: () => this.setState({ ufcTab: id }),
+        bg: st.ufcTab === id ? 'var(--card)' : 'transparent',
+        sh: st.ufcTab === id ? '0 1px 3px rgba(0,0,0,.15)' : 'none'
+      }));
+      v.ufcCardView = st.ufcTab === 'card';
+      v.ufcRankView = st.ufcTab === 'rank';
+      v.ufcHint = past ? 'Ergebnisse · Main Card' : 'Main Card · Start ' + ev.time + ' Uhr';
+      v.ufcBouts = this.ufcCard(ev).map((b, i) => ({
+        tag: i === 0 ? 'MAIN EVENT' : i === 1 ? 'CO-MAIN EVENT' : '',
+        wclass: b.w, a: b.a, bName: b.b,
+        aW: b.winner === 'a' ? '700' : '500', bW: b.winner === 'b' ? '700' : '500',
+        aC: b.winner === 'b' ? 'var(--sec)' : 'var(--fg)', bC: b.winner === 'a' ? 'var(--sec)' : 'var(--fg)',
+        result: b.winner ? 'Sieg ' + (b.winner === 'a' ? b.a : b.b) + ' · ' + b.method + ' · Runde ' + b.round : ''
+      }));
+      v.ufcRanks = this.ufcP4P().map((p, i) => ({ pos: i + 1, name: p[0], sub: p[1], val: p[2], posColor: i < 3 ? '#bf9b30' : 'var(--sec)' }));
+      const [uh, um] = ev.time.split(':').map(Number);
+      setupExport('ufc:' + ev.id, ev.name + ' – ' + ev.main, sh.date, uh, um, 180, 'Main Card · ' + ev.main);
+    }
+    if (shF1) {
+      const rc = sh.rc, kind = sh.kind, past = sh.off < 0;
+      v.sheetBadge = 'FORMEL 1 · ' + (kind === 'quali' ? 'QUALIFYING' : 'RENNEN');
+      v.sheetColor = '#e10600'; v.sheetTitle = rc.gp;
+      v.f1Tabs = [['session', kind === 'quali' ? 'Qualifying' : 'Rennen'], ['stand', 'WM-Stand']].map(([id, label]) => ({
+        label, on: () => this.setState({ f1Tab: id }),
+        bg: st.f1Tab === id ? 'var(--card)' : 'transparent',
+        sh: st.f1Tab === id ? '0 1px 3px rgba(0,0,0,.15)' : 'none'
+      }));
+      v.f1SessionView = st.f1Tab === 'session';
+      v.f1StandView = st.f1Tab === 'stand';
+      v.f1Upcoming = !past;
+      v.f1HasRows = past;
+      v.f1Time = kind === 'quali' ? rc.qTime : rc.rTime;
+      v.f1Hint = (past ? (kind === 'quali' ? 'Ergebnis Qualifying · ' : 'Rennergebnis · ') : '') + rc.circuit;
+      if (past) {
+        const order = this.f1Order((kind === 'quali' ? 'q' : 'r') + rc.id).slice(0, 10);
+        const r = this.R(this.H('f1t' + kind + rc.id));
+        let gap = 0;
+        v.f1Rows = order.map((d, i) => {
+          if (i > 0) gap += kind === 'quali' ? 0.05 + r() * 0.35 : 1 + r() * 6;
+          const val = i === 0
+            ? (kind === 'quali' ? '1:24,' + String(100 + Math.floor(r() * 800)) : '1:28:' + String(10 + Math.floor(r() * 49)))
+            : '+' + (kind === 'quali' ? gap.toFixed(3) : gap.toFixed(1)).replace('.', ',') + ' s';
+          return { pos: i + 1, name: d[0], team: d[1], val, posColor: i < 3 ? '#e10600' : 'var(--sec)' };
+        });
+      } else v.f1Rows = [];
+      v.f1Stand = this.f1Standings().map((d, i) => ({ pos: i + 1, name: d.name, team: d.team, val: String(d.pts), posColor: i < 3 ? '#e10600' : 'var(--sec)' }));
+      const [fh, fm] = v.f1Time.split(':').map(Number);
+      setupExport('f1:' + kind + rc.id, (kind === 'quali' ? 'Qualifying' : 'Rennen') + ' · ' + rc.gp, sh.date, fh, fm, kind === 'quali' ? 60 : 120, 'Formel 1 · ' + rc.circuit);
+    }
+    return v;
+  }
+}
+</script>
+</body>
+</html>

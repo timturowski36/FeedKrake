@@ -20,6 +20,8 @@ dependencies {
     implementation(libs.dotenv)
     implementation(libs.kaml)
     implementation(libs.logback)
+
+    testImplementation(kotlin("test"))
 }
 
 application {
@@ -29,4 +31,8 @@ application {
 tasks.named<JavaExec>("run") {
     workingDir = rootProject.projectDir
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

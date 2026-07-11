@@ -86,6 +86,17 @@ fun Route.calendarRoutes(service: CalendarService, icsHost: String) {
         }
     }
 
+    // ── Suche (NOO-151) ───────────────────────────────────────────────────────
+
+    get("/api/calendar/search") {
+        val q = call.request.queryParameters["q"] ?: ""
+        if (q.trim().length < 2) {
+            return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Mindestens 2 Zeichen erforderlich"))
+        }
+        val config = call.requestedConfig()
+        call.respond(service.search(q, config))
+    }
+
     // ── Katalog & Konfiguration ───────────────────────────────────────────────
 
     get("/api/catalog") {
@@ -145,6 +156,24 @@ fun Route.calendarRoutes(service: CalendarService, icsHost: String) {
             ?: return@get call.respond(HttpStatusCode.NotFound)
         val ics = IcsService(icsHost).calendar(service.feedEvents(config), "NooNoo Kalender ($code)")
         call.respondText(ics, ContentType.parse("text/calendar; charset=utf-8"))
+    }
+
+    // ── Wetter-Range (NOO-141): unabhängig von einer Config-Auswahl, für die
+    //    immer sichtbare Tagesleisten-Wetteranzeige (heute+5). ──────────────────
+
+    get("/api/weather") {
+        val fromStr = call.request.queryParameters["from"]
+            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Parameter 'from' fehlt"))
+        val toStr = call.request.queryParameters["to"]
+            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Parameter 'to' fehlt"))
+        val from = runCatching { LocalDate.parse(fromStr) }.getOrNull()
+            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Ungültiges Datum 'from'"))
+        val to = runCatching { LocalDate.parse(toStr) }.getOrNull()
+            ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Ungültiges Datum 'to'"))
+        val location = call.request.queryParameters["location"]
+            ?.let { WeatherLocation.fromName(it) ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Unbekannter Ort")) }
+            ?: WeatherLocation.RECKLINGHAUSEN
+        call.respond(service.weatherRange(location, from, to))
     }
 
     // ── Wetter-Detail ─────────────────────────────────────────────────────────
