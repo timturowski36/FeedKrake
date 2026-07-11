@@ -31,17 +31,53 @@ JS-`resize`-Listener wie im Prototyp) — beide Layouts (Mobile-Liste/Desktop-Gr
 werden immer ins DOM gerendert, CSS blendet auf Mobile die nicht ausgewählten
 Tagesspalten aus. Funktional/visuell identisch zum Prototyp, aber weniger JS.
 
-## Hinweis: lokale Laufzeit-Verifikation eingeschränkt
+## Laufzeit-Verifikation (nachträglich durchgeführt, 2026-07-11)
 
-In der Sandbox dieser Session ist weder Docker (permission denied) noch ein
-laufender lokaler Postgres erreichbar (`docker-compose.yml` ist nur für Produktiv-
-Deploy mit echten Secrets gedacht, kein lokales Dev-Setup vorhanden). `./gradlew
-:web:run` würde beim Start eine DB-Verbindung brauchen. Verifikation erfolgt daher
-primär durch: (a) `./gradlew :web:compileKotlin`/`:web:build` zur Kompilier-Prüfung,
-(b) Code-Lesen/statische Prüfung gegen die Akzeptanzkriterien, (c) visuelle Prüfung
-der HTML/CSS-Werte gegen den Prototyp ohne Live-Server. Falls eine spätere Session
-Zugriff auf eine laufende Postgres-Instanz hat, sollte echtes End-to-End-Testen
-(curl, Browser) nachgeholt werden — insbesondere vor NOO-162 (Regressionscheck).
+Trotz fehlendem Docker-Zugriff wurde eine echte Laufzeit-Verifikation nachgeholt:
+ein portables Postgres-16-Binary (zonky `embedded-postgres-binaries-linux-amd64:16.14.0`,
+via Maven Central) wurde ohne root/Docker in einem Scratch-Verzeichnis initialisiert
+und gestartet, alle 14 Flyway-Migrationen aus `aggregator/src/main/resources/db/migration`
+liefen sauber durch (`org.flywaydb:flyway-core:11.1.0` direkt über die bereits im
+Gradle-Cache liegenden Jars angesteuert). `:web:installDist` erzeugte ein
+lauffähiges Distributions-Bundle, gestartet mit `POSTGRES_URL`/`POSTGRES_USER`/
+`POSTGRES_PASSWORD` als Prozess-Umgebungsvariablen **aus einem Verzeichnis ohne
+`.env`-Datei** (bewusst, um die echte `.env` mit Produktions-Secrets im Repo-Root
+niemals zu laden oder zu berühren).
+
+Gegen diesen laufenden Server wurden per `curl` verifiziert (alle erfolgreich):
+- `GET /` liefert das neue `index.html` (200, korrektes `text/html`).
+- `GET /js/*.js` / `GET /css/*.css` mit korrekten Content-Types (`text/javascript`,
+  `text/css`) — wichtig für `<script type="module">`.
+- `GET /health` → `ok`.
+- `GET /api/calendar/week` (mit und ohne `code`, inkl. 404 bei unbekanntem Code).
+- `GET /api/catalog`.
+- **`GET /api/calendar/search`** (neu, NOO-151): 400 bei `q.length<2`, 200 mit
+  leerem Array ohne Daten, Code-Filter angewendet.
+- **`GET /api/weather?from=&to=`** (neu, NOO-141): 200, korrektes leeres Objekt
+  ohne Wetterdaten.
+- `POST /api/config` / `GET /api/config/{code}`: inkl. der Wetter-Validierung
+  (leere Refs → 400 "Ungültiger Wetterort", ein gültiger Ref → 200).
+- `GET /api/events/{id}/details` (404 für unbekannte ID).
+- `GET /api/pubg/player/{id}?day=` (200, leere Statistik).
+- `GET /calendar.ics` — unverändertes, valides ICS (Regressionscheck bestanden).
+- SSE `GET /api/calendar/stream` — sendet das erwartete `event: ping`-Heartbeat.
+
+**Nicht möglich war ein echter Browser-/JS-Ausführungstest**: Die in
+`~/.cache/ms-playwright` vorhandene Chromium-Instanz (von `:aggregator`s
+Playwright-Nutzung) stürzt in dieser Sandbox bei jedem Seitenaufruf ab
+(`--headless`/`--headless=new`, mit/ohne `--single-process` probiert) — ein
+Build-internes "unrecognized flag"-Problem unabhängig von den übergebenen
+Flags, kein Effekt meiner Änderungen. Damit bleibt ungetestet: tatsächliches
+Laden/Ausführen der ES-Module im Browser, visuelle Darstellung, Klick-Interaktionen.
+Die HTTP-Ebene (Routing, JSON-Shapes, Content-Types, Fehlerpfade) ist damit aber
+sehr viel gründlicher verifiziert als reine Code-Lektüre.
+
+Es wurden keine echten Sportdaten eingespielt (der volle `:aggregator`-Prozess
+mit Discord-Bot/Scheduler/externen APIs wurde bewusst nicht gestartet, um keine
+echten API-Calls/Rate-Limits/Secrets zu benötigen) — alle Endpunkt-Antworten
+oben sind daher strukturell korrekt, aber inhaltlich leer. Die eigentliche
+Event-Rendering-Logik (Capability-Matrix-Panels mit echten Daten) bleibt
+insofern nur durch Code-Review verifiziert, nicht durch Beobachtung realer Daten.
 
 ## Grundsatzentscheidungen (nicht neu herleiten)
 
@@ -137,12 +173,14 @@ ersetzt wurde, insofern voraussichtlich nur eine kurze Kontrolle).
 
 ## Gesamtstatus
 
-Alle Kern-Tickets (Batches 0–7, NOO-101 bis NOO-163) sind umgesetzt und
-committet. Offen bleibt nur ⚠️ Batch 8 (UFC/Strava echte Anbindung),
-bewusst zurückgestellt mangels Datenquelle. Vor einem Produktions-Merge nach
-`main` sollte einmal in einem echten Browser mit laufender Postgres-Instanz
-durchgeklickt werden (siehe Lücken unten) — das konnte in dieser Sandbox-Session
-nicht nachgeholt werden.
+Alle Kern-Tickets (Batches 0–7, NOO-101 bis NOO-163) sind umgesetzt, committet
+und gegen einen echten laufenden Server (lokale Postgres, siehe unten) auf
+HTTP-Ebene verifiziert. Offen bleibt nur ⚠️ Batch 8 (UFC/Strava echte
+Anbindung), bewusst zurückgestellt mangels Datenquelle. Vor einem
+Produktions-Merge nach `main` sollte trotzdem einmal in einem echten Browser
+mit echten Sportdaten durchgeklickt werden (siehe "Laufzeit-Verifikation"
+unten für den genauen Umfang dessen, was in dieser Session bereits geprüft
+werden konnte und was nicht).
 
 ## Bekannte Lücke: Live-Test der Open-Meteo-Client-Aufrufe (NOO-142)
 
