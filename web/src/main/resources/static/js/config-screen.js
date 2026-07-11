@@ -298,38 +298,47 @@ function syncAddUrlaubButton() {
   if (btn) btn.disabled = !(newUrlaubOrt.trim() && newUrlaubVon && newUrlaubBis);
 }
 
-function accountScreenHtml() {
+function accountScreenHtml(backLabel) {
   return `
-    <a class="screen-back" href="#" id="acc-back">‹ Konfiguration</a>
+    <a class="screen-back" href="#" id="acc-back">‹ ${esc(backLabel)}</a>
     <div class="account-header">
-      <div class="account-avatar"><svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="var(--sec)" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+      <div class="account-avatar"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg></div>
       <h1 class="screen-title" style="margin-bottom:4px">Account anlegen</h1>
-      <p>Mit einem Account synchronisierst du deine Konfiguration geräteübergreifend und schaltest zusätzliche Integrationen frei.</p>
+      <p>Verbinde externe Kalenderquellen und synchronisiere deine Konfiguration.</p>
     </div>
     <div class="cfg-card account-form">
-      <input type="email" placeholder="E-Mail-Adresse" disabled>
-      <input type="password" placeholder="Passwort" disabled>
-      <button class="primary-btn" disabled>Weiter</button>
-      <div class="account-disclaimer">Demo – Registrierung ist noch nicht aktiv.</div>
+      <input type="email" placeholder="E-Mail">
+      <input type="password" placeholder="Passwort">
     </div>
-    <div class="cfg-section-label" style="margin-top:22px">Das ermöglicht dir</div>
+    <button class="account-submit">Weiter</button>
+    <div class="account-disclaimer">Demo – Registrierung ist noch nicht aktiv.</div>
+    <div class="cfg-section-label" style="margin-top:28px">Das ermöglicht dir</div>
     <div class="cfg-card">
-      <div class="benefit-row"><div class="benefit-icon" style="background:var(--good)">📊</div><div class="module-row-text"><div class="name">Google Sheets</div><div class="desc">Eigene Tabellen als Kalendermodul</div></div></div>
-      <div class="benefit-row"><div class="benefit-icon" style="background:var(--acc)">📅</div><div class="module-row-text"><div class="name">Outlook Kalender</div><div class="desc">Termine synchronisieren</div></div></div>
+      <div class="benefit-row">
+        <span class="benefit-icon" style="background:#30d158"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 4h16v16H4zM4 10h16M10 4v16"/></svg></span>
+        <div class="module-row-text"><div class="name">Google Sheets</div><div class="desc">Termine aus einer Tabelle in den Kalender übernehmen</div></div>
+      </div>
+      <div class="benefit-row">
+        <span class="benefit-icon" style="background:#0a84ff"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 6h16v12H4zM4 7l8 6 8-6"/></svg></span>
+        <div class="module-row-text"><div class="name">Outlook Kalender</div><div class="desc">Deinen Outlook-Kalender einbinden</div></div>
+      </div>
     </div>
   `;
 }
 
-function openAccountScreen() {
-  el("screen-account").innerHTML = accountScreenHtml();
+/** returnTo: "config" (aus dem Marketplace) oder "week" (Header-Button). */
+export function openAccountScreen(returnTo = "config") {
+  el("screen-account").innerHTML = accountScreenHtml(returnTo === "week" ? "Kalender" : "Konfiguration");
   el("screen-account").hidden = false;
-  el("screen-config").hidden = true;
-  el("acc-back").addEventListener("click", e => { e.preventDefault(); closeAccountScreen(); });
+  if (returnTo === "week") document.getElementById("app").hidden = true;
+  else el("screen-config").hidden = true;
+  el("acc-back").addEventListener("click", e => { e.preventDefault(); closeAccountScreen(returnTo); });
 }
 
-function closeAccountScreen() {
+function closeAccountScreen(returnTo) {
   el("screen-account").hidden = true;
-  el("screen-config").hidden = false;
+  if (returnTo === "week") document.getElementById("app").hidden = false;
+  else el("screen-config").hidden = false;
 }
 
 function wireStatic() {
@@ -410,4 +419,5 @@ async function persist() {
 
 export function setupConfigScreenTrigger() {
   document.getElementById("btn-config").addEventListener("click", openConfigScreen);
+  document.getElementById("btn-account").addEventListener("click", () => openAccountScreen("week"));
 }
