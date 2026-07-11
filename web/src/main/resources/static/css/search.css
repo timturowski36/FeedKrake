@@ -1,0 +1,45 @@
+/* Such-Overlay (NOO-152) */
+
+#search-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0, 0, 0, .42);
+  display: flex; justify-content: center;
+  padding: 8vh 16px 0;
+  animation: fadeIn .15s;
+}
+#search-overlay[hidden] { display: none; }
+
+.search-panel {
+  width: min(560px, 100%);
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--card);
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .3);
+}
+.search-input-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; border-bottom: 1px solid var(--sep);
+  position: sticky; top: 0; background: var(--card);
+}
+.search-input-row svg { width: 18px; height: 18px; color: var(--sec); flex-shrink: 0; }
+.search-input-row input {
+  flex: 1; border: none; background: transparent; font-size: 16px; color: var(--fg);
+}
+.search-close {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--fill); border: none; color: var(--sec);
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.search-empty { padding: 24px 16px; text-align: center; color: var(--sec); font-size: 13px; }
+.search-result {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; cursor: pointer;
+}
+.search-result:hover { background: var(--fill); }
+.search-result .bar { width: 4px; align-self: stretch; border-radius: 2px; background: var(--res-color, var(--sec)); }
+.search-result .text { flex: 1; min-width: 0; }
+.search-result .badge-row { font-size: 11px; color: var(--res-color, var(--sec)); font-weight: 700; display: flex; gap: 6px; }
+.search-result .title { font-size: 14px; font-weight: 600; margin-top: 2px; }
+.search-result .sub { font-size: 12px; color: var(--sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-result .chevron { color: var(--sec); flex-shrink: 0; }

@@ -38,4 +38,9 @@ export const api = {
   news(limit = 20) {
     return getJson(`/api/news?limit=${limit}`);
   },
+  search(q, code) {
+    const params = new URLSearchParams({ q });
+    if (code) params.set("code", code);
+    return getJson("/api/calendar/search?" + params);
+  },
 };

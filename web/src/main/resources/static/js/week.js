@@ -283,7 +283,8 @@ export function setupWeekNavigation() {
   }, { passive: true });
 
   document.addEventListener("keydown", e => {
-    if (document.getElementById("sheet-backdrop") && !document.getElementById("sheet-backdrop").hidden) return;
+    if (!document.getElementById("sheet-backdrop").hidden) return;
+    if (!document.getElementById("search-overlay").hidden) return;
     if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
     if (e.key === "ArrowLeft") shiftDay(-1);
     if (e.key === "ArrowRight") shiftDay(1);

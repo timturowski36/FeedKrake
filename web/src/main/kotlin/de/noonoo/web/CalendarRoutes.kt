@@ -86,6 +86,17 @@ fun Route.calendarRoutes(service: CalendarService, icsHost: String) {
         }
     }
 
+    // ── Suche (NOO-151) ───────────────────────────────────────────────────────
+
+    get("/api/calendar/search") {
+        val q = call.request.queryParameters["q"] ?: ""
+        if (q.trim().length < 2) {
+            return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Mindestens 2 Zeichen erforderlich"))
+        }
+        val config = call.requestedConfig()
+        call.respond(service.search(q, config))
+    }
+
     // ── Katalog & Konfiguration ───────────────────────────────────────────────
 
     get("/api/catalog") {

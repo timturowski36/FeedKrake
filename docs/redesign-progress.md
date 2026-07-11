@@ -8,11 +8,12 @@ wurde, oder rekonstruierbar aus den Entscheidungen unten.)
 
 ## Hier weitermachen
 
-Nächstes Ticket: NOO-151 (Such-API, Batch 6)
+Nächstes Ticket: NOO-161 (Cutover/Aufräumen, Batch 7)
 Letzter Commit: (wird nach diesem Commit eingetragen)
-Falls mittendrin unterbrochen: sauberer Stopppunkt — Batches 1–5 fertig und
-committet (Kern-Neuaufbau, Konfig-Screen, Wetter-Range-Endpoint, lokale Module
-Quiz/Aktivitäten/Urlaub). Weiter mit Batch 6 (Suche).
+Falls mittendrin unterbrochen: sauberer Stopppunkt — Batches 1–6 fertig und
+committet (kompletter Kern-Neuaufbau inkl. Suche). Weiter mit Batch 7
+(Regressionscheck + Doku) und danach Batch 8 nur bei Bedarf (UFC/Strava,
+aktuell zurückgestellt).
 
 ## Abweichungen von der ursprünglichen Datei-Struktur aus dem Plan (bewusste Vereinfachung)
 
@@ -91,8 +92,8 @@ Zugriff auf eine laufende Postgres-Instanz hat, sollte echtes End-to-End-Testen
 | NOO-142 | done        |           | Urlaubsmodul (kal.cfg.urlaub), Wetter-Override via Open-Meteo-Geocoding (client, gecacht) — Live-Test der externen API in dieser Session nicht möglich, siehe Hinweis unten |
 | NOO-143 | done        |           | Aktivitätenmodul (kal.cfg.akt, kal.done), Abhak-Button auf der Karte |
 | NOO-144 | done        |           | Quizmodul (quiz-pool.js, Sheet mit Frage/Antwort-Flow, kal.done) |
-| NOO-151 | not-started |           | Such-API |
-| NOO-152 | not-started |           | Such-Overlay |
+| NOO-151 | done        |           | `GET /api/calendar/search?q&code` (CalendarService.search + SearchService, mit Unit-Tests) |
+| NOO-152 | done        |           | Such-Overlay (search.js/search.css), Lupe/`/`/Cmd-K, serverseitige + lokale Treffer gemischt |
 | NOO-161 | not-started |           | Cutover: altes index.html entfernen |
 | NOO-162 | not-started |           | Regressionscheck |
 | NOO-163 | not-started |           | README/Doku aktualisieren |
@@ -123,9 +124,16 @@ web/src/main/resources/static/
 
     quiz-pool.js           # Fragenpool + datums-geseedeter Hash/LCG-Picker (NOO-144)
     local-modules.js         # kal.cfg/kal.done, Quiz/Aktivitäten/Urlaub-Synthese, Wetter-Override
+    search.js                 # Such-Overlay (NOO-152)
+  css/search.css               # Such-Overlay-Styles (NOO-152)
+
+web/src/main/kotlin/de/noonoo/web/application/SearchService.kt   # reine Textsuche (NOO-151)
+web/src/test/kotlin/de/noonoo/web/application/SearchServiceTest.kt  # 5 Tests, gruen
 ```
 
-Noch offen: `js/search.js` + `css/search.css` (Batch 6).
+Noch offen für Batch 7: Regressionscheck (ICS-Feeds, SSE, Deep-Links), README/Doku,
+Prüfung auf tote Reste vom alten Monolithen (der aber schon in Batch 1 komplett
+ersetzt wurde, insofern voraussichtlich nur eine kurze Kontrolle).
 
 ## Bekannte Lücke: Live-Test der Open-Meteo-Client-Aufrufe (NOO-142)
 

@@ -4,17 +4,14 @@ import { api } from "./api.js";
 import { loadWeek, setupWeekNavigation } from "./week.js";
 import { setupSheetChrome } from "./sheet.js";
 import { setupConfigScreenTrigger } from "./config-screen.js";
+import { setupSearch } from "./search.js";
 
 applyTheme(state.theme);
 
 setupWeekNavigation();
 setupSheetChrome();
 setupConfigScreenTrigger();
-
-// Such-Overlay (Batch 6, NOO-152) ist noch nicht verdrahtet — siehe docs/redesign-progress.md.
-document.getElementById("btn-search").addEventListener("click", () => {
-  console.info("Such-Overlay folgt in Batch 6 (NOO-152).");
-});
+setupSearch();
 
 // ── News-Ticker (bestehender Inhalt, unverändert übernommen) ────────────────
 let tickerItems = [], tickerIdx = 0;

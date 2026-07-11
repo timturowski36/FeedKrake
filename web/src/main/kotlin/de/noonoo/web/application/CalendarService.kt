@@ -208,6 +208,17 @@ class CalendarService(
 
     fun findEvent(id: String): Event? = repo.findEventById(id)
 
+    /** Volltextsuche über ±28 Tage, optional durch einen Config-Code gefiltert (NOO-151). */
+    fun search(query: String, config: StoredConfig?): List<Event> {
+        val now = Instant.now()
+        val from = now.minus(28, java.time.temporal.ChronoUnit.DAYS)
+        val to = now.plus(28, java.time.temporal.ChronoUnit.DAYS)
+        val modules = config?.let { selectedModules(it) }
+        val events = repo.findEvents(from, to, modules)
+            .filter { config == null || matchesSelections(it, config.selections) }
+        return SearchService.searchEvents(events, query)
+    }
+
     fun latestNews(limit: Int) = repo.latestNews(limit)
 
     fun maxLastUpdated(week: IsoWeek, config: StoredConfig?): Instant? {

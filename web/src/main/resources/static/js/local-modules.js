@@ -120,6 +120,39 @@ export function localModuleColorsForDay(dateStr) {
   return colors;
 }
 
+/** Lokale Einträge ±28 Tage, deren Titel auf `query` matcht (für das Such-Overlay, NOO-152). */
+export function searchLocalEntries(query, todayStr) {
+  const cfg = loadCfg();
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const today = new Date(todayStr + "T12:00:00");
+  const results = [];
+  for (let offset = -28; offset <= 28; offset++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + offset);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const wd = isoWeekday(dateStr);
+    if (cfg.modules.urlaub) {
+      for (const v of cfg.urlaub.list) {
+        if (dateStr >= v.von && dateStr <= v.bis && `urlaub in ${v.ort}`.toLowerCase().includes(q)) {
+          results.push({ dateStr, title: `Urlaub in ${v.ort}`, badge: "URLAUB", colorVar: "var(--mod-urlaub)", kind: "urlaub" });
+        }
+      }
+    }
+    if (cfg.modules.quiz && cfg.quiz.days.includes(wd) && "tagesquiz".includes(q)) {
+      results.push({ dateStr, title: "Tagesquiz", badge: "QUIZ", colorVar: "var(--mod-quiz)", kind: "quiz" });
+    }
+    if (cfg.modules.akt) {
+      for (const a of cfg.akt.list) {
+        if (a.days.includes(wd) && a.name.toLowerCase().includes(q)) {
+          results.push({ dateStr, title: a.name, badge: "AKTIVITÄT", colorVar: "var(--mod-akt)", kind: "akt" });
+        }
+      }
+    }
+  }
+  return results;
+}
+
 export function toggleActivity(id, dateStr) {
   const key = `akt:${id}:${dateStr}`;
   setDone(key, !loadDone()[key]);
