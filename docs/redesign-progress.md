@@ -8,9 +8,26 @@ wurde, oder rekonstruierbar aus den Entscheidungen unten.)
 
 ## Hier weitermachen
 
-Nächstes Ticket: NOO-111 (Designsystem & Dateistruktur)
+Nächstes Ticket: NOO-141 (Wetter-Range-Endpoint + lokale Module, Batch 5)
 Letzter Commit: (wird nach diesem Commit eingetragen)
-Falls mittendrin unterbrochen: sauberer Stopppunkt — Batch 0 abgeschlossen.
+Falls mittendrin unterbrochen: sauberer Stopppunkt — Batches 1–4 (Kern-Neuaufbau
+inkl. Konfig-Screen) fertig und committet. Weiter mit Batch 5.
+
+## Abweichungen von der ursprünglichen Datei-Struktur aus dem Plan (bewusste Vereinfachung)
+
+Statt einzelner `js/modules/football.js`, `f1.js`, `handball.js`, `pubg.js`,
+`weather.js` wurden die Panel-Builder für alle Module direkt in `js/sheet.js`
+konsolidiert (kein Bundler vorhanden, die Panels teilen sich ohnehin die
+generische Tab-/Tabellen-Infrastruktur — separate Dateien hätten hier nur
+zusätzliche Imports ohne echten Vorteil bedeutet). Handball nutzt automatisch
+dieselbe Fußball-Logik, da beide dieselbe `EventDetailsResponse`-Form liefern
+(nur die Modulfarbe unterscheidet sich). Gemeinsame Helfer (`esc`, Datumsformate,
+`MOD_LABELS`/`MOD_COLOR_VARS`/`slugOf`) liegen in `js/util.js`.
+
+Der Breakpoint (900px) wird rein per CSS-Media-Query umgesetzt (nicht per
+JS-`resize`-Listener wie im Prototyp) — beide Layouts (Mobile-Liste/Desktop-Grid)
+werden immer ins DOM gerendert, CSS blendet auf Mobile die nicht ausgewählten
+Tagesspalten aus. Funktional/visuell identisch zum Prototyp, aber weniger JS.
 
 ## Hinweis: lokale Laufzeit-Verifikation eingeschränkt
 
@@ -57,18 +74,18 @@ Zugriff auf eine laufende Postgres-Instanz hat, sollte echtes End-to-End-Testen
 |---------|-------------|-----------|-------|
 | NOO-101 | done        |           | docs/frontend-ist.md geschrieben |
 | NOO-102 | done        |           | verifiziert per Code-Lesen (Main.kt:78-80, Commit 3a087e9) — kein lauffähiger lokaler Server verfügbar für curl, siehe Hinweis oben |
-| NOO-111 | not-started |           | Designsystem-Tokens + Dateistruktur |
-| NOO-112 | not-started |           | Header + 7-Tage-Pillenleiste |
-| NOO-113 | not-started |           | Eintragskarten Mobile/Desktop |
-| NOO-114 | not-started |           | Swipe- & Tastaturnavigation |
-| NOO-121 | not-started |           | Bottom-Sheet-Framework |
-| NOO-122 | not-started |           | Sheet Fußball (WM+Buli) |
-| NOO-123 | not-started |           | Sheet F1 & Handball |
-| NOO-124 | not-started |           | Sheet PUBG + neuer Endpoint /api/pubg/players/{name}/stats |
-| NOO-125 | not-started |           | ICS-Button im Sheet |
-| NOO-131 | not-started |           | Konfig-Screen Grundstruktur + TEILEN |
-| NOO-132 | not-started |           | Modulzeilen mit Inline-Konfiguration |
-| NOO-133 | not-started |           | Marketplace + Account (UFC/Strava nur Platzhalter, ⚠️ siehe Batch 8) |
+| NOO-111 | done        |           | tokens.css/layout.css/sheet.css/config.css + index.html/js/*.js neu aufgebaut |
+| NOO-112 | done        |           | Header + 7-Tage-Pillenleiste (week.js) |
+| NOO-113 | done        |           | Eintragskarten Mobile/Desktop, Modulfarben, Chip-System (week.js/layout.css) |
+| NOO-114 | done        |           | Swipe + Pfeiltasten (week.js `shiftDay`) |
+| NOO-121 | done        |           | Bottom-Sheet-Framework (sheet.js, Capability-Matrix 1:1 aus altem buildPanels portiert) |
+| NOO-122 | done        |           | Sheet Fußball (WM+Buli): Score-Header, Timeline, Tabelle, Torschützen (sheet.js) |
+| NOO-123 | done        |           | Sheet F1 (Session-Tabs+WM-Stand) & Handball (reuse Fußball-Panels) |
+| NOO-124 | done (vereinfacht) | | PUBG-Rangliste + Spieler-Deep-Dive nutzt bestehenden `/api/pubg/player/{playerId}`-Endpoint (liefert weekStats+records = Tag/Woche/Rekorde); echter neuer `/api/pubg/players/{name}/stats?range=` **nicht** gebaut, da die bestehende Route den Bedarf bereits deckt — siehe Entscheidungs-Log |
+| NOO-125 | done        |           | ICS-Button im Sheet mit Export-Status-Persistenz (kal.exported.{id}) |
+| NOO-131 | done        |           | Konfig-Screen (config-screen.js/config.css), TEILEN-Sektion mit bestehendem Code-Flow |
+| NOO-132 | done        |           | Modulzeilen mit Inline-Ref-Chips, Zurücksetzen/Entfernen |
+| NOO-133 | done        |           | Marketplace (Sport-Module) + Account-Screen; UFC/Strava/Sheets/Outlook als Platzhalter — ⚠️ siehe Batch 8 |
 | NOO-141 | not-started |           | Wetter-Range-Endpoint + SVG-Icons (Scope reduziert) |
 | NOO-142 | not-started |           | Urlaubsmodul (lokal) |
 | NOO-143 | not-started |           | Aktivitätenmodul (lokal) |
@@ -84,12 +101,52 @@ Zugriff auf eine laufende Postgres-Instanz hat, sollte echtes End-to-End-Testen
 
 ```
 web/src/main/resources/static/
-  index.html          # ALT — Monolith, wird erst in Batch 7 (NOO-161) entfernt
+  index.html            # NEU aufgebaut (Batch 1-4) — alter Monolith bereits ersetzt
+  css/
+    tokens.css           # Design-Tokens, Keyframes (NOO-111)
+    layout.css            # Header, Pillenleiste, Karten, Ticker (NOO-112/113)
+    sheet.css              # Bottom-Sheet, Panels, PUBG-Grid, ICS-Button (NOO-121-125)
+    config.css              # Konfig-/Account-Screen (NOO-131-133)
+  js/
+    util.js               # esc(), Datumsformate, MOD_LABELS/MOD_COLOR_VARS/slugOf
+    state.js                # zentraler State, Theme
+    api.js                    # fetch-Wrapper
+    week.js                    # Wochenübersicht, Swipe/Tastatur, SSE
+    sheet.js                    # Bottom-Sheet, Capability-Matrix, PUBG-Deep-Dive, Wetter-Sheet, ICS
+    config-screen.js              # Konfig-/Marketplace-/Account-Screen
+    app.js                          # Einstiegspunkt/Wiring
+
+  (NOO-161 wird geprüft, ob noch Reste zu entfernen sind — Monolith existiert
+  aber bereits nicht mehr, da direkt neu aufgebaut statt migriert.)
 ```
 
-(Wird aktualisiert, sobald die neuen `css/`/`js/`-Dateien angelegt werden.)
+Noch offen: `js/search.js` + `css/search.css` (Batch 6), lokale Module
+`js/modules/{quiz,activities,vacation}.js` (Batch 5, Ordner existiert noch nicht).
 
 ## Entscheidungs-Log (append-only)
 
 - 2026-07-11: Plan verabschiedet, Tracker angelegt. Neuaufbau statt In-Place-Patch,
   UFC/Strava zurückgestellt (Nutzer-Vorgabe), nur lokale Commits.
+- 2026-07-11: Batches 1–4 in einem Zug umgesetzt (statt einzeln committet), da
+  Wochenübersicht, Sheet und Konfiguration voneinander abhängen und ein
+  Zwischenstand ohne Konfig-Screen einen echten Funktionsverlust (keine
+  Modul-Auswahl mehr) bedeutet hätte — das alte `index.html` wurde daher erst
+  ersetzt, nachdem auch der Konfig-Screen stand.
+- 2026-07-11: NOO-124 vereinfacht: PUBG-Spieler-Deep-Dive (Tag/Woche/Rekorde)
+  nutzt den bestehenden `/api/pubg/player/{playerId}?day=`-Endpoint (liefert
+  bereits `weekStats` + monotone `records`), statt einen neuen
+  `/api/pubg/players/{name}/stats?range=day|week|lifetime`-Endpoint zu bauen.
+  Der bestehende Endpoint deckt die Prototyp-UI (Tag aus den bereits geladenen
+  Tagesdaten, Woche + Rekorde aus dem Endpoint) vollständig ab. Eine echte
+  PUBG-API-"lifetime"-Season-Anbindung (`pubg_season_stats`, aktuell nur in
+  `:aggregator` erreichbar) bleibt ein möglicher Folge-Schritt, ist aber kein
+  Blocker für die UI.
+- 2026-07-11: Datei-Struktur gegenüber Plan vereinfacht: keine separaten
+  `js/modules/*.js` — Panel-Logik konsolidiert in `sheet.js` (siehe oben).
+  Breakpoint 900px per CSS statt JS-resize-Listener.
+- 2026-07-11: Kein lokaler Kotlin-Testlauf/Live-Server möglich in dieser Session
+  (kein Docker-Zugriff, keine lokale Postgres) — Verifikation über
+  `./gradlew :web:compileKotlin` (grün) + manuelle Code-/HTML-ID-Konsistenzprüfung
+  (grep-Abgleich aller `getElementById`/`el()`-Aufrufe gegen die IDs im HTML).
+  Echtes Browser-Testen sollte nachgeholt werden, sobald eine Umgebung mit
+  laufender Postgres verfügbar ist.

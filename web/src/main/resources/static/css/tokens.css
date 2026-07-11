@@ -1,0 +1,77 @@
+/* Design-Tokens (NOO-111) — 1:1 aus docs/frontend/Kalender.dc.html übernommen. */
+
+:root {
+  --bg: #f2f2f7;
+  --card: #ffffff;
+  --fg: #1d1d1f;
+  --sec: #8e8e93;
+  --sep: rgba(60, 60, 67, .14);
+  --fill: rgba(120, 120, 128, .12);
+  --acc: #0a84ff;
+  --good: #30d158;
+  --warn: #ff9f0a;
+  --bad: #ff453a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .05);
+
+  /* Modulfarben (Jira Tickets NOO-113) */
+  --mod-wm: #af52de;
+  --mod-buli: #ff375f;
+  --mod-handball: #40c8e0;
+  --mod-f1: #e10600;
+  --mod-pubg: #ff9f0a;
+  --mod-quiz: #5e5ce6;
+  --mod-akt: #30d158;
+  --mod-strava: #fc4c02;
+  --mod-ufc: #bf9b30;
+  --mod-urlaub: #64d2ff;
+
+  --breakpoint-desktop: 900px;
+}
+
+[data-theme="dunkel"] {
+  --bg: #000000;
+  --card: #1c1c1e;
+  --fg: #f5f5f7;
+  --sec: #98989d;
+  --sep: rgba(84, 84, 88, .5);
+  --fill: rgba(120, 120, 128, .22);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+}
+
+html, body { margin: 0; padding: 0; background: var(--bg); }
+body { transition: background .25s; }
+*, *::before, *::after { box-sizing: border-box; }
+button, input { font-family: inherit; font-size: inherit; color: inherit; }
+button { cursor: pointer; }
+input { outline: none; }
+a { color: var(--acc); text-decoration: none; }
+a:hover { text-decoration: underline; }
+::-webkit-scrollbar { display: none; }
+
+#app, #sheet, #search-overlay, #screen-config, #screen-account {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--fg);
+}
+
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+@keyframes sheetUp {
+  from { transform: translateY(48px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+
+.live-pulse { animation: livePulse 1.6s infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-pulse { animation: none; }
+  #sheet .sheet-panel, #sheet-backdrop, #search-overlay { animation: none !important; }
+}

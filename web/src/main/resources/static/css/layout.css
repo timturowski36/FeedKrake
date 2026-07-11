@@ -1,0 +1,219 @@
+/* Wochenübersicht: Header, Pillenleiste, Karten (NOO-112/113/114) */
+
+#app {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  transition: background .25s, color .25s;
+  padding: 0 clamp(.75rem, 3vw, 2.5rem) calc(4.5rem + env(safe-area-inset-bottom));
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0 14px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.kw-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--acc);
+  letter-spacing: .02em;
+}
+#month-label {
+  margin: 2px 0 0;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+.hdr-actions { display: flex; align-items: center; gap: 6px; }
+.icon-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--fill);
+  border: none;
+  color: var(--sec);
+  display: grid;
+  place-items: center;
+}
+.icon-btn svg { width: 16px; height: 16px; }
+.pill-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  background: var(--fill);
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.hdr-spacer { width: 6px; }
+
+/* ── Saison-Status (bestehende Inhalte, neu geskinnt) ──────────────────────── */
+#season-bar {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding-bottom: 12px;
+}
+.season-chip {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: .02em;
+  color: var(--sec);
+  background: var(--fill);
+  border-radius: 20px;
+  padding: 5px 10px;
+}
+.season-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sec); }
+.season-chip.active .dot { background: var(--good); }
+.season-chip.inactive { opacity: .55; }
+
+/* ── 7-Tage-Pillenleiste ────────────────────────────────────────────────────── */
+.pill-bar {
+  display: flex; gap: 6px; overflow-x: auto;
+  padding-bottom: 14px;
+}
+.day-pill {
+  flex: 1 0 74px; min-width: 74px;
+  border-radius: 14px;
+  padding: 10px 4px 9px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: transparent;
+  border: none;
+  transition: background .2s;
+}
+.day-pill.selected-mobile-only { background: var(--card); }
+.day-pill .wd {
+  font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  color: var(--sec);
+}
+.day-pill.is-today .wd { color: var(--acc); }
+.day-pill .date-circle {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 16px; font-weight: 600;
+  color: var(--fg);
+}
+.day-pill.is-today .date-circle { background: var(--acc); color: #fff; }
+.day-pill .weather-row {
+  height: 16px; font-size: 11px; color: var(--sec);
+  display: flex; align-items: center; gap: 2px;
+}
+.day-pill .weather-row svg { width: 14px; height: 14px; }
+.day-pill .dot-row { height: 5px; display: flex; gap: 3px; }
+.day-pill .dot-row span { width: 5px; height: 5px; border-radius: 50%; }
+
+/* ── Mobile Tagestitel ("Heute · Freitag, 11. Juli" + Wetter) ───────────────── */
+.mobile-day-title {
+  display: none;
+  align-items: center; justify-content: space-between;
+  padding-bottom: 10px;
+  font-size: 15px; font-weight: 600;
+}
+.mobile-day-title .weather { font-size: 13px; font-weight: 400; color: var(--sec); display: flex; align-items: center; gap: 4px; }
+.mobile-day-title .weather svg { width: 15px; height: 15px; }
+
+/* ── Wochenraster ────────────────────────────────────────────────────────────
+   7 Tagesspalten werden immer gerendert; auf Mobile blendet CSS alle bis auf
+   die ausgewählte aus (statt in JS zwei Layout-Varianten zu pflegen). */
+#week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+.day-col {
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 46vh;
+  background: transparent;
+  border-radius: 14px;
+  padding: 8px;
+}
+.day-col.is-today { background: var(--fill); }
+
+.event-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 10px 11px;
+  box-shadow: var(--shadow);
+  border-left: 3px solid var(--mod-color, var(--sec));
+  cursor: default;
+}
+.event-card.clickable { cursor: pointer; }
+.event-card .row-top {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+}
+.event-card .badge { font-size: 10px; font-weight: 700; letter-spacing: .05em; color: var(--mod-color, var(--sec)); }
+.event-card .time { font-size: 11px; color: var(--sec); }
+.event-card .title {
+  font-size: 13px; font-weight: 600; line-height: 1.3; margin-top: 3px;
+}
+.event-card .sub {
+  font-size: 11px; color: var(--sec); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.event-card .chip {
+  display: inline-block; margin-top: 6px;
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+  background: var(--chip-bg); color: var(--chip-fg);
+}
+.event-card .check-btn {
+  margin-top: 6px; height: 26px; border-radius: 13px;
+  border: 1.5px solid var(--ck-border, var(--sep));
+  background: var(--ck-bg, transparent);
+  color: var(--ck-fg, var(--sec));
+  font-size: 11px; font-weight: 600;
+  padding: 0 10px;
+}
+
+.empty-week {
+  grid-column: 1 / -1;
+  text-align: center; color: var(--sec);
+  padding: 3rem 1rem; font-size: .9rem;
+}
+.empty-week[hidden] { display: none; }
+
+/* ── News-Ticker (bestehender Inhalt, neu geskinnt) ─────────────────────────── */
+#ticker {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: calc(2.6rem + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--card);
+  border-top: 1px solid var(--sep);
+  display: flex; align-items: center; gap: 10px;
+  padding-left: clamp(.75rem, 3vw, 2.5rem);
+  padding-right: clamp(.75rem, 3vw, 2.5rem);
+  font-size: 12px;
+  z-index: 40;
+}
+#ticker .tag { color: var(--acc); font-weight: 700; letter-spacing: .06em; font-size: 10px; flex-shrink: 0; text-transform: uppercase; }
+#ticker .src { color: var(--sec); flex-shrink: 0; }
+#ticker a { color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Breakpoint 900px ───────────────────────────────────────────────────────── */
+@media (max-width: 899.98px) {
+  .mobile-day-title { display: flex; }
+  .day-pill:not(.selected-mobile-only) .date-circle { background: transparent; }
+  .day-pill.selected-mobile-only { background: var(--card); }
+
+  #week-grid { display: block; }
+  .day-col { display: none; min-height: 0; background: none; padding: 0; }
+  .day-col.selected-mobile-day { display: flex; }
+
+  .event-card { border-left: none; padding: 13px 15px; border-radius: 16px; position: relative; }
+  .event-card::before {
+    content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 4px;
+    border-radius: 2px; background: var(--mod-color, var(--sec));
+  }
+  .event-card { padding-left: 19px; }
+  .event-card .title { font-size: 15px; }
+  .event-card .sub { font-size: 13px; white-space: normal; }
+  .event-card .chip { font-size: 11px; padding: 4px 9px; }
+  .event-card .check-btn { width: 28px; height: 28px; border-radius: 50%; padding: 0; }
+
+  #ticker { padding-left: .75rem; padding-right: .75rem; }
+}
+
+@media (min-width: 900px) {
+  .day-pill.selected-mobile-only { background: transparent; }
+}
