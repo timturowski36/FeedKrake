@@ -8,10 +8,11 @@ wurde, oder rekonstruierbar aus den Entscheidungen unten.)
 
 ## Hier weitermachen
 
-Nächstes Ticket: NOO-141 (Wetter-Range-Endpoint + lokale Module, Batch 5)
+Nächstes Ticket: NOO-151 (Such-API, Batch 6)
 Letzter Commit: (wird nach diesem Commit eingetragen)
-Falls mittendrin unterbrochen: sauberer Stopppunkt — Batches 1–4 (Kern-Neuaufbau
-inkl. Konfig-Screen) fertig und committet. Weiter mit Batch 5.
+Falls mittendrin unterbrochen: sauberer Stopppunkt — Batches 1–5 fertig und
+committet (Kern-Neuaufbau, Konfig-Screen, Wetter-Range-Endpoint, lokale Module
+Quiz/Aktivitäten/Urlaub). Weiter mit Batch 6 (Suche).
 
 ## Abweichungen von der ursprünglichen Datei-Struktur aus dem Plan (bewusste Vereinfachung)
 
@@ -86,10 +87,10 @@ Zugriff auf eine laufende Postgres-Instanz hat, sollte echtes End-to-End-Testen
 | NOO-131 | done        |           | Konfig-Screen (config-screen.js/config.css), TEILEN-Sektion mit bestehendem Code-Flow |
 | NOO-132 | done        |           | Modulzeilen mit Inline-Ref-Chips, Zurücksetzen/Entfernen |
 | NOO-133 | done        |           | Marketplace (Sport-Module) + Account-Screen; UFC/Strava/Sheets/Outlook als Platzhalter — ⚠️ siehe Batch 8 |
-| NOO-141 | not-started |           | Wetter-Range-Endpoint + SVG-Icons (Scope reduziert) |
-| NOO-142 | not-started |           | Urlaubsmodul (lokal) |
-| NOO-143 | not-started |           | Aktivitätenmodul (lokal) |
-| NOO-144 | not-started |           | Quizmodul (lokal) |
+| NOO-141 | done        |           | `GET /api/weather?from&to&location` (CalendarService.weatherRange, CalendarRoutes) + SVG-Icons in Pillenleiste/Titel |
+| NOO-142 | done        |           | Urlaubsmodul (kal.cfg.urlaub), Wetter-Override via Open-Meteo-Geocoding (client, gecacht) — Live-Test der externen API in dieser Session nicht möglich, siehe Hinweis unten |
+| NOO-143 | done        |           | Aktivitätenmodul (kal.cfg.akt, kal.done), Abhak-Button auf der Karte |
+| NOO-144 | done        |           | Quizmodul (quiz-pool.js, Sheet mit Frage/Antwort-Flow, kal.done) |
 | NOO-151 | not-started |           | Such-API |
 | NOO-152 | not-started |           | Such-Overlay |
 | NOO-161 | not-started |           | Cutover: altes index.html entfernen |
@@ -120,8 +121,20 @@ web/src/main/resources/static/
   aber bereits nicht mehr, da direkt neu aufgebaut statt migriert.)
 ```
 
-Noch offen: `js/search.js` + `css/search.css` (Batch 6), lokale Module
-`js/modules/{quiz,activities,vacation}.js` (Batch 5, Ordner existiert noch nicht).
+    quiz-pool.js           # Fragenpool + datums-geseedeter Hash/LCG-Picker (NOO-144)
+    local-modules.js         # kal.cfg/kal.done, Quiz/Aktivitäten/Urlaub-Synthese, Wetter-Override
+```
+
+Noch offen: `js/search.js` + `css/search.css` (Batch 6).
+
+## Bekannte Lücke: Live-Test der Open-Meteo-Client-Aufrufe (NOO-142)
+
+`local-modules.js` (`geocode()`, `applyVacationWeatherOverrides()`) ruft die
+öffentlichen Open-Meteo-APIs direkt aus dem Browser auf (Geocoding + Forecast
+für beliebige Urlaubsorte). In dieser Sandbox-Session ohne Browser/Netzwerkzugriff
+auf externe Hosts konnte das nicht end-to-end getestet werden — nur Code-Review.
+Vor Abnahme einmal im Browser einen Urlaub eintragen und prüfen, ob die
+Pillenleiste/der Tagestitel das Wetter des Urlaubsorts zeigt.
 
 ## Entscheidungs-Log (append-only)
 

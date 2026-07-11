@@ -151,30 +151,8 @@ class CalendarService(
             ?.firstOrNull { it.module == ModuleType.WEATHER.slug }
             ?.refs?.firstOrNull()
             ?.let { WeatherLocation.fromName(it) }
-        val today = Instant.now().atZone(BERLIN).toLocalDate()
-        val weatherMap: Map<String, WeatherDayDto> = if (weatherLocation != null && weatherRepo != null) {
-            val monday = week.monday()
-            val days = (0..6L).map { monday.plusDays(it) }
-            val weatherDays = weatherRepo.findDaysInRange(weatherLocation, days.first(), days.last())
-                .associateBy { it.day }
-            days.mapNotNull { day ->
-                val wd = weatherDays[day] ?: return@mapNotNull null
-                val cat = WeatherCategory.fromWmo(wd.weatherCode)
-                val currentTemp = if (day == today) weatherRepo.findCurrentHour(weatherLocation, Instant.now())?.temp?.toInt() else null
-                day.toString() to WeatherDayDto(
-                    symbol = cat.symbol,
-                    label = cat.label,
-                    tempMax = wd.tempMax.toInt(),
-                    tempMin = wd.tempMin.toInt(),
-                    precipProbMax = wd.precipProbabilityMax,
-                    precipSumMm = wd.precipSumMm,
-                    windMaxKmh = wd.windMaxKmh,
-                    sunrise = wd.sunrise.toString().substring(0, 5),
-                    sunset = wd.sunset.toString().substring(0, 5),
-                    currentTemp = currentTemp
-                )
-            }.toMap()
-        } else emptyMap()
+        val monday = week.monday()
+        val weatherMap = if (weatherLocation != null) weatherDayDtos(weatherLocation, monday, monday.plusDays(6)) else emptyMap()
 
         return WeekResponse(
             week = week.label,
@@ -190,6 +168,37 @@ class CalendarService(
     }
 
     fun weekWindow(week: IsoWeek): Pair<Instant, Instant> = week.start(BERLIN) to week.end(BERLIN)
+
+    /**
+     * Wetter für einen Datumsbereich, unabhängig von einer Config-Auswahl (NOO-141).
+     * Wird sowohl von [weekResponse] (bestehendes Verhalten) als auch vom neuen
+     * `GET /api/weather`-Range-Endpoint genutzt.
+     */
+    fun weatherRange(location: WeatherLocation, from: LocalDate, to: LocalDate): Map<String, WeatherDayDto> =
+        weatherDayDtos(location, from, to)
+
+    private fun weatherDayDtos(location: WeatherLocation, from: LocalDate, to: LocalDate): Map<String, WeatherDayDto> {
+        if (weatherRepo == null) return emptyMap()
+        val today = Instant.now().atZone(BERLIN).toLocalDate()
+        val weatherDays = weatherRepo.findDaysInRange(location, from, to).associateBy { it.day }
+        return generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }.mapNotNull { day ->
+            val wd = weatherDays[day] ?: return@mapNotNull null
+            val cat = WeatherCategory.fromWmo(wd.weatherCode)
+            val currentTemp = if (day == today) weatherRepo.findCurrentHour(location, Instant.now())?.temp?.toInt() else null
+            day.toString() to WeatherDayDto(
+                symbol = cat.symbol,
+                label = cat.label,
+                tempMax = wd.tempMax.toInt(),
+                tempMin = wd.tempMin.toInt(),
+                precipProbMax = wd.precipProbabilityMax,
+                precipSumMm = wd.precipSumMm,
+                windMaxKmh = wd.windMaxKmh,
+                sunrise = wd.sunrise.toString().substring(0, 5),
+                sunset = wd.sunset.toString().substring(0, 5),
+                currentTemp = currentTemp
+            )
+        }.toMap()
+    }
 
     /** Alle Events für den abonnierbaren ICS-Feed (14 Tage zurück bis Saisonende). */
     fun feedEvents(config: StoredConfig?): List<Event> =

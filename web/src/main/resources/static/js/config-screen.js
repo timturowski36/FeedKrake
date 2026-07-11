@@ -6,6 +6,16 @@ import { state, applyTheme } from "./state.js";
 import { api } from "./api.js";
 import { esc, MOD_COLOR_VARS } from "./util.js";
 import { loadWeek, applyCode } from "./week.js";
+import { loadCfg, saveCfg } from "./local-modules.js";
+import { QUIZ_POOL } from "./quiz-pool.js";
+
+const LOCAL_MOD_META = {
+  quiz: { label: "Quiz", desc: "Tägliches Wissensquiz", icon: "?", colorVar: "--mod-quiz" },
+  akt: { label: "Aktivitäten", desc: "Wöchentliche Aktivitäten zum Abhaken", icon: "✓", colorVar: "--mod-akt" },
+  urlaub: { label: "Urlaub", desc: "Urlaubszeiträume inkl. Wetter-Override", icon: "✈", colorVar: "--mod-urlaub" },
+};
+const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+let localCfg = loadCfg();
 
 const MOD_META = {
   bl1: { label: "1. Bundesliga", desc: "Alle Spieltage der 1. Bundesliga", icon: "⚽" },
@@ -26,6 +36,12 @@ const PLACEHOLDER_MODULES = [
 let openModuleKey = null;
 /** { [module]: { refs: string[] } } — leere refs = "alle" (siehe Hinweistext). */
 let pending = {};
+// Transiente Eingaben für die "neu hinzufügen"-Formulare (Aktivität/Urlaub), nicht persistiert.
+let newAktName = "";
+let newAktDays = new Set();
+let newUrlaubOrt = "";
+let newUrlaubVon = "";
+let newUrlaubBis = "";
 
 function el(id) { return document.getElementById(id); }
 
@@ -48,6 +64,7 @@ async function currentSelections() {
 export async function openConfigScreen() {
   await ensureCatalog();
   pending = await currentSelections();
+  localCfg = loadCfg();
   openModuleKey = null;
   render();
   document.getElementById("app").hidden = true;
@@ -66,6 +83,8 @@ function render() {
   const modules = state.catalog.modules;
   const active = modules.filter(m => m.module in pending);
   const inactive = modules.filter(m => !(m.module in pending));
+  const activeLocal = Object.keys(LOCAL_MOD_META).filter(k => localCfg.modules[k]);
+  const inactiveLocal = Object.keys(LOCAL_MOD_META).filter(k => !localCfg.modules[k]);
 
   el("screen-config").innerHTML = `
     <a class="screen-back" href="#" id="cfg-back">‹ Kalender</a>
@@ -83,13 +102,18 @@ function render() {
 
     <div class="cfg-section">
       <div class="cfg-section-label">Meine Module</div>
-      <div class="cfg-card">${active.length ? active.map(moduleRowHtml).join("") : `<div class="empty-state">Noch keine Module aktiv.</div>`}</div>
+      <div class="cfg-card">${
+        active.length || activeLocal.length
+          ? active.map(moduleRowHtml).join("") + activeLocal.map(localModuleRowHtml).join("")
+          : `<div class="empty-state">Noch keine Module aktiv.</div>`
+      }</div>
     </div>
 
     <div class="cfg-section">
       <div class="cfg-section-label">Marketplace</div>
       <div class="cfg-card">
         ${inactive.map(marketplaceRowHtml).join("")}
+        ${inactiveLocal.map(localMarketplaceRowHtml).join("")}
         ${PLACEHOLDER_MODULES.map(placeholderRowHtml).join("")}
       </div>
       <p class="cfg-hint">Module mit Schloss benötigen einen Account. <a href="#" id="cfg-account-link">Mehr erfahren</a></p>
@@ -109,6 +133,7 @@ function render() {
 
   wireStatic();
   active.forEach(m => wireModuleRow(m));
+  activeLocal.forEach(key => wireLocalModuleRow(key));
 }
 
 function moduleRowHtml(m) {
@@ -148,6 +173,142 @@ function placeholderRowHtml(m) {
     <div class="module-row-text"><div class="name">${esc(m.label)}</div><div class="desc">${esc(m.desc)}</div></div>
     <span class="tag ${m.dev ? "dev-tag" : ""}">${m.dev ? "IN ENTWICKLUNG" : "ACCOUNT"}</span>
   </div>`;
+}
+
+function localModuleRowHtml(key) {
+  const meta = LOCAL_MOD_META[key];
+  const isOpen = openModuleKey === key;
+  return `<div class="module-row ${isOpen ? "open" : ""}" data-module="${key}">
+    <div class="module-row-head" data-toggle="${key}">
+      <div class="module-row-icon" style="--row-color:var(${meta.colorVar})">${meta.icon}</div>
+      <div class="module-row-text"><div class="name">${esc(meta.label)}</div><div class="desc">${esc(meta.desc)}</div></div>
+      <svg class="module-row-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+    <div class="module-row-body">
+      ${localModuleBodyHtml(key)}
+      <div class="module-row-footer">
+        <button class="link-btn danger" data-remove-local="${key}">Modul entfernen</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function localMarketplaceRowHtml(key) {
+  const meta = LOCAL_MOD_META[key];
+  return `<div class="marketplace-row">
+    <div class="module-row-text"><div class="name">${esc(meta.label)}</div><div class="desc">${esc(meta.desc)}</div></div>
+    <button class="add-btn" data-add-local="${key}">Hinzufügen</button>
+  </div>`;
+}
+
+function weekdayTogglesHtml(nameAttr, selectedDays) {
+  return `<div class="ref-chip-list">${WEEKDAYS.map((wd, i) =>
+    `<button class="ref-chip ${selectedDays.includes(i) ? "active" : ""}" data-${nameAttr}-day="${i}" style="width:36px;justify-content:center">${wd}</button>`).join("")}</div>`;
+}
+
+function localModuleBodyHtml(key) {
+  if (key === "quiz") {
+    const topics = Object.keys(QUIZ_POOL);
+    return `<p class="ref-hint">An diesen Tagen</p>
+      ${weekdayTogglesHtml("quiz", localCfg.quiz.days)}
+      <p class="ref-hint" style="margin-top:12px">Themengebiete (ohne Auswahl: alle)</p>
+      <div class="ref-chip-list">${topics.map(t => `<button class="ref-chip ${localCfg.quiz.topics.includes(t) ? "active" : ""}" data-quiz-topic="${esc(t)}">${esc(t)}</button>`).join("")}</div>`;
+  }
+  if (key === "akt") {
+    const rows = localCfg.akt.list.map(a => `<div class="marketplace-row">
+        <div class="module-row-text"><div class="name">${esc(a.name)}</div><div class="desc">${a.days.map(d => WEEKDAYS[d]).join(", ")}</div></div>
+        <button class="link-btn danger" data-remove-akt="${a.id}">Löschen</button>
+      </div>`).join("") || `<div class="empty-state">Noch keine Aktivitäten.</div>`;
+    return `${rows}
+      <p class="ref-hint" style="margin-top:12px">Neue Aktivität</p>
+      <input class="share-input" id="new-akt-name" placeholder="Name" style="text-transform:none;letter-spacing:normal;width:100%;margin-bottom:8px" value="${esc(newAktName)}">
+      ${weekdayTogglesHtml("new-akt", [...newAktDays])}
+      <button class="add-btn" id="add-akt-btn" style="margin-top:10px" ${newAktName.trim() && newAktDays.size ? "" : "disabled"}>Hinzufügen</button>`;
+  }
+  if (key === "urlaub") {
+    const rows = localCfg.urlaub.list.map(v => `<div class="marketplace-row">
+        <div class="module-row-text"><div class="name">${esc(v.ort)}</div><div class="desc">${v.von} – ${v.bis}</div></div>
+        <button class="link-btn danger" data-remove-urlaub="${v.id}">Löschen</button>
+      </div>`).join("") || `<div class="empty-state">Noch kein Urlaub geplant.</div>`;
+    return `${rows}
+      <p class="ref-hint" style="margin-top:12px">Neuer Urlaub — überschreibt das Wetter im Zeitraum mit dem Wetter am Urlaubsort</p>
+      <input class="share-input" id="new-urlaub-ort" placeholder="Ort" style="text-transform:none;letter-spacing:normal;width:100%;margin-bottom:8px" value="${esc(newUrlaubOrt)}">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input type="date" class="share-input" id="new-urlaub-von" style="text-transform:none;letter-spacing:normal" value="${newUrlaubVon}">
+        <input type="date" class="share-input" id="new-urlaub-bis" style="text-transform:none;letter-spacing:normal" value="${newUrlaubBis}">
+      </div>
+      <button class="add-btn" id="add-urlaub-btn" ${newUrlaubOrt.trim() && newUrlaubVon && newUrlaubBis ? "" : "disabled"}>Hinzufügen</button>`;
+  }
+  return "";
+}
+
+function persistLocal() {
+  saveCfg(localCfg);
+  render();
+}
+
+function wireLocalModuleRow(key) {
+  if (key === "quiz") {
+    document.querySelectorAll("[data-quiz-day]").forEach(btn => btn.addEventListener("click", () => {
+      const d = parseInt(btn.dataset.quizDay, 10);
+      const days = localCfg.quiz.days;
+      localCfg.quiz.days = days.includes(d) ? days.filter(x => x !== d) : [...days, d];
+      persistLocal();
+    }));
+    document.querySelectorAll("[data-quiz-topic]").forEach(btn => btn.addEventListener("click", () => {
+      const t = btn.dataset.quizTopic;
+      const topics = localCfg.quiz.topics;
+      localCfg.quiz.topics = topics.includes(t) ? topics.filter(x => x !== t) : [...topics, t];
+      persistLocal();
+    }));
+  }
+  if (key === "akt") {
+    const nameInput = el("new-akt-name");
+    if (nameInput) nameInput.addEventListener("input", () => { newAktName = nameInput.value; syncAddAktButton(); });
+    document.querySelectorAll("[data-new-akt-day]").forEach(btn => btn.addEventListener("click", () => {
+      const d = parseInt(btn.dataset.newAktDay, 10);
+      if (newAktDays.has(d)) newAktDays.delete(d); else newAktDays.add(d);
+      render();
+    }));
+    const addBtn = el("add-akt-btn");
+    if (addBtn) addBtn.addEventListener("click", () => {
+      localCfg.akt.list.push({ id: Date.now(), name: newAktName.trim(), days: [...newAktDays].sort() });
+      newAktName = ""; newAktDays = new Set();
+      persistLocal();
+    });
+    document.querySelectorAll("[data-remove-akt]").forEach(btn => btn.addEventListener("click", () => {
+      localCfg.akt.list = localCfg.akt.list.filter(a => String(a.id) !== btn.dataset.removeAkt);
+      persistLocal();
+    }));
+  }
+  if (key === "urlaub") {
+    const ortInput = el("new-urlaub-ort"), vonInput = el("new-urlaub-von"), bisInput = el("new-urlaub-bis");
+    if (ortInput) ortInput.addEventListener("input", () => { newUrlaubOrt = ortInput.value; syncAddUrlaubButton(); });
+    if (vonInput) vonInput.addEventListener("input", () => { newUrlaubVon = vonInput.value; syncAddUrlaubButton(); });
+    if (bisInput) bisInput.addEventListener("input", () => { newUrlaubBis = bisInput.value; syncAddUrlaubButton(); });
+    const addBtn = el("add-urlaub-btn");
+    if (addBtn) addBtn.addEventListener("click", () => {
+      let [von, bis] = [newUrlaubVon, newUrlaubBis];
+      if (von > bis) [von, bis] = [bis, von];
+      localCfg.urlaub.list.push({ id: Date.now(), ort: newUrlaubOrt.trim(), von, bis });
+      newUrlaubOrt = ""; newUrlaubVon = ""; newUrlaubBis = "";
+      persistLocal();
+    });
+    document.querySelectorAll("[data-remove-urlaub]").forEach(btn => btn.addEventListener("click", () => {
+      localCfg.urlaub.list = localCfg.urlaub.list.filter(v => String(v.id) !== btn.dataset.removeUrlaub);
+      persistLocal();
+    }));
+  }
+}
+
+function syncAddAktButton() {
+  const btn = el("add-akt-btn");
+  if (btn) btn.disabled = !(newAktName.trim() && newAktDays.size);
+}
+
+function syncAddUrlaubButton() {
+  const btn = el("add-urlaub-btn");
+  if (btn) btn.disabled = !(newUrlaubOrt.trim() && newUrlaubVon && newUrlaubBis);
 }
 
 function accountScreenHtml() {
@@ -209,6 +370,15 @@ function wireStatic() {
     }));
   document.querySelectorAll("[data-remove]").forEach(btn =>
     btn.addEventListener("click", async () => { delete pending[btn.dataset.remove]; if (openModuleKey === btn.dataset.remove) openModuleKey = null; await persist(); }));
+  document.querySelectorAll("[data-add-local]").forEach(btn =>
+    btn.addEventListener("click", () => { localCfg.modules[btn.dataset.addLocal] = true; persistLocal(); }));
+  document.querySelectorAll("[data-remove-local]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.removeLocal;
+      localCfg.modules[key] = false;
+      if (openModuleKey === key) openModuleKey = null;
+      persistLocal();
+    }));
   document.querySelectorAll("[data-reset]").forEach(btn =>
     btn.addEventListener("click", async () => {
       const key = btn.dataset.reset;

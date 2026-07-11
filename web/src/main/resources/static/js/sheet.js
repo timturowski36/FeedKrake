@@ -5,6 +5,7 @@
 import { state } from "./state.js";
 import { api } from "./api.js";
 import { esc, fullDateFmt, longDateFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
+import { quizStateFor, submitQuizResult } from "./local-modules.js";
 
 let currentEventId = null;
 
@@ -318,6 +319,56 @@ export async function openWeatherSheet(location, day) {
   html += `<dl class="weather-kpi"><div><dt>Niederschlag</dt><dd>${det.precipSumMm.toFixed(1)} mm</dd></div><div><dt>Wind max.</dt><dd>${det.windMaxKmh.toFixed(0)} km/h</dd></div></dl>`;
   el("sheet-body").innerHTML = html;
   showSheetChrome();
+}
+
+// ── Quiz-Sheet (lokales Modul, NOO-144) ─────────────────────────────────────
+export function openQuizSheet(dateStr) {
+  const { questions, result } = quizStateFor(dateStr);
+  el("sheet-badge").textContent = "QUIZ";
+  el("sheet-title").textContent = "Tagesquiz";
+  el("sheet-date").textContent = longDateFmt.format(new Date(`${dateStr}T12:00:00`));
+  document.querySelector(".sheet-header").style.setProperty("--sheet-color", "var(--mod-quiz)");
+
+  if (result) {
+    el("sheet-body").innerHTML = `<div class="quiz-done">
+      <div class="check-circle">✓</div>
+      <p style="font-size:17px;font-weight:700">Quiz erledigt</p>
+      <p style="color:var(--sec)">${result.s} von ${result.n} Fragen richtig beantwortet.</p>
+    </div>`;
+  } else {
+    renderQuizQuestion(dateStr, questions, 0, 0);
+  }
+  showSheetChrome();
+}
+
+function renderQuizQuestion(dateStr, questions, idx, score) {
+  const q = questions[idx];
+  const body = el("sheet-body");
+  body.innerHTML = `
+    <div class="quiz-hint">FRAGE ${idx + 1} VON ${questions.length} · ${esc(q.topic)}</div>
+    <div class="quiz-question">${esc(q.q)}</div>
+    <div id="quiz-answers">${q.a.map((a, i) => `<button class="quiz-answer" data-idx="${i}">${esc(a)}</button>`).join("")}</div>
+    <button class="export-btn" id="quiz-next" style="--export-bg:var(--acc);--export-fg:#fff;display:none;margin-top:16px">${idx + 1 < questions.length ? "Weiter" : "Abschließen"}</button>
+  `;
+  let picked = false;
+  body.querySelectorAll(".quiz-answer").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (picked) return;
+      picked = true;
+      const i = parseInt(btn.dataset.idx, 10);
+      const correct = i === q.c;
+      if (correct) score++;
+      body.querySelectorAll(".quiz-answer").forEach((b, bi) => {
+        if (bi === q.c) b.classList.add("correct");
+        else if (bi === i) b.classList.add("wrong");
+      });
+      el("quiz-next").style.display = "block";
+    });
+  });
+  el("quiz-next").addEventListener("click", () => {
+    if (idx + 1 < questions.length) renderQuizQuestion(dateStr, questions, idx + 1, score);
+    else { submitQuizResult(dateStr, score, questions.length); openQuizSheet(dateStr); }
+  });
 }
 
 export function setupSheetChrome() {

@@ -29,6 +29,9 @@ export const api = {
   weatherDay(location, day) {
     return getJson(`/api/weather/${encodeURIComponent(location)}/${encodeURIComponent(day)}`);
   },
+  weatherRange(from, to) {
+    return getJson(`/api/weather?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  },
   pubgPlayer(playerId, day) {
     return getJson(`/api/pubg/player/${encodeURIComponent(playerId)}?day=${encodeURIComponent(day)}`);
   },

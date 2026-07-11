@@ -1,8 +1,9 @@
 // Wochenübersicht: Header, Pillenleiste, Karten, Swipe/Tastatur (NOO-112/113/114).
 import { state } from "./state.js";
 import { api } from "./api.js";
-import { openSheet, openWeatherSheet } from "./sheet.js";
+import { openSheet, openWeatherSheet, openQuizSheet } from "./sheet.js";
 import { esc, timeFmt, dateFmt, longDateFmt, todayKeyFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
+import { localEntriesForDay, toggleActivity, applyVacationWeatherOverrides, localModuleColorsForDay } from "./local-modules.js";
 
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const DAY_NAMES_LONG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
@@ -37,6 +38,15 @@ export async function loadWeek(push = true) {
   if (!res.ok) return;
   state.data = res.data;
   state.week = state.data.week;
+  // NOO-141: ohne konfiguriertes Wettermodul trotzdem heute+5 in der Pillenleiste zeigen,
+  // über den config-unabhängigen Range-Endpoint (Standardort Recklinghausen).
+  if (Object.keys(state.data.weather || {}).length === 0) {
+    const rangeRes = await api.weatherRange(state.data.days[0], state.data.days[6]);
+    if (rangeRes.ok) {
+      state.data.weather = rangeRes.data;
+      state.data.weatherLocation = state.data.weatherLocation || "RECKLINGHAUSEN";
+    }
+  }
   if (state.selDay == null) {
     const today = todayKeyFmt.format(new Date());
     const idx = state.data.days.indexOf(today);
@@ -48,6 +58,11 @@ export async function loadWeek(push = true) {
     if (state.code) url.searchParams.set("code", state.code); else url.searchParams.delete("code");
     history.pushState({}, "", url);
   }
+  // NOO-142: Wetter-Override für Tage im konfigurierten Urlaubszeitraum (einmal pro
+  // Wochenwechsel berechnet, danach in state.data zwischengespeichert für re-renders).
+  const override = await applyVacationWeatherOverrides(state.data.weather || {}, state.data.days);
+  state.data.weather = override.weather;
+  state.data.weatherOrtByDay = override.ortByDay;
   render();
   connectSse();
 }
@@ -113,7 +128,10 @@ function renderPillBar(d, today) {
     const weatherHtml = wd
       ? `${weatherIconSvg(wd.label)}<span>${day === today && wd.currentTemp != null ? wd.currentTemp : wd.tempMax}°</span>`
       : "–";
-    const colors = [...new Set((byDay[day] || []).map(e => `var(${MOD_COLOR_VARS[slugOf(e)] || "--sec"})`))].slice(0, 4);
+    const colors = [...new Set([
+      ...(byDay[day] || []).map(e => `var(${MOD_COLOR_VARS[slugOf(e)] || "--sec"})`),
+      ...localModuleColorsForDay(day),
+    ])].slice(0, 4);
     const dots = colors.map(c => `<span style="background:${c}"></span>`).join("");
     return `<button class="day-pill ${isToday ? "is-today" : ""} ${isSelected ? "selected-mobile-only" : ""}" data-day-idx="${i}">
       <span class="wd">${DAY_NAMES[i]}</span>
@@ -134,27 +152,45 @@ function renderPillBar(d, today) {
 function renderMobileDayTitle(d, today) {
   const day = d.days[state.selDay];
   const isToday = day === today;
-  const label = `${isToday ? "Heute" : DAY_NAMES_LONG[state.selDay]} · ${longDateFmt.format(new Date(day + "T12:00:00"))}`;
+  const ort = d.weatherOrtByDay?.[day];
+  const label = `${ort ? esc(ort) + " · " : ""}${isToday ? "Heute" : DAY_NAMES_LONG[state.selDay]} · ${longDateFmt.format(new Date(day + "T12:00:00"))}`;
   const wd = d.weather?.[day];
   const weatherHtml = wd ? `<span class="weather">${weatherIconSvg(wd.label, 15)} ${wd.label}, ${day === today && wd.currentTemp != null ? wd.currentTemp : wd.tempMax}°</span>` : "";
-  document.getElementById("mobile-day-title").innerHTML = `<span>${esc(label)}</span>${weatherHtml}`;
+  document.getElementById("mobile-day-title").innerHTML = `<span>${label}</span>${weatherHtml}`;
+}
+
+function minutesOf(e) {
+  if (!e.startTime) return 0;
+  const dt = new Date(e.startTime);
+  return dt.getUTCHours() * 60 + dt.getUTCMinutes(); // grobe Sortierung reicht, echte Anzeige nutzt timeFmt
 }
 
 function renderGrid(d, today) {
   const byDay = groupByDay(d);
   const grid = document.getElementById("week-grid");
+  let anyEntries = false;
   grid.innerHTML = d.days.map((day, i) => {
-    const events = byDay[day] || [];
-    const cards = events.map(cardHtml).join("");
+    const specs = (byDay[day] || []).map(e => ({ minutes: minutesOf(e), html: cardHtml(e) }))
+      .concat(localEntriesForDay(day, today));
+    if (specs.length) anyEntries = true;
+    const cards = specs.sort((a, b) => a.minutes - b.minutes).map(s => s.html).join("");
     const isToday = day === today;
     const isSelected = i === state.selDay;
     return `<div class="day-col ${isToday ? "is-today" : ""} ${isSelected ? "selected-mobile-day" : ""}" data-day-idx="${i}">${cards}</div>`;
   }).join("");
   const empty = document.getElementById("empty-week");
-  empty.hidden = d.events.length > 0;
+  empty.hidden = anyEntries;
   document.getElementById("empty-week-code-note").textContent = state.code ? " (Filter aktiv)" : "";
-  grid.querySelectorAll(".event-card.clickable").forEach(el =>
+  grid.querySelectorAll(".event-card.clickable[data-id]").forEach(el =>
     el.addEventListener("click", () => openSheet(el.dataset.id)));
+  grid.querySelectorAll(".event-card.clickable[data-quiz-key]").forEach(el =>
+    el.addEventListener("click", () => openQuizSheet(el.dataset.quizKey)));
+  grid.querySelectorAll(".check-btn[data-akt-id]").forEach(btn =>
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      toggleActivity(btn.dataset.aktId, btn.dataset.aktDate);
+      render();
+    }));
 }
 
 function chipStyle(kind) {
