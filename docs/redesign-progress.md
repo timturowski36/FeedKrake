@@ -8,12 +8,12 @@ wurde, oder rekonstruierbar aus den Entscheidungen unten.)
 
 ## Hier weitermachen
 
-Nächstes Ticket: NOO-161 (Cutover/Aufräumen, Batch 7)
+Nächstes Ticket: keins offen — Batches 0–7 fertig. Nur noch ⚠️ Batch 8
+(UFC/Strava echte Anbindung) zurückgestellt, siehe unten.
 Letzter Commit: (wird nach diesem Commit eingetragen)
-Falls mittendrin unterbrochen: sauberer Stopppunkt — Batches 1–6 fertig und
-committet (kompletter Kern-Neuaufbau inkl. Suche). Weiter mit Batch 7
-(Regressionscheck + Doku) und danach Batch 8 nur bei Bedarf (UFC/Strava,
-aktuell zurückgestellt).
+Falls mittendrin unterbrochen: sauberer Stopppunkt — alle Kern-Tickets sind
+umgesetzt und committet. Für eine neue Session: nur noch die "Bekannten
+Lücken" unten (Live-Verifikation im Browser) sind offen, kein Code-Rest.
 
 ## Abweichungen von der ursprünglichen Datei-Struktur aus dem Plan (bewusste Vereinfachung)
 
@@ -94,9 +94,9 @@ Zugriff auf eine laufende Postgres-Instanz hat, sollte echtes End-to-End-Testen
 | NOO-144 | done        |           | Quizmodul (quiz-pool.js, Sheet mit Frage/Antwort-Flow, kal.done) |
 | NOO-151 | done        |           | `GET /api/calendar/search?q&code` (CalendarService.search + SearchService, mit Unit-Tests) |
 | NOO-152 | done        |           | Such-Overlay (search.js/search.css), Lupe/`/`/Cmd-K, serverseitige + lokale Treffer gemischt |
-| NOO-161 | not-started |           | Cutover: altes index.html entfernen |
-| NOO-162 | not-started |           | Regressionscheck |
-| NOO-163 | not-started |           | README/Doku aktualisieren |
+| NOO-161 | done (kontrolliert) | | Kein Rest vom alten Monolithen (grep auf alte Klassen/Fonts/`ambient` leer); Cutover war bereits mit dem Neuaufbau in Batch 1 erledigt |
+| NOO-162 | done (soweit ohne Browser möglich) | | ICS/SSE/Config-Routen unverändert (Diff geprüft), `?week=`/`?code=` Deep-Link-Logik 1:1 portiert; Lighthouse/Viewport-Test braucht echten Browser — offen, siehe Hinweis |
+| NOO-163 | done        |           | README.md aktualisiert (Features, API-Tabelle, `:web`-Beschreibung); keine Screenshots vorhanden, daher nichts zu aktualisieren |
 | NOO-1xx | zurückgestellt | | ⚠️ UFC/Strava echte Anbindung (Batch 8, siehe oben) |
 
 ## Aktuelle Datei-Struktur (static/)
@@ -134,6 +134,15 @@ web/src/test/kotlin/de/noonoo/web/application/SearchServiceTest.kt  # 5 Tests, g
 Noch offen für Batch 7: Regressionscheck (ICS-Feeds, SSE, Deep-Links), README/Doku,
 Prüfung auf tote Reste vom alten Monolithen (der aber schon in Batch 1 komplett
 ersetzt wurde, insofern voraussichtlich nur eine kurze Kontrolle).
+
+## Gesamtstatus
+
+Alle Kern-Tickets (Batches 0–7, NOO-101 bis NOO-163) sind umgesetzt und
+committet. Offen bleibt nur ⚠️ Batch 8 (UFC/Strava echte Anbindung),
+bewusst zurückgestellt mangels Datenquelle. Vor einem Produktions-Merge nach
+`main` sollte einmal in einem echten Browser mit laufender Postgres-Instanz
+durchgeklickt werden (siehe Lücken unten) — das konnte in dieser Sandbox-Session
+nicht nachgeholt werden.
 
 ## Bekannte Lücke: Live-Test der Open-Meteo-Client-Aufrufe (NOO-142)
 
