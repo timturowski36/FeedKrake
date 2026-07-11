@@ -1,135 +1,33 @@
-// Bottom-Sheet (NOO-121 ff.): Capability-Matrix-Logik 1:1 aus der alten
-// index.html portiert (buildPanels/renderTabs/wireTabClicks/f1ResultsTable) —
-// nur die umgebende Chrome und die Panel-Bausteine sind neu geskinnt. Panels
-// werden weiterhin nur gerendert, wenn die Quelle tatsächlich Daten liefert.
+// Bottom-Sheet (NOO-121 ff.): modulspezifische Renderer exakt nach dem
+// Design-Prototyp docs/frontend/Kalender.dc.html — Match (Scoreboard + Tabs
+// Spielverlauf/Turnier|Liga), Formel 1 (Session/WM-Stand), PUBG (Tagesrangliste
+// → Spieler mit Tag/Woche/Rekorde) und Quiz. Panels degradieren still, wenn die
+// Quelle keine Daten liefert.
 import { state } from "./state.js";
 import { api } from "./api.js";
-import { esc, fullDateFmt, longDateFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
+import { esc, timeFmt, fullDateFmt, longDateFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
 import { quizStateFor, submitQuizResult } from "./local-modules.js";
-
-let currentEventId = null;
 
 function el(id) { return document.getElementById(id); }
 
-/** Baut die Liste verfügbarer Panels aus den Detaildaten. Panels ohne Inhalt werden weggelassen. */
-function buildPanels(det) {
-  const panels = [];
-  const add = (id, label, phases, html, extra = false) => {
-    if (!html) return;
-    panels.push({ id, label, phases, extra, html });
-  };
-
-  if (det.matchEvents) {
-    add("verlauf", "Spielverlauf", ["LIVE", "POST"], det.matchEvents.map(matchEventLine).join("") || emptyHint("Noch keine Ereignisse."));
-  }
-  if (det.headToHead) {
-    add("h2h", "Direkter Vergleich", ["PRE"], table(
-      ["Datum", "Paarung", "Erg."],
-      det.headToHead.map(h => [h.date, `${esc(h.home)} – ${esc(h.away)}`, h.result]),
-      { numCols: [2] }
-    ));
-  }
-  if (det.standings) {
-    const hasGroups = det.standings.some(s => s.group);
-    add("tabelle", "Tabelle", null, table(
-      ["#", "Team", "Sp", "Diff", "Pkt"],
-      det.standings.map(s => [
-        s.position,
-        `${hasGroups && s.group ? esc(s.group) + " · " : ""}${esc(s.team)}`,
-        s.played, s.goalsFor - s.goalsAgainst, s.points,
-      ]),
-      { numCols: [2, 3, 4], highlightRows: det.standings.map(s => s.highlight) }
-    ));
-  }
-  if (det.raceResults) add("rennergebnis", "Rennergebnis", ["POST"], f1ResultsTable(det.raceResults, "Status"));
-  if (det.qualifyingResults) add("qualifying", "Qualifying", ["POST"], f1ResultsTable(det.qualifyingResults, "Beste Zeit"));
-  if (det.previousWinner || det.circuitInfo) {
-    let html = "";
-    if (det.circuitInfo) html += `<p class="sheet-meta">${esc(det.circuitInfo.circuitName)}, ${esc(det.circuitInfo.locality)} (${esc(det.circuitInfo.country)})</p>`;
-    if (det.previousWinner) html += `<p class="sheet-meta">Vorjahressieger (${det.previousWinner.season}): ${esc(det.previousWinner.driverName)} · ${esc(det.previousWinner.constructorName)}</p>`;
-    add("vorschau", "Vorschau", ["PRE"], html);
-  }
-  if (det.pubgStats) add("pubg", "Tagesrangliste", null, pubgRankingHtml(det.pubgStats));
-  if (det.topScorers || det.nationGoals) {
-    let html = "";
-    if (det.topScorers) html += `<h3 class="panel-sub">Torschützen</h3>` + table(
-      ["#", "Spieler", "Tore", "Assists"],
-      det.topScorers.map(s => [s.rank, `${esc(s.player)} <span style="color:var(--sec)">${esc(s.team)}</span>`, s.goals, s.assists ?? "–"]),
-      { numCols: [2, 3] }
-    );
-    if (det.nationGoals) html += `<h3 class="panel-sub">Tore nach Nation</h3>` + table(
-      ["#", "Nation", "Tore"],
-      det.nationGoals.map(n => [n.rank, esc(n.team), n.goals]),
-      { numCols: [2] }
-    );
-    add("turnierinfo", "Turnierinformationen", null, html, true);
-  }
-  if (det.driverStandings || det.constructorStandings) {
-    let html = "";
-    if (det.driverStandings) html += `<h3 class="panel-sub">Fahrerwertung</h3>` + table(
-      ["#", "Fahrer", "Pkt"],
-      det.driverStandings.slice(0, 10).map(s => [s.position, `${esc(s.name)} <span style="color:var(--sec)">${esc(s.team ?? "")}</span>`, s.points]),
-      { numCols: [2] }
-    );
-    if (det.constructorStandings) html += `<h3 class="panel-sub">Konstrukteurswertung</h3>` + table(
-      ["#", "Team", "Pkt"],
-      det.constructorStandings.slice(0, 10).map(s => [s.position, esc(s.name), s.points]),
-      { numCols: [2] }
-    );
-    add("gesamtwertung", "Gesamtwertung", null, html, true);
-  }
-  return panels;
-}
-
 function emptyHint(text) { return `<p class="sheet-meta">${esc(text)}</p>`; }
 
-function table(headers, rows, opts = {}) {
-  const numCols = new Set(opts.numCols || []);
-  const highlight = opts.highlightRows || [];
-  const head = `<tr>${headers.map((h, i) => `<th${numCols.has(i) ? ' class="num"' : ""}>${esc(h)}</th>`).join("")}</tr>`;
-  const body = rows.map((row, ri) =>
-    `<tr class="${highlight[ri] ? "top3" : ""}">` +
-      row.map((cell, ci) => `<td${numCols.has(ci) ? ' class="num tabular-nums"' : ""}>${cell}</td>`).join("") + `</tr>`
-  ).join("");
-  return `<table class="sheet-table">${head}${body}</table>`;
+function setSheetHeader(badge, title, date, colorVar) {
+  el("sheet-badge").textContent = badge;
+  el("sheet-title").textContent = title;
+  el("sheet-date").textContent = date;
+  document.querySelector(".sheet-header").style.setProperty("--sheet-color", colorVar);
 }
 
-function f1ResultsTable(rows, statusLabel) {
-  return table(
-    ["#", "Fahrer", "Team", statusLabel, "Pkt"],
-    rows.map(s => [
-      esc(s.positionText), `${esc(s.driverName)}${s.fastestLap ? " ⚡" : ""}`, esc(s.constructorName), esc(s.status), s.points,
-    ]),
-    { numCols: [4], highlightRows: rows.map((_, i) => i < 3) }
-  );
-}
+// ── Gemeinsame Bausteine ─────────────────────────────────────────────────────
 
-// ── Spielverlauf-Timeline: Icon je nach Ereignistyp (Tor rund, Karte eckig) ──
-function matchEventLine(m) {
-  const t = (m.type || "").toLowerCase();
-  let iconCls = "", iconGlyph = "•";
-  if (t.includes("goal") || t.includes("tor")) { iconGlyph = "⚽"; }
-  else if (t.includes("yellow") || t.includes("gelb")) { iconCls = "card-yellow"; iconGlyph = ""; }
-  else if (t.includes("red") || t.includes("rot")) { iconCls = "card-red"; iconGlyph = ""; }
-  const text = [m.player, m.detail].filter(Boolean).join(" – ") || m.type;
-  return `<div class="evt-line">
-    <span class="min tabular-nums">${esc(m.minute)}</span>
-    <span class="icon ${iconCls}">${iconGlyph}</span>
-    <span class="text">${esc(text)}</span>
-  </div>`;
-}
-
-/** Rendert Tab-Leiste + Tab-Panels; Standard-Tab = erstes nicht-Extra-Panel zur aktuellen Phase. */
-function renderTabs(panels, phase) {
-  if (panels.length === 0) return emptyHint("Für dieses Event liegen keine Detaildaten vor.");
-  const ordered = [...panels.filter(p => !p.extra), ...panels.filter(p => p.extra)];
-  let activeIdx = ordered.findIndex(p => !p.extra && (!p.phases || p.phases.includes(phase)));
-  if (activeIdx < 0) activeIdx = 0;
-  const tabBar = `<div class="tab-bar" role="tablist">` + ordered.map((p, i) =>
-    `<button class="tab-btn ${i === activeIdx ? "active" : ""}" role="tab" aria-selected="${i === activeIdx}" data-tab-idx="${i}">${esc(p.label)}</button>`).join("") + `</div>`;
-  const panelsHtml = ordered.map((p, i) =>
-    `<div class="tab-panel ${i === activeIdx ? "active" : ""}" role="tabpanel" data-tab-idx="${i}">${p.html}</div>`).join("");
-  return tabBar + panelsHtml;
+/** 2er/3er-Segmented-Control + Panels; Klassen .tab-bar/.tab-btn/.tab-panel. */
+function tabsHtml(tabs, activeIdx = 0) {
+  const bar = `<div class="tab-bar" role="tablist">` + tabs.map((t, i) =>
+    `<button class="tab-btn ${i === activeIdx ? "active" : ""}" role="tab" aria-selected="${i === activeIdx}" data-tab-idx="${i}">${esc(t.label)}</button>`).join("") + `</div>`;
+  const panels = tabs.map((t, i) =>
+    `<div class="tab-panel ${i === activeIdx ? "active" : ""}" role="tabpanel" data-tab-idx="${i}">${t.html}</div>`).join("");
+  return bar + panels;
 }
 
 function wireTabClicks(container) {
@@ -141,82 +39,45 @@ function wireTabClicks(container) {
   });
 }
 
-// ── Score-Header (Fußball/Handball) ──────────────────────────────────────────
-function scoreHeaderHtml(ev) {
-  const parts = ev?.participants || [];
-  if (parts.length !== 2) return "";
-  const [a, b] = parts;
-  const isLive = ev.status === "LIVE";
-  const isFinished = ev.status === "FINISHED";
-  const hasScore = a.score != null && b.score != null;
-  const center = hasScore
-    ? `<div class="score tabular-nums">${esc(a.score)}:${esc(b.score)}</div><div class="status ${isLive ? "live live-pulse" : ""}">${isLive ? "● LIVE" : isFinished ? "Endstand" : ""}</div>`
-    : `<div class="score" style="font-size:20px">${ev.startTime ? new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" }).format(new Date(ev.startTime)) : "–"}</div><div class="status">Anstoß</div>`;
-  return `<div class="score-header">
-    <div class="team">${esc(a.name)}</div>
-    <div class="center">${center}</div>
-    <div class="team">${esc(b.name)}</div>
-  </div>`;
+/**
+ * 4-Spalten-Ranking-Grid des Prototyps (# / Name / Sub / Wert).
+ * rows: { rank, name, sub, val, top? } — top färbt die Rangspalte in accentVar.
+ */
+function rankGrid(heads, rows, accentVar = "--acc") {
+  const head = `<span class="rg-head num">#</span>
+    <span class="rg-head">${esc(heads.name)}</span>
+    <span class="rg-head">${esc(heads.sub)}</span>
+    <span class="rg-head num">${esc(heads.val)}</span>`;
+  const body = rows.map(r => `
+    <span class="rg-rank num" style="${r.top ? `color:var(${accentVar})` : ""}">${esc(String(r.rank))}</span>
+    <span class="rg-name">${r.name}</span>
+    <span class="rg-sub">${esc(r.sub ?? "")}</span>
+    <span class="rg-val num">${esc(String(r.val))}</span>`).join("");
+  return `<div class="rank-grid">${head}${body}</div>`;
 }
 
-// ── PUBG-Tagesrangliste + Spieler-Deep-Dive (NOO-124) ────────────────────────
-function pubgRankingHtml(rows) {
-  const cols = "34px 1fr 44px 44px 58px 50px";
-  const head = `<div class="pubg-grid-head" style="grid-template-columns:${cols}"><span>#</span><span>Spieler</span><span class="num">Kills</span><span class="num">Dmg</span><span class="num">Überlebt</span><span class="num">Weit.</span></div>`;
-  const body = rows.map((s, i) => `<div class="pubg-grid-row ${i === 0 ? "rank-1" : ""}" style="grid-template-columns:${cols}" data-player-id="${esc(s.playerId ?? "")}" data-player-name="${esc(s.player)}">
-    <span class="rank tabular-nums">#${s.placement}</span>
-    <span>${esc(s.player)}</span>
-    <span class="num tabular-nums">${s.kills}</span>
-    <span class="num tabular-nums">${s.damage}</span>
-    <span class="num tabular-nums">${s.survivedMinutes}min</span>
-    <span class="num tabular-nums">${s.longestKill}m</span>
-  </div>`).join("");
-  return head + body + `<p class="sheet-meta" style="margin-top:8px">Spieler antippen für Wochenstatistik &amp; Rekorde</p>`;
+/** Kategorie-Chips + je Kategorie ein rank-grid (Stats-Tab des Prototyps). */
+function statCatsHtml(cats, accentVar) {
+  if (!cats.length) return emptyHint("Für dieses Event liegen keine Statistiken vor.");
+  const chips = `<div class="cat-chips">` + cats.map((c, i) =>
+    `<button class="cat-chip ${i === 0 ? "active" : ""}" data-cat-idx="${i}">${esc(c.label)}</button>`).join("") + `</div>`;
+  const panels = cats.map((c, i) =>
+    `<div class="cat-panel ${i === 0 ? "active" : ""}" data-cat-idx="${i}">${rankGrid(c.heads, c.rows, accentVar)}</div>`).join("");
+  return chips + panels;
 }
 
-async function openPubgPlayerDetail(playerId, playerName, day, backHtml) {
-  const res = await api.pubgPlayer(playerId, day);
-  const body = el("sheet-body");
-  el("sheet-title").textContent = playerName;
-  let html = `<a class="back-link" href="#" id="pubg-back">← Zurück zur Tagesrangliste</a>`;
-  const w = res.ok ? res.data.weekStats : null;
-  const r = res.ok ? res.data.records : null;
-  if (w) {
-    html += `<h3 class="panel-sub">Woche</h3><div class="pubg-kpi-grid">` +
-      kpiTile(w.matchesPlayed, "Matches") + kpiTile(w.wins, "Siege") + kpiTile(w.top10, "Top 10") +
-      kpiTile(w.totalKills, "Kills") + kpiTile(w.totalAssists, "Assists") + kpiTile(Math.round(w.avgDamagePerMatch), "Ø Schaden") +
-      kpiTile(w.bestDayKills, "Beste Tagesausbeute") + `</div>`;
-  }
-  if (r) {
-    html += `<h3 class="panel-sub">Rekorde</h3><div class="pubg-kpi-grid">` +
-      kpiTile(r.mostKillsInMatch, "Meiste Kills") + kpiTile(Math.round(r.longestKillEver) + "m", "Weitester Kill") +
-      kpiTile(Math.round(r.longestSurvivalEver / 60) + "min", "Längstes Überleben") + kpiTile(Math.round(r.mostDamageInMatch), "Meister Schaden") +
-      kpiTile(r.totalChickenDinners, "Chicken Dinners") + kpiTile(r.mostAssistsInMatch, "Meiste Assists") +
-      kpiTile(r.bestKillStreak, "Beste Kill-Streak") + `</div>`;
-  }
-  if (!w && !r) {
-    html += `<div class="locked-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg><p>Langzeitstatistiken noch nicht verfügbar.</p></div>`;
-  }
-  body.innerHTML = html;
-  el("pubg-back").addEventListener("click", e => {
-    e.preventDefault();
-    body.innerHTML = backHtml;
-    el("sheet-title").textContent = "PUBG";
-    wireTabClicks(body);
-    wirePubgRows(body, day, backHtml);
-    if (currentEventId) wireExportButton(currentEventId);
+function wireCatChips(container) {
+  container.querySelectorAll(".cat-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      container.querySelectorAll(".cat-chip").forEach(c => c.classList.toggle("active", c === chip));
+      container.querySelectorAll(".cat-panel").forEach(p => p.classList.toggle("active", p.dataset.catIdx === chip.dataset.catIdx));
+    });
   });
 }
 
-function kpiTile(value, label) {
-  return `<div class="pubg-kpi-tile"><div class="value tabular-nums">${esc(String(value))}</div><div class="label">${esc(label)}</div></div>`;
-}
-
-function wirePubgRows(body, day, backHtml) {
-  body.querySelectorAll("[data-player-id]").forEach(row => {
-    if (!row.dataset.playerId) return;
-    row.addEventListener("click", () => openPubgPlayerDetail(row.dataset.playerId, row.dataset.playerName, day, backHtml));
-  });
+function kpiGrid(kpis) {
+  return `<div class="kpi-grid">` + kpis.map(([label, value]) =>
+    `<div class="kpi-tile"><div class="value tabular-nums">${esc(String(value))}</div><div class="label">${esc(label)}</div></div>`).join("") + `</div>`;
 }
 
 // ── ICS-Export-Button (sticky Footer, NOO-125) ──────────────────────────────
@@ -226,8 +87,8 @@ function exportButtonHtml(id) {
   const fg = exported ? "var(--good)" : "#fff";
   const label = exported ? "Im Kalender gespeichert" : "Zum Kalender hinzufügen";
   const icon = exported
-    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>`
-    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M12 14v5M9.5 16.5h5"/></svg>`;
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v4M16 3v4M4 9h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zM12 13v5M9.5 15.5h5"/></svg>`;
   return `<div class="sheet-footer">
     <button class="export-btn" id="export-btn" style="--export-bg:${bg};--export-fg:${fg}">${icon}<span>${esc(label)}</span></button>
   </div>`;
@@ -246,9 +107,262 @@ function wireExportButton(id) {
   });
 }
 
-// ── Haupt-Sheet: Event-Details ───────────────────────────────────────────────
+// ── Match-Sheet (bl1/bl2/handball/wm): Scoreboard + Spielverlauf/Turnier|Liga ─
+function scoreHeaderHtml(ev) {
+  const parts = ev?.participants || [];
+  if (parts.length !== 2) return "";
+  const [a, b] = parts;
+  const isLive = ev.status === "LIVE";
+  const hasScore = a.score != null && b.score != null;
+  const center = hasScore
+    ? `<div class="score tabular-nums">${esc(a.score)}:${esc(b.score)}</div>
+       <div class="status ${isLive ? "live live-pulse" : ""}">${isLive ? "● LIVE" : "Endstand"}</div>`
+    : `<div class="score">${ev.startTime ? timeFmt.format(new Date(ev.startTime)) : "–"}</div>
+       <div class="status">Anstoß</div>`;
+  return `<div class="score-header">
+    <div class="team team-a">${esc(a.name)}</div>
+    <div class="center">${center}</div>
+    <div class="team">${esc(b.name)}</div>
+  </div>`;
+}
+
+/** Zwischenstand je Timeline-Ereignis: Backend-Score oder (WM) aus Team-Toren gezählt. */
+function withRunningScores(events, ev) {
+  const [a, b] = ev?.participants || [];
+  let goalsA = 0, goalsB = 0;
+  return events.map(m => {
+    let score = m.score || "";
+    if (!score && m.team && a && b && (m.type || "").toLowerCase().includes("goal")) {
+      if (m.team === a.name) goalsA++;
+      else if (m.team === b.name) goalsB++;
+      else return { ...m, runningScore: "" }; // Teamname passt nicht zu den Teilnehmern → defensiv ohne Score
+      score = `${goalsA}:${goalsB}`;
+    }
+    return { ...m, runningScore: score };
+  });
+}
+
+function matchEventLine(m) {
+  const t = (m.type || "").toLowerCase();
+  let iconCls = "", iconGlyph = "•", label = m.type || "";
+  if (t.includes("goal") || t.includes("tor")) { iconGlyph = "⚽"; label = "Tor"; }
+  else if (t.includes("yellow") || t.includes("gelb")) { iconCls = "card-yellow"; iconGlyph = ""; label = "Gelbe Karte"; }
+  else if (t.includes("red") || t.includes("rot")) { iconCls = "card-red"; iconGlyph = ""; label = "Rote Karte"; }
+  const main = m.player ? `${label} – ${m.player}` : (m.detail || label);
+  const sub = [m.player ? m.detail : null, m.team].filter(Boolean).join(" · ");
+  return `<div class="evt-line">
+    <span class="min tabular-nums">${esc(m.minute)}</span>
+    <span class="icon ${iconCls}">${iconGlyph}</span>
+    <span class="text"><span class="main">${esc(main)}</span>${sub ? `<span class="sub"> · ${esc(sub)}</span>` : ""}</span>
+    ${m.runningScore ? `<span class="evt-score tabular-nums">${esc(m.runningScore)}</span>` : ""}
+  </div>`;
+}
+
+function matchGameViewHtml(det, ev) {
+  const upcoming = ev?.status === "SCHEDULED" && !(det.matchEvents || []).length;
+  if (upcoming) {
+    const time = ev?.startTime ? timeFmt.format(new Date(ev.startTime)) : null;
+    return `<div class="sheet-centered-hint">${time ? `Anpfiff um ${esc(time)} Uhr.` : "Noch keine Ereignisse."}</div>`;
+  }
+  const events = withRunningScores(det.matchEvents || [], ev);
+  return events.map(matchEventLine).join("") || emptyHint("Noch keine Ereignisse.");
+}
+
+function matchStatsCats(det, slug) {
+  const cats = [];
+  if (slug === "wm") {
+    if (det.topScorers?.length) {
+      cats.push({
+        label: "Tore",
+        heads: { name: "Spieler", sub: "Nation", val: "Tore" },
+        rows: det.topScorers.map(s => ({ rank: s.rank, name: esc(s.player), sub: s.team, val: s.goals, top: s.rank <= 3 })),
+      });
+      if (det.topScorers.some(s => s.assists != null)) {
+        const scorer = det.topScorers
+          .map(s => ({ ...s, pts: s.goals + (s.assists ?? 0) }))
+          .sort((x, y) => y.pts - x.pts);
+        cats.push({
+          label: "Scorer",
+          heads: { name: "Spieler", sub: "Zusammensetzung", val: "Punkte" },
+          rows: scorer.map((s, i) => ({ rank: i + 1, name: esc(s.player), sub: `${s.goals} T · ${s.assists ?? 0} A`, val: s.pts, top: i < 3 })),
+        });
+      }
+    }
+    if (det.nationGoals?.length) {
+      cats.push({
+        label: "Nationen",
+        heads: { name: "Nation", sub: "", val: "Tore" },
+        rows: det.nationGoals.map(n => ({ rank: n.rank, name: esc(n.team), sub: "", val: n.goals, top: n.rank <= 3 })),
+      });
+    }
+  }
+  if (det.standings?.length) {
+    const hasGroups = det.standings.some(s => s.group);
+    cats.push({
+      label: slug === "wm" ? "Gruppe" : "Tabelle",
+      heads: { name: "Team", sub: "Sp", val: "Pkt" },
+      rows: det.standings.map(s => ({
+        rank: s.position,
+        name: `${hasGroups && s.group ? `<span class="rg-muted">${esc(s.group)} · </span>` : ""}${s.highlight ? `<span class="rg-highlight">${esc(s.team)}</span>` : esc(s.team)}`,
+        sub: String(s.played), val: s.points, top: s.position <= 3,
+      })),
+    });
+  }
+  return cats;
+}
+
+function renderMatchSheet(det, ev, slug) {
+  const body = el("sheet-body");
+  const statsLabel = slug === "wm" ? "Turnier" : "Liga";
+  const html = scoreHeaderHtml(ev) + tabsHtml([
+    { label: "Spielverlauf", html: matchGameViewHtml(det, ev) },
+    { label: statsLabel, html: statCatsHtml(matchStatsCats(det, slug), "--acc") },
+  ]) + exportButtonHtml(ev?.id || det.eventId);
+  body.innerHTML = html;
+  wireTabClicks(body);
+  wireCatChips(body);
+  wireExportButton(ev?.id || det.eventId);
+}
+
+// ── Formel-1-Sheet: Session (Qualifying/Rennen) + WM-Stand ───────────────────
+const F1_SESSION_LABELS = { qualifying: "Qualifying", race: "Rennen", sprint: "Sprint" };
+
+function f1SessionViewHtml(det, ev, sessionLabel) {
+  const results = det.raceResults || det.qualifyingResults;
+  const hint = det.circuitInfo
+    ? `<div class="sheet-hint">${esc(det.circuitInfo.circuitName)}, ${esc(det.circuitInfo.locality)} (${esc(det.circuitInfo.country)})</div>`
+    : "";
+  if (!results?.length) {
+    const time = ev?.startTime && ev.status === "SCHEDULED" ? timeFmt.format(new Date(ev.startTime)) : null;
+    return hint + (time
+      ? `<div class="sheet-centered-hint">Start um ${esc(time)} Uhr.</div>`
+      : emptyHint(`Für dieses ${sessionLabel} liegen noch keine Ergebnisse vor.`));
+  }
+  return hint + rankGrid(
+    { name: "Fahrer", sub: "Team", val: "Zeit" },
+    results.map((r, i) => ({
+      rank: r.positionText, name: `${esc(r.driverName)}${r.fastestLap ? " ⚡" : ""}`,
+      sub: r.constructorName, val: r.status, top: i < 3,
+    })),
+    "--mod-f1"
+  );
+}
+
+function f1StandingsViewHtml(det) {
+  if (!det.driverStandings?.length) return emptyHint("Noch kein WM-Stand verfügbar.");
+  const fmtPts = p => Number.isInteger(p) ? String(p) : String(p);
+  return `<div class="sheet-hint">Fahrerwertung</div>` + rankGrid(
+    { name: "Fahrer", sub: "Team", val: "Punkte" },
+    det.driverStandings.map(s => ({
+      rank: s.position, name: esc(s.name), sub: s.team ?? "", val: fmtPts(s.points), top: s.position <= 3,
+    })),
+    "--mod-f1"
+  );
+}
+
+function renderF1Sheet(det, ev) {
+  const body = el("sheet-body");
+  const sessionLabel = F1_SESSION_LABELS[ev?.metadata?.session] || "Session";
+  const html = tabsHtml([
+    { label: sessionLabel, html: f1SessionViewHtml(det, ev, sessionLabel) },
+    { label: "WM-Stand", html: f1StandingsViewHtml(det) },
+  ]) + exportButtonHtml(ev?.id || det.eventId);
+  body.innerHTML = html;
+  wireTabClicks(body);
+  wireExportButton(ev?.id || det.eventId);
+}
+
+// ── PUBG-Sheet: Tagesrangliste → Spieler (Tag/Woche/Rekorde, NOO-124) ────────
+function pubgKd(r) {
+  if (r.matchesPlayed == null || r.wins == null) return "–";
+  return (r.kills / Math.max(1, r.matchesPlayed - r.wins)).toFixed(1);
+}
+
+function pubgRankingHtml(rows) {
+  const head = `<div class="pubg-grid-head"><span>#</span><span>Spieler</span><span class="num">Spiele</span><span class="num">Wins</span><span class="num">Kills</span><span class="num">K/D</span><span class="num">Weitester</span></div>`;
+  const body = rows.map((s, i) => `<div class="pubg-grid-row ${i === 0 ? "rank-1" : ""}" data-player-id="${esc(s.playerId ?? "")}" data-player-name="${esc(s.player)}">
+    <span class="rank tabular-nums">${i + 1}</span>
+    <span class="name">${esc(s.player)}</span>
+    <span class="num tabular-nums">${s.matchesPlayed ?? "–"}</span>
+    <span class="num tabular-nums">${s.wins ?? "–"}</span>
+    <span class="num tabular-nums kills">${s.kills}</span>
+    <span class="num tabular-nums">${pubgKd(s)}</span>
+    <span class="num tabular-nums sec">${s.longestKill} m</span>
+  </div>`).join("");
+  return `<div class="sheet-hint">Tagesrangliste · tippe auf einen Spieler für Details</div>` + head + body;
+}
+
+const PUBG_LOCKED_HTML = `<div class="locked-state">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V7a5 5 0 0110 0v4M6 11h12a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1v-8a1 1 0 011-1z"/></svg>
+  <div class="title">Langzeitstatistiken noch nicht verfügbar</div>
+  <div class="sub">Sie werden geladen, sobald sie für diesen Spieler abrufbar sind (Request-Limit der API).</div>
+</div>`;
+
+function pubgPlayerTabHtml(tab, dayRow, weekStats, records) {
+  if (tab === "tag") {
+    if (!dayRow) return emptyHint("Keine Tagesstatistik gefunden.");
+    const kpis = [];
+    if (dayRow.matchesPlayed != null) kpis.push(["Matches", dayRow.matchesPlayed], ["Wins", dayRow.wins ?? 0]);
+    kpis.push(["Kills", dayRow.kills], ["Assists", dayRow.assists], ["Schaden", dayRow.damage],
+      ["Überlebt", dayRow.survivedMinutes + " min"], ["Longest Kill", dayRow.longestKill + " m"]);
+    return `<div class="sheet-hint">Statistik für diesen Tag</div>` + kpiGrid(kpis);
+  }
+  if (tab === "woche") {
+    if (!weekStats) return PUBG_LOCKED_HTML;
+    return `<div class="sheet-hint">Woche des Kalendereintrags (bis heute)</div>` + kpiGrid([
+      ["Matches", weekStats.matchesPlayed], ["Wins", weekStats.wins], ["Top 10", weekStats.top10],
+      ["Kills", weekStats.totalKills], ["Assists", weekStats.totalAssists],
+      ["Ø Schaden", Math.round(weekStats.avgDamagePerMatch)], ["Beste Tagesausbeute", weekStats.bestDayKills],
+    ]);
+  }
+  if (!records) return PUBG_LOCKED_HTML;
+  return `<div class="sheet-hint">Persönliche Rekorde (Lifetime)</div>` + kpiGrid([
+    ["Wins", records.totalChickenDinners], ["Meiste Kills", records.mostKillsInMatch],
+    ["Longest Shot", Math.round(records.longestKillEver) + " m"],
+    ["Längstes Überleben", Math.round(records.longestSurvivalEver / 60) + " min"],
+    ["Meister Schaden", Math.round(records.mostDamageInMatch)],
+    ["Meiste Assists", records.mostAssistsInMatch], ["Beste Kill-Streak", records.bestKillStreak],
+  ]);
+}
+
+async function openPubgPlayerDetail(det, ev, playerId, playerName, day) {
+  const res = await api.pubgPlayer(playerId, day);
+  const weekStats = res.ok ? res.data.weekStats : null;
+  const records = res.ok ? res.data.records : null;
+  const dayRow = (det.pubgStats || []).find(r => r.playerId === playerId);
+  const body = el("sheet-body");
+  let tab = "tag";
+
+  const render = () => {
+    body.innerHTML = `
+      <button class="back-link" id="pubg-back"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>Rangliste</button>
+      <div class="pubg-player-name">${esc(playerName)}</div>
+      <div class="tab-bar" role="tablist">${[["tag", "Tag"], ["woche", "Woche"], ["rekorde", "Rekorde"]].map(([id, label]) =>
+        `<button class="tab-btn ${tab === id ? "active" : ""}" role="tab" aria-selected="${tab === id}" data-pubg-tab="${id}">${label}</button>`).join("")}</div>
+      ${pubgPlayerTabHtml(tab, dayRow, weekStats, records)}
+    `;
+    body.querySelectorAll("[data-pubg-tab]").forEach(btn =>
+      btn.addEventListener("click", () => { tab = btn.dataset.pubgTab; render(); }));
+    el("pubg-back").addEventListener("click", () => renderPubgSheet(det, ev));
+  };
+  render();
+}
+
+function renderPubgSheet(det, ev) {
+  const body = el("sheet-body");
+  el("sheet-title").textContent = det.title;
+  body.innerHTML = pubgRankingHtml(det.pubgStats || []) + exportButtonHtml(ev?.id || det.eventId);
+  wireExportButton(ev?.id || det.eventId);
+  const day = ev?.startTime ? new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date(ev.startTime)) : null;
+  if (!day) return;
+  body.querySelectorAll("[data-player-id]").forEach(row => {
+    if (!row.dataset.playerId) return;
+    row.addEventListener("click", () => openPubgPlayerDetail(det, ev, row.dataset.playerId, row.dataset.playerName, day));
+  });
+}
+
+// ── Haupt-Sheet: Dispatch nach Modultyp ──────────────────────────────────────
 export async function openSheet(id) {
-  currentEventId = id;
   const res = await api.eventDetails(id);
   if (!res.ok) return;
   const det = res.data;
@@ -256,23 +370,19 @@ export async function openSheet(id) {
   const slug = slugOf(ev || { moduleType: det.module });
   const colorVar = MOD_COLOR_VARS[slug] || "--acc";
 
-  el("sheet-badge").textContent = MOD_LABELS[slug] || det.module;
-  el("sheet-title").textContent = det.title;
-  el("sheet-date").textContent = ev?.startTime ? fullDateFmt.format(new Date(ev.startTime)) : "";
-  document.querySelector(".sheet-header").style.setProperty("--sheet-color", `var(${colorVar})`);
+  let badge = MOD_LABELS[slug] || det.module;
+  if (slug === "f1") {
+    const session = F1_SESSION_LABELS[ev?.metadata?.session];
+    if (session) badge = `FORMEL 1 · ${session.toUpperCase()}`;
+  }
+  setSheetHeader(badge, det.title, ev?.startTime ? fullDateFmt.format(new Date(ev.startTime)) : "", `var(${colorVar})`);
 
-  const body = el("sheet-body");
-  const scoreHeader = scoreHeaderHtml(ev);
-  const panels = buildPanels(det);
-  const tabsHtml = renderTabs(panels, det.phase || "PRE");
-  const bodyHtml = scoreHeader + tabsHtml;
-  body.innerHTML = bodyHtml + exportButtonHtml(id);
-  wireTabClicks(body);
-  wireExportButton(id);
-
-  if (det.pubgStats && ev?.startTime) {
-    const day = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date(ev.startTime));
-    wirePubgRows(body, day, bodyHtml + exportButtonHtml(id));
+  if (slug === "pubg") renderPubgSheet(det, ev);
+  else if (slug === "f1") renderF1Sheet(det, ev);
+  else if (["bl1", "bl2", "handball", "wm"].includes(slug)) renderMatchSheet(det, ev, slug);
+  else {
+    el("sheet-body").innerHTML = emptyHint("Für dieses Event liegen keine Detaildaten vor.") + exportButtonHtml(id);
+    wireExportButton(id);
   }
 
   showSheetChrome();
@@ -286,22 +396,18 @@ function showSheetChrome() {
 export function closeSheet() {
   el("sheet-backdrop").hidden = true;
   document.body.style.overflow = "";
-  currentEventId = null;
 }
 
 // ── Quiz-Sheet (lokales Modul, NOO-144) ─────────────────────────────────────
 export function openQuizSheet(dateStr) {
   const { questions, result } = quizStateFor(dateStr);
-  el("sheet-badge").textContent = "QUIZ";
-  el("sheet-title").textContent = "Tagesquiz";
-  el("sheet-date").textContent = longDateFmt.format(new Date(`${dateStr}T12:00:00`));
-  document.querySelector(".sheet-header").style.setProperty("--sheet-color", "var(--mod-quiz)");
+  setSheetHeader("QUIZ", "Allgemeinwissens-Quiz", longDateFmt.format(new Date(`${dateStr}T12:00:00`)), "var(--mod-quiz)");
 
   if (result) {
     el("sheet-body").innerHTML = `<div class="quiz-done">
-      <div class="check-circle">✓</div>
-      <p style="font-size:17px;font-weight:700">Quiz erledigt</p>
-      <p style="color:var(--sec)">${result.s} von ${result.n} Fragen richtig beantwortet.</p>
+      <div class="check-circle"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+      <div class="title">Quiz erledigt</div>
+      <div class="sub">${result.s} von ${result.n} Fragen richtig beantwortet.</div>
     </div>`;
   } else {
     renderQuizQuestion(dateStr, questions, 0, 0);
@@ -313,10 +419,10 @@ function renderQuizQuestion(dateStr, questions, idx, score) {
   const q = questions[idx];
   const body = el("sheet-body");
   body.innerHTML = `
-    <div class="quiz-hint">FRAGE ${idx + 1} VON ${questions.length} · ${esc(q.topic)}</div>
+    <div class="quiz-hint">FRAGE ${idx + 1} VON ${questions.length} · ${esc(q.topic.toUpperCase())}</div>
     <div class="quiz-question">${esc(q.q)}</div>
     <div id="quiz-answers">${q.a.map((a, i) => `<button class="quiz-answer" data-idx="${i}">${esc(a)}</button>`).join("")}</div>
-    <button class="export-btn" id="quiz-next" style="--export-bg:var(--acc);--export-fg:#fff;display:none;margin-top:16px">${idx + 1 < questions.length ? "Weiter" : "Abschließen"}</button>
+    <button class="quiz-next" id="quiz-next" style="display:none">${idx + 1 < questions.length ? "Weiter" : "Abschließen"}</button>
   `;
   let picked = false;
   body.querySelectorAll(".quiz-answer").forEach(btn => {
