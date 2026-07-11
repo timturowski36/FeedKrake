@@ -230,7 +230,6 @@ function exportButtonHtml(id) {
     : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M12 14v5M9.5 16.5h5"/></svg>`;
   return `<div class="sheet-footer">
     <button class="export-btn" id="export-btn" style="--export-bg:${bg};--export-fg:${fg}">${icon}<span>${esc(label)}</span></button>
-    <div class="feed-hint">Alle Termine abonnieren: <a href="${state.code ? `/calendar/${state.code}.ics` : "/calendar.ics"}">webcal-Feed</a></div>
   </div>`;
 }
 
@@ -288,37 +287,6 @@ export function closeSheet() {
   el("sheet-backdrop").hidden = true;
   document.body.style.overflow = "";
   currentEventId = null;
-}
-
-// ── Wetter-Sheet (eigene Render-Funktion, nutzt dieselbe Sheet-Chrome) ──────
-export async function openWeatherSheet(location, day) {
-  const res = await api.weatherDay(location, day);
-  if (!res.ok) return;
-  const det = res.data;
-  el("sheet-badge").textContent = `WETTER · ${esc(det.location)}`;
-  el("sheet-title").textContent = longDateFmt.format(new Date(`${day}T12:00:00`));
-  el("sheet-date").textContent = "";
-  document.querySelector(".sheet-header").style.setProperty("--sheet-color", "var(--acc)");
-
-  let html = `<p style="font-size:15px;color:var(--sec)">${esc(det.label)}</p>`;
-  html += `<p style="font-size:15px;margin:6px 0">Max ${det.tempMax}° · Min ${det.tempMin}°</p>`;
-  html += `<p class="sheet-meta">☀ ${esc(det.sunrise)} Aufgang · ${esc(det.sunset)} Untergang</p>`;
-  if (det.hours?.length) {
-    const temps = det.hours.map(h => h.temp);
-    const maxT = Math.max(...temps), minT = Math.min(...temps), range = maxT - minT || 1;
-    html += `<h3 class="panel-sub">Stundenverlauf (06–24 Uhr)</h3><div class="weather-bar">` +
-      det.hours.map(h => {
-        const barH = Math.round(8 + ((h.temp - minT) / range) * 40);
-        return `<div class="weather-bar-col">
-          <div>${h.precipProbability > 0 ? h.precipProbability + "%" : ""}</div>
-          <div class="wh-bar" style="height:${barH}px"></div>
-          <span class="tabular-nums">${h.hour}h</span>
-        </div>`;
-      }).join("") + `</div>`;
-  }
-  html += `<dl class="weather-kpi"><div><dt>Niederschlag</dt><dd>${det.precipSumMm.toFixed(1)} mm</dd></div><div><dt>Wind max.</dt><dd>${det.windMaxKmh.toFixed(0)} km/h</dd></div></dl>`;
-  el("sheet-body").innerHTML = html;
-  showSheetChrome();
 }
 
 // ── Quiz-Sheet (lokales Modul, NOO-144) ─────────────────────────────────────

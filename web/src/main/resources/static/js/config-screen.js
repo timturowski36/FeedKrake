@@ -5,7 +5,7 @@
 import { state, applyTheme } from "./state.js";
 import { api } from "./api.js";
 import { esc, MOD_COLOR_VARS } from "./util.js";
-import { loadWeek, applyCode } from "./week.js";
+import { loadWeek } from "./week.js";
 import { loadCfg, saveCfg } from "./local-modules.js";
 import { QUIZ_POOL } from "./quiz-pool.js";
 
@@ -68,14 +68,12 @@ export async function openConfigScreen() {
   openModuleKey = null;
   render();
   document.getElementById("app").hidden = true;
-  document.getElementById("ticker").hidden = true;
   el("screen-config").hidden = false;
 }
 
 export function closeConfigScreen() {
   el("screen-config").hidden = true;
   document.getElementById("app").hidden = false;
-  document.getElementById("ticker").hidden = false;
   loadWeek(false);
 }
 
@@ -116,18 +114,7 @@ function render() {
         ${inactiveLocal.map(localMarketplaceRowHtml).join("")}
         ${PLACEHOLDER_MODULES.map(placeholderRowHtml).join("")}
       </div>
-      <p class="cfg-hint">Module mit Schloss benötigen einen Account. <a href="#" id="cfg-account-link">Mehr erfahren</a></p>
-    </div>
-
-    <div class="cfg-section">
-      <div class="cfg-section-label">Teilen</div>
-      <div class="cfg-card">
-        ${state.code ? `<div class="share-code-display">${esc(state.code)}</div>` : `<p class="cfg-hint" style="padding-top:12px">Noch kein Code aktiv — Änderungen an deinen Modulen erzeugen automatisch einen.</p>`}
-        <div class="share-row">
-          <input class="share-input" id="cfg-code-input" maxlength="6" placeholder="CODE LADEN">
-          <button class="primary-btn" id="cfg-apply-code">Laden</button>
-        </div>
-      </div>
+      <p class="cfg-hint">Module mit Schloss benötigen einen <a href="#" id="cfg-account-link">Account</a>.</p>
     </div>
   `;
 
@@ -387,14 +374,6 @@ function wireStatic() {
       pending[key] = { refs: defaultRefs };
       await persist();
     }));
-  const applyBtn = el("cfg-apply-code");
-  if (applyBtn) applyBtn.addEventListener("click", async () => {
-    const code = el("cfg-code-input").value.trim();
-    if (!code) return;
-    applyCode(code);
-    pending = await currentSelections();
-    render();
-  });
 }
 
 function wireModuleRow(m) {

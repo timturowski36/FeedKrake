@@ -87,16 +87,11 @@
   font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 20px;
 }
 
-/* Teilen */
-.share-code-display {
-  font-size: 22px; font-weight: 700; letter-spacing: .25em; color: var(--acc);
-  text-align: center; padding: 14px 0;
-}
-.share-row { display: flex; gap: 8px; padding: 12px 14px; }
+/* Text-Eingaben (Aktivitäten/Urlaub-Formulare) */
 .share-input {
-  flex: 1; border: 1.5px solid var(--sep); border-radius: 10px; padding: 10px 12px;
-  background: var(--bg); color: var(--fg); text-transform: uppercase; letter-spacing: .15em;
-  font-size: 14px;
+  flex: 1; border: none; border-radius: 10px; padding: 10px 12px;
+  background: var(--fill); color: var(--fg);
+  font-size: 15px;
 }
 .primary-btn {
   border: none; background: var(--acc); color: #fff; font-weight: 600;

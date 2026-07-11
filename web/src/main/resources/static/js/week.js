@@ -1,9 +1,10 @@
 // Wochenübersicht: Header, Pillenleiste, Karten, Swipe/Tastatur (NOO-112/113/114).
 import { state } from "./state.js";
 import { api } from "./api.js";
-import { openSheet, openWeatherSheet, openQuizSheet } from "./sheet.js";
+import { openSheet, openQuizSheet } from "./sheet.js";
 import { esc, timeFmt, dateFmt, longDateFmt, todayKeyFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
 import { localEntriesForDay, toggleActivity, applyVacationWeatherOverrides, localModuleColorsForDay } from "./local-modules.js";
+import { openConfigScreen } from "./config-screen.js";
 
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const DAY_NAMES_LONG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
@@ -73,12 +74,6 @@ export function clearCode(reload) {
   if (reload) loadWeek();
 }
 
-export function applyCode(code) {
-  state.code = code.toUpperCase();
-  localStorage.setItem("noonoo-code", state.code);
-  loadWeek();
-}
-
 function render() {
   const d = state.data;
   const monday = new Date(d.days[0] + "T12:00:00");
@@ -88,23 +83,10 @@ function render() {
     monday.getMonth() === sunday.getMonth()
       ? monday.toLocaleDateString("de-DE", { month: "long", year: "numeric" })
       : `${dateFmt.format(monday)} – ${longDateFmt.format(sunday)}`;
-  renderSeasons(d.seasons);
   const today = todayKeyFmt.format(new Date());
   renderPillBar(d, today);
   renderGrid(d, today);
   renderMobileDayTitle(d, today);
-}
-
-function renderSeasons(seasons) {
-  const bar = document.getElementById("season-bar");
-  bar.innerHTML = seasons.map(s => {
-    let note = "";
-    if (s.status === "NOT_STARTED" && s.nextEventAt) note = ` · startet ${dateFmt.format(new Date(s.nextEventAt))}`;
-    else if (s.status === "NOT_STARTED") note = " · noch kein Termin";
-    else if (s.status === "FINISHED") note = " · Saison beendet";
-    const cls = s.status === "ACTIVE" ? "active" : "inactive";
-    return `<span class="season-chip ${cls}"><span class="dot"></span>${esc(s.label)}${note}</span>`;
-  }).join("");
 }
 
 function groupByDay(d) {
@@ -136,17 +118,12 @@ function renderPillBar(d, today) {
     return `<button class="day-pill ${isToday ? "is-today" : ""} ${isSelected ? "selected-mobile-only" : ""}" data-day-idx="${i}">
       <span class="wd">${DAY_NAMES[i]}</span>
       <span class="date-circle tabular-nums">${new Date(day + "T12:00:00").getDate()}</span>
-      <span class="weather-row" data-day="${day}" data-clickable-weather="${wd ? "1" : "0"}">${weatherHtml}</span>
+      <span class="weather-row">${weatherHtml}</span>
       <span class="dot-row">${dots}</span>
     </button>`;
   }).join("");
   bar.querySelectorAll(".day-pill").forEach(btn =>
     btn.addEventListener("click", () => selectDay(parseInt(btn.dataset.dayIdx, 10))));
-  bar.querySelectorAll('.weather-row[data-clickable-weather="1"]').forEach(row =>
-    row.addEventListener("click", e => {
-      e.stopPropagation();
-      openWeatherSheet(d.weatherLocation, row.dataset.day);
-    }));
 }
 
 function renderMobileDayTitle(d, today) {
@@ -180,7 +157,6 @@ function renderGrid(d, today) {
   }).join("");
   const empty = document.getElementById("empty-week");
   empty.hidden = anyEntries;
-  document.getElementById("empty-week-code-note").textContent = state.code ? " (Filter aktiv)" : "";
   grid.querySelectorAll(".event-card.clickable[data-id]").forEach(el =>
     el.addEventListener("click", () => openSheet(el.dataset.id)));
   grid.querySelectorAll(".event-card.clickable[data-quiz-key]").forEach(el =>
@@ -269,6 +245,10 @@ export function setupWeekNavigation() {
   document.getElementById("btn-prev").onclick = goPrevWeek;
   document.getElementById("btn-next").onclick = goNextWeek;
   document.getElementById("btn-today").onclick = goToday;
+  document.getElementById("empty-week-config-link").addEventListener("click", e => {
+    e.preventDefault();
+    openConfigScreen();
+  });
 
   // Swipe (dx>55px und |dx|>1.5·|dy|), nur auf Mobile relevant (Desktop zeigt alle Tage).
   const grid = document.getElementById("week-grid");
