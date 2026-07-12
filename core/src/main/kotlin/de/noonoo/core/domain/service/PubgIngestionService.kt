@@ -61,12 +61,15 @@ class PubgIngestionService(
             val knownIds = repository.findKnownMatchIds(allMatchIds.toList())
             val newMatchIds = allMatchIds - knownIds
             log.info { "[PUBG] ${newMatchIds.size} neue Matches von ${allMatchIds.size} gesamt." }
+            val trackedIds = allAccountIds.toSet()
             for (matchId in newMatchIds) {
                 val result = apiPort.fetchMatchDetails(matchId, platform) ?: continue
                 val (match, participants) = result
                 repository.saveMatch(match)
                 repository.saveParticipants(participants)
-                aggregationService.ingest(match, participants)
+                // Aggregationsmodell (Tages-Stats, Rekorde) nur für die konfigurierten
+                // Spieler – die Rohdaten oben behalten die komplette Lobby.
+                aggregationService.ingest(match, participants.filter { it.accountId in trackedIds })
             }
         }
 

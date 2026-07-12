@@ -655,7 +655,7 @@ class PostgresPubgRepository(private val dataSource: DataSource) : PubgRepositor
                 most_damage_in_match      = GREATEST(pubg_player_records.most_damage_in_match, EXCLUDED.most_damage_in_match),
                 most_damage_match_id      = CASE WHEN EXCLUDED.most_damage_in_match >= pubg_player_records.most_damage_in_match
                                                  THEN EXCLUDED.most_damage_match_id ELSE pubg_player_records.most_damage_match_id END,
-                total_chicken_dinners     = pubg_player_records.total_chicken_dinners + EXCLUDED.total_chicken_dinners,
+                total_chicken_dinners     = EXCLUDED.total_chicken_dinners,
                 most_assists_in_match     = GREATEST(pubg_player_records.most_assists_in_match, EXCLUDED.most_assists_in_match),
                 best_kill_streak          = GREATEST(pubg_player_records.best_kill_streak, EXCLUDED.best_kill_streak),
                 highest_dbnos_in_match    = GREATEST(pubg_player_records.highest_dbnos_in_match, EXCLUDED.highest_dbnos_in_match),
@@ -820,6 +820,14 @@ class PostgresPubgRepository(private val dataSource: DataSource) : PubgRepositor
         }
     }
 }
+
+    override fun countChickenDinners(playerId: String): Int =
+        dataSource.connection.use { conn ->
+            conn.prepareStatement("SELECT COUNT(*) FROM pubg_participation WHERE player_id = ? AND win_place = 1").use { stmt ->
+                stmt.setString(1, playerId)
+                stmt.executeQuery().use { rs -> if (rs.next()) rs.getInt(1) else 0 }
+            }
+        }
 
     override fun findParticipationsForPlayerAndDay(playerId: String, day: LocalDate): List<PubgParticipation> {
         val sql = """

@@ -106,7 +106,9 @@ class PubgAggregationService(private val repository: PubgRepository) {
                 longestSurvivalMatchId = p.matchId,
                 mostDamageInMatch = p.damageDealt,
                 mostDamageMatchId = p.matchId,
-                totalChickenDinners = if (p.winPlace == 1) 1 else 0,
+                // Gesamtstand statt Delta: ein Delta würde bei jedem erneuten Einspielen
+                // desselben Matches (Backfill bei jedem Start) weiter aufaddieren.
+                totalChickenDinners = repository.countChickenDinners(p.playerId),
                 mostAssistsInMatch = p.assists,
                 bestKillStreak = p.killStreaks,
                 highestDbnosInMatch = p.dbnos,
