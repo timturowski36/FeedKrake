@@ -2,12 +2,11 @@
 import { state } from "./state.js";
 import { api } from "./api.js";
 import { openSheet, openQuizSheet } from "./sheet.js";
-import { esc, timeFmt, dateFmt, longDateFmt, todayKeyFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
+import { esc, timeFmt, dateFmt, longDateFmt, weekdayDateFmt, todayKeyFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
 import { localEntriesForDay, toggleActivity, applyVacationWeatherOverrides, localModuleColorsForDay } from "./local-modules.js";
 import { openConfigScreen } from "./config-screen.js";
 
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const DAY_NAMES_LONG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 
 // Wetter-SVG-Icons 1:1 aus docs/frontend/Kalender.dc.html (Sonnig/Teils sonnig/Bewölkt/Regen).
 const WEATHER_ICONS = {
@@ -128,11 +127,15 @@ function renderPillBar(d, today) {
 
 function renderMobileDayTitle(d, today) {
   const day = d.days[state.selDay];
-  const isToday = day === today;
+  // Prototyp: "Heute · "/"Morgen · "/"Gestern · " vor dem langen Datum mit Wochentag.
+  const offset = Math.round((new Date(day + "T12:00:00") - new Date(today + "T12:00:00")) / 86400000);
+  const prefix = offset === 0 ? "Heute · " : offset === 1 ? "Morgen · " : offset === -1 ? "Gestern · " : "";
+  const label = `${prefix}${weekdayDateFmt.format(new Date(day + "T12:00:00"))}`;
   const ort = d.weatherOrtByDay?.[day];
-  const label = `${ort ? esc(ort) + " · " : ""}${isToday ? "Heute" : DAY_NAMES_LONG[state.selDay]} · ${longDateFmt.format(new Date(day + "T12:00:00"))}`;
   const wd = d.weather?.[day];
-  const weatherHtml = wd ? `<span class="weather">${weatherIconSvg(wd.label, 15)} ${wd.label}, ${day === today && wd.currentTemp != null ? wd.currentTemp : wd.tempMax}°</span>` : "";
+  const weatherHtml = wd
+    ? `<span class="weather">${weatherIconSvg(wd.label, 15)} ${ort ? esc(ort) + " · " : ""}${wd.label}, ${day === today && wd.currentTemp != null ? wd.currentTemp : wd.tempMax}°</span>`
+    : "";
   document.getElementById("mobile-day-title").innerHTML = `<span>${label}</span>${weatherHtml}`;
 }
 
@@ -153,7 +156,10 @@ function renderGrid(d, today) {
     const cards = specs.sort((a, b) => a.minutes - b.minutes).map(s => s.html).join("");
     const isToday = day === today;
     const isSelected = i === state.selDay;
-    return `<div class="day-col ${isToday ? "is-today" : ""} ${isSelected ? "selected-mobile-day" : ""}" data-day-idx="${i}">${cards}</div>`;
+    // Wisch-Hinweis innerhalb der Tagesspalte (Prototyp 1822): Leerraum der
+    // 52vh-Mindesthöhe fällt unter den Hinweis, nicht zwischen Karten und Hinweis.
+    const hint = isSelected ? `<div class="swipe-hint">← Wischen zum Tageswechsel →</div>` : "";
+    return `<div class="day-col ${isToday ? "is-today" : ""} ${isSelected ? "selected-mobile-day" : ""}" data-day-idx="${i}">${cards}${hint}</div>`;
   }).join("");
   const empty = document.getElementById("empty-week");
   empty.hidden = anyEntries;
@@ -190,7 +196,11 @@ function cardHtml(e) {
   let chipKind = "sec";
 
   if (slug === "pubg") {
-    sub = (e.participants || []).map(p => `${esc(p.name)}${p.score ? " · " + esc(p.score) : ""}`).join(", ");
+    // Prototyp 2747: Titel "N Spieler waren aktiv" kommt vom Server, Sub = Führender
+    const lead = (e.participants || [])[0];
+    sub = lead?.score != null
+      ? `${esc(lead.name)} führt mit ${esc(lead.score)} Kills`
+      : (e.participants || []).map(p => esc(p.name)).join(", ");
   } else if (e.status !== "SCHEDULED" && scores.length === 2) {
     title += ` <strong>${esc(scores[0])}:${esc(scores[1])}</strong>`;
   }
@@ -206,9 +216,12 @@ function cardHtml(e) {
     : "";
 
   return `<article class="event-card clickable" style="--mod-color:var(${colorVar})" data-id="${e.id}">
-    <div class="row-top"><span class="badge">${esc(MOD_LABELS[slug] || slug.toUpperCase())}</span><span class="time tabular-nums">${time}</span></div>
-    <div class="title">${title}</div>
-    ${sub ? `<div class="sub">${sub}</div>` : ""}
+    <div class="bar"></div>
+    <div class="main">
+      <div class="row-top"><span class="badge">${esc(MOD_LABELS[slug] || slug.toUpperCase())}</span><span class="time tabular-nums">${time}</span></div>
+      <div class="title">${title}</div>
+      ${sub ? `<div class="sub">${sub}</div>` : ""}
+    </div>
     ${chipHtml}
   </article>`;
 }

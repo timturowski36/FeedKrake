@@ -366,7 +366,8 @@ async function openPubgPlayerDetail(det, ev, playerId, playerName, day) {
 
 function renderPubgSheet(det, ev) {
   const body = el("sheet-body");
-  el("sheet-title").textContent = det.title;
+  // Prototyp 3052: Sheet-Titel ist "Tagesübersicht", nicht der Event-Titel
+  el("sheet-title").textContent = "Tagesübersicht";
   body.innerHTML = pubgRankingHtml(det.pubgStats || []) + exportButtonHtml(ev?.id || det.eventId);
   wireExportButton(ev?.id || det.eventId);
   const day = ev?.startTime ? new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }).format(new Date(ev.startTime)) : null;
@@ -379,7 +380,7 @@ function renderPubgSheet(det, ev) {
 
 // ── Haupt-Sheet: Dispatch nach Modultyp ──────────────────────────────────────
 export async function openSheet(id) {
-  const res = await api.eventDetails(id);
+  const res = await api.eventDetails(id, state.code);
   if (!res.ok) return;
   const det = res.data;
   const ev = state.data.events.find(e => e.id === id);

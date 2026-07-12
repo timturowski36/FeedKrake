@@ -23,8 +23,9 @@ export const api = {
       body: JSON.stringify({ selections }),
     }).then(async (res) => ({ ok: res.ok, data: res.ok ? await res.json() : await res.json().catch(() => null) }));
   },
-  eventDetails(id) {
-    return getJson(`/api/events/${encodeURIComponent(id)}/details`);
+  eventDetails(id, code) {
+    const suffix = code ? "?code=" + encodeURIComponent(code) : "";
+    return getJson(`/api/events/${encodeURIComponent(id)}/details${suffix}`);
   },
   weatherRange(from, to) {
     return getJson(`/api/weather?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);

@@ -59,6 +59,8 @@ function iconTile(key, colorCss) {
 
 const LOCK_SVG = `<svg class="lock-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V7a5 5 0 0110 0v4M6 11h12a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1v-8a1 1 0 011-1z"/></svg>`;
 
+const BACK_CHEVRON_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`;
+
 /** Katalog-Module, die (noch) nicht aktivierbar sind — erscheinen stattdessen als Platzhalter unten. */
 const IN_DEVELOPMENT_MODULES = new Set(["handball"]);
 
@@ -124,12 +126,15 @@ function render() {
   const inactiveLocal = Object.keys(LOCAL_MOD_META).filter(k => !localCfg.modules[k]);
 
   el("screen-config").innerHTML = `
-    <a class="screen-back" href="#" id="cfg-back">‹ Kalender</a>
+    <header class="screen-back-row">
+      <button class="screen-back" id="cfg-back">${BACK_CHEVRON_SVG}Kalender</button>
+    </header>
     <h1 class="screen-title">Konfiguration</h1>
 
     <div class="cfg-section">
       <div class="cfg-section-label">Darstellung</div>
-      <div class="cfg-card">
+      <div class="cfg-card theme-card">
+        <span class="theme-label">Erscheinungsbild</span>
         <div class="seg-control" id="theme-seg">
           <button data-theme="hell" class="${state.theme === "hell" ? "active" : ""}">Hell</button>
           <button data-theme="dunkel" class="${state.theme === "dunkel" ? "active" : ""}">Dunkel</button>
@@ -345,7 +350,9 @@ function syncAddUrlaubButton() {
 
 function accountScreenHtml(backLabel) {
   return `
-    <a class="screen-back" href="#" id="acc-back">‹ ${esc(backLabel)}</a>
+    <header class="screen-back-row">
+      <button class="screen-back" id="acc-back">${BACK_CHEVRON_SVG}${esc(backLabel)}</button>
+    </header>
     <div class="account-header">
       <div class="account-avatar"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg></div>
       <h1 class="screen-title" style="margin-bottom:4px">Account anlegen</h1>

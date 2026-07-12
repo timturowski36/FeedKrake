@@ -212,6 +212,17 @@ Pillenleiste/der Tagestitel das Wetter des Urlaubsorts zeigt.
 - 2026-07-11: Datei-Struktur gegenüber Plan vereinfacht: keine separaten
   `js/modules/*.js` — Panel-Logik konsolidiert in `sheet.js` (siehe oben).
   Breakpoint 900px per CSS statt JS-resize-Listener.
+- 2026-07-12: PUBG-Modul auf Personen-Sicht des Prototyps umgestellt (Nutzer-Wunsch:
+  "nur die Statistiken der Personen"): `CalendarService.withPubgPersonStats` reichert
+  gebündelte Tages-Events serverseitig mit der Tagesrangliste an (Participants mit
+  playerId als externalRef + Kills als score, Titel "N Spieler waren aktiv" wie
+  Prototyp 2747) und filtert bei einer PUBG-Auswahl mit Refs auf die konfigurierten
+  Personen. Damit funktioniert erstmals auch der Refs-Filter für PUBG-Tages-Events
+  (vorher hatten Participants keinen externalRef → Event verschwand bei Personen-
+  Auswahl komplett). `GET /api/events/{id}/details` nimmt jetzt optional `?code=`
+  und filtert pubgStats entsprechend; ICS-Feed filtert Personen, behält aber den
+  beschreibenden Original-Titel. Rangliste sortiert nach Kills absteigend
+  (Prototyp pubgDay), PUBG-Sheet-Titel "Tagesübersicht" (Prototyp 3052).
 - 2026-07-11: Kein lokaler Kotlin-Testlauf/Live-Server möglich in dieser Session
   (kein Docker-Zugriff, keine lokale Postgres) — Verifikation über
   `./gradlew :web:compileKotlin` (grün) + manuelle Code-/HTML-ID-Konsistenzprüfung

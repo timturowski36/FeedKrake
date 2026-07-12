@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2f2f7">
   <title>NooNoo Kalender</title>
+  <!-- Theme VOR dem ersten Paint setzen (kein Hell-Aufblitz für Dark-Nutzer); Default folgt dem OS. -->
+  <script>try{var t=localStorage.getItem('kal.theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dunkel':'hell');document.documentElement.setAttribute('data-theme',t);document.querySelector('meta[name="theme-color"]').setAttribute('content',t==='dunkel'?'#000000':'#f2f2f7')}catch(e){}</script>
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/sheet.css">
@@ -57,7 +60,7 @@
       <div class="search-input-row">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
         <input id="search-input" placeholder="Suchen: Termine, Läufe, Spiele, Urlaub …">
-        <button class="search-close" id="search-close" aria-label="Schließen">✕</button>
+        <button class="search-close" id="search-close" aria-label="Schließen"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button>
       </div>
       <div id="search-results"></div>
     </div>

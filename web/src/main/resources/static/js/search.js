@@ -27,7 +27,7 @@ export function openSearch() {
   el("search-overlay").hidden = false;
   const input = el("search-input");
   input.value = "";
-  renderResults([]);
+  runSearch("");
   setTimeout(() => input.focus(), 30);
 }
 

@@ -8,11 +8,13 @@ export const state = {
   sse: null,
   catalog: null,
   selDay: null, // 0–6, nur für Mobile-Ansicht relevant
-  theme: localStorage.getItem("kal.theme") || "hell",
+  theme: localStorage.getItem("kal.theme")
+    || (matchMedia("(prefers-color-scheme: dark)").matches ? "dunkel" : "hell"),
 };
 
 export function applyTheme(theme) {
   state.theme = theme;
   document.documentElement.setAttribute("data-theme", theme);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dunkel" ? "#000000" : "#f2f2f7");
   localStorage.setItem("kal.theme", theme);
 }

@@ -377,7 +377,7 @@ class EventDetailRepository(private val dataSource: DataSource) {
                    total_damage, time_played_seconds, longest_kill_day, matches_played, wins
             FROM pubg_player_day_stats
             WHERE day = ?
-            ORDER BY best_placement, total_kills DESC
+            ORDER BY total_kills DESC, best_placement
             """.trimIndent(),
             { it.setObject(1, day) }
         ) {
