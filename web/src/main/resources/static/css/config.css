@@ -47,7 +47,7 @@
   font-size: 15px; font-weight: 700;
 }
 .module-row-text { flex: 1; }
-.module-row-text .name { font-size: 15px; font-weight: 600; }
+.module-row-text .name { display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 600; }
 .module-row-text .desc { font-size: 12px; color: var(--sec); margin-top: 1px; }
 .module-row-chevron { color: var(--sec); transition: transform .2s; flex-shrink: 0; }
 .module-row.open .module-row-chevron { transform: rotate(90deg); }
@@ -82,6 +82,7 @@
   background: var(--fill); color: var(--sec);
 }
 .marketplace-row .tag.dev-tag { background: rgba(94, 92, 230, .15); color: var(--mod-quiz); }
+.marketplace-row .lock-icon { color: var(--sec); flex-shrink: 0; }
 .add-btn {
   border: none; background: var(--fill); color: var(--acc);
   font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 20px;

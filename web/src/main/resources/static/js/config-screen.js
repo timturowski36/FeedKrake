@@ -10,27 +10,62 @@ import { loadCfg, saveCfg } from "./local-modules.js";
 import { QUIZ_POOL } from "./quiz-pool.js";
 
 const LOCAL_MOD_META = {
-  quiz: { label: "Quiz", desc: "Tägliches Wissensquiz", icon: "?", colorVar: "--mod-quiz" },
-  akt: { label: "Aktivitäten", desc: "Wöchentliche Aktivitäten zum Abhaken", icon: "✓", colorVar: "--mod-akt" },
-  urlaub: { label: "Urlaub", desc: "Urlaubszeiträume inkl. Wetter-Override", icon: "✈", colorVar: "--mod-urlaub" },
+  quiz: { label: "Tägliches Quiz", desc: "Allgemeinwissen an deinen Wunschtagen", colorVar: "--mod-quiz" },
+  akt: { label: "Eigene Aktivitäten", desc: "Wöchentliche Vorhaben zum Abhaken", colorVar: "--mod-akt" },
+  urlaub: { label: "Urlaub", desc: "Urlaube mit Wetter am Zielort", colorVar: "--mod-urlaub" },
 };
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 let localCfg = loadCfg();
 
 const MOD_META = {
-  bl1: { label: "1. Bundesliga", desc: "Alle Spieltage der 1. Bundesliga", icon: "⚽" },
-  bl2: { label: "2. Bundesliga", desc: "Alle Spieltage der 2. Bundesliga", icon: "⚽" },
-  handball: { label: "Handball", desc: "Bundesliga-Spieltage", icon: "🤾" },
-  wm: { label: "WM 2026", desc: "Alle Spiele der Weltmeisterschaft", icon: "🏆" },
-  f1: { label: "Formel 1", desc: "Qualifying & Rennen", icon: "🏎" },
-  pubg: { label: "PUBG", desc: "Tagesrangliste der Spielrunden", icon: "🎮" },
-  weather: { label: "Wetter", desc: "Wetter in der Tagesleiste", icon: "☀" },
+  bl1: { label: "1. Bundesliga", desc: "Spieltage, Ergebnisse und Form" },
+  bl2: { label: "2. Bundesliga", desc: "Spieltage, Ergebnisse und Form" },
+  handball: { label: "Handball", desc: "Bundesliga-Spieltage und Tabelle" },
+  wm: { label: "WM 2026", desc: "Live-Ergebnisse und Turnierstatistiken" },
+  f1: { label: "Formel 1", desc: "Rennwochenenden und WM-Stand" },
+  pubg: { label: "PUBG", desc: "Spiele und Statistiken deiner Freunde" },
+  weather: { label: "Wetter", desc: "Wetterlage in der Wochenübersicht" },
 };
+
+// Stroke-SVG-Pfade 1:1 aus dem Design-Prototyp (MODS + manuelle Marketplace-Einträge).
+const ICON_PATHS = {
+  bl1: "M12 3a9 9 0 100 18 9 9 0 000-18zM12 8.4l3.4 2.5-1.3 4h-4.2l-1.3-4zM12 3v5.4M4.4 15l3.5-.1M19.6 15l-3.5-.1",
+  bl2: "M12 3a9 9 0 100 18 9 9 0 000-18zM12 8.4l3.4 2.5-1.3 4h-4.2l-1.3-4zM12 3v5.4M4.4 15l3.5-.1M19.6 15l-3.5-.1",
+  handball: "M12 3a9 9 0 100 18 9 9 0 000-18zM12 8.4l3.4 2.5-1.3 4h-4.2l-1.3-4zM12 3v5.4M4.4 15l3.5-.1M19.6 15l-3.5-.1",
+  wm: "M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0zM7 5H4v2a3 3 0 003 3M17 5h3v2a3 3 0 01-3-3",
+  f1: "M5 21V4M5 4h14l-3 4 3 4H5",
+  pubg: "M12 2.5v3.5M12 18v3.5M2.5 12H6M18 12h3.5M12 7.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z",
+  weather: "M12 8.2a3.8 3.8 0 100 7.6 3.8 3.8 0 000-7.6zM12 2.6v2M12 19.4v2M2.6 12h2M19.4 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4",
+  quiz: "M9.2 9a3 3 0 015.6 1c0 2-3 2.4-3 4M12 17.5v.1M12 3a9 9 0 100 18 9 9 0 000-18z",
+  akt: "M20 6L9 17l-5-5",
+  urlaub: "M6 8h12a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2zM9 8V6a3 3 0 016 0v2M9 12v6M15 12v6",
+  strava: "M5 20a2 2 0 100-4 2 2 0 000 4zM19 8a2 2 0 100-4 2 2 0 000 4zM7 18h7a4 4 0 000-8h-4a3 3 0 010-6h7",
+  ufc: "M8 3h8l5 5v8l-5 5H8l-5-5V8z",
+  sheets: "M4 4h16v16H4zM4 10h16M10 4v16",
+  outlook: "M4 6h16v12H4zM4 7l8 6 8-6",
+  news: "M4 5h16v14H4zM8 9h8M8 12h8M8 15h5",
+};
+
+function modColor(key) {
+  if (key === "weather") return "var(--warn)";
+  return `var(${MOD_COLOR_VARS[key] || "--sec"})`;
+}
+
+function iconTile(key, colorCss) {
+  return `<span class="module-row-icon" style="--row-color:${colorCss}">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${ICON_PATHS[key] || ""}"/></svg>
+  </span>`;
+}
+
+const LOCK_SVG = `<svg class="lock-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V7a5 5 0 0110 0v4M6 11h12a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1v-8a1 1 0 011-1z"/></svg>`;
+
+/** Nicht aktivierbare Marketplace-Einträge (Reihenfolge/Design aus dem Prototyp). */
 const PLACEHOLDER_MODULES = [
-  { key: "strava", label: "Strava", desc: "Läufe & Aktivitäten", dev: true },
-  { key: "ufc", label: "UFC", desc: "Kampfkarten & Rankings", dev: true },
-  { key: "sheets", label: "Google Sheets", desc: "Eigene Tabellen einbinden", locked: true },
-  { key: "outlook", label: "Outlook Kalender", desc: "Termine synchronisieren", locked: true },
+  { key: "strava", label: "Strava", desc: "Läufe und Laufstatistiken im Kalender", color: "#fc4c02", tag: "IN ENTWICKLUNG", dev: true },
+  { key: "ufc", label: "UFC", desc: "Events, Fight Cards und Ergebnisse", color: "#bf9b30", tag: "IN ENTWICKLUNG", dev: true },
+  { key: "sheets", label: "Google Sheets", desc: "Termine aus einer Tabelle übernehmen", color: "#8e8e93", tag: "ACCOUNT", locked: true },
+  { key: "outlook", label: "Outlook Kalender", desc: "Deinen Outlook-Kalender einbinden", color: "#8e8e93", tag: "ACCOUNT", locked: true },
+  { key: "news", label: "News-Briefing", desc: "Tägliche Schlagzeilen zum Start in den Tag", color: "#8e8e93", tag: "IN ENTWICKLUNG", dev: true },
 ];
 
 let openModuleKey = null;
@@ -124,8 +159,7 @@ function render() {
 }
 
 function moduleRowHtml(m) {
-  const colorVar = MOD_COLOR_VARS[m.module] || "--acc";
-  const meta = MOD_META[m.module] || { label: m.label, desc: "", icon: "•" };
+  const meta = MOD_META[m.module] || { label: m.label, desc: "" };
   const isOpen = openModuleKey === m.module;
   const sel = pending[m.module] || { refs: [] };
   const body = m.selectableRefs && m.options.length
@@ -134,7 +168,7 @@ function moduleRowHtml(m) {
     : `<p class="ref-hint">Alle Termine dieses Moduls werden angezeigt.</p>`;
   return `<div class="module-row ${isOpen ? "open" : ""}" data-module="${m.module}">
     <div class="module-row-head" data-toggle="${m.module}">
-      <div class="module-row-icon" style="--row-color:var(${colorVar})">${meta.icon}</div>
+      ${iconTile(m.module, modColor(m.module))}
       <div class="module-row-text"><div class="name">${esc(meta.label)}</div><div class="desc">${esc(meta.desc)}</div></div>
       <svg class="module-row-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
     </div>
@@ -149,16 +183,22 @@ function moduleRowHtml(m) {
 }
 
 function marketplaceRowHtml(m) {
+  const meta = MOD_META[m.module] || { label: m.label, desc: "" };
   return `<div class="marketplace-row">
-    <div class="module-row-text"><div class="name">${esc(m.label)}</div></div>
+    ${iconTile(m.module, modColor(m.module))}
+    <div class="module-row-text"><div class="name">${esc(meta.label)}</div><div class="desc">${esc(meta.desc)}</div></div>
     <button class="add-btn" data-add="${m.module}">Hinzufügen</button>
   </div>`;
 }
 
 function placeholderRowHtml(m) {
   return `<div class="marketplace-row ${m.dev ? "dev" : "locked"}" ${m.locked ? `data-open-account="1"` : ""}>
-    <div class="module-row-text"><div class="name">${esc(m.label)}</div><div class="desc">${esc(m.desc)}</div></div>
-    <span class="tag ${m.dev ? "dev-tag" : ""}">${m.dev ? "IN ENTWICKLUNG" : "ACCOUNT"}</span>
+    ${iconTile(m.key, m.color)}
+    <div class="module-row-text">
+      <div class="name">${esc(m.label)}<span class="tag ${m.dev ? "dev-tag" : ""}">${esc(m.tag)}</span></div>
+      <div class="desc">${esc(m.desc)}</div>
+    </div>
+    ${m.locked ? LOCK_SVG : ""}
   </div>`;
 }
 
@@ -167,7 +207,7 @@ function localModuleRowHtml(key) {
   const isOpen = openModuleKey === key;
   return `<div class="module-row ${isOpen ? "open" : ""}" data-module="${key}">
     <div class="module-row-head" data-toggle="${key}">
-      <div class="module-row-icon" style="--row-color:var(${meta.colorVar})">${meta.icon}</div>
+      ${iconTile(key, `var(${meta.colorVar})`)}
       <div class="module-row-text"><div class="name">${esc(meta.label)}</div><div class="desc">${esc(meta.desc)}</div></div>
       <svg class="module-row-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
     </div>
@@ -183,6 +223,7 @@ function localModuleRowHtml(key) {
 function localMarketplaceRowHtml(key) {
   const meta = LOCAL_MOD_META[key];
   return `<div class="marketplace-row">
+    ${iconTile(key, `var(${meta.colorVar})`)}
     <div class="module-row-text"><div class="name">${esc(meta.label)}</div><div class="desc">${esc(meta.desc)}</div></div>
     <button class="add-btn" data-add-local="${key}">Hinzufügen</button>
   </div>`;
