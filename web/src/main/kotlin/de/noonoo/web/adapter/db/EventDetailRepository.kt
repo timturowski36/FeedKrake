@@ -24,6 +24,10 @@ data class DetailMatchEventRow(
 @Serializable
 data class DetailH2hRow(val date: String, val home: String, val away: String, val result: String)
 
+/** Formkurve eines Teams: chips = "S"/"U"/"N" der letzten Spiele (neueste zuerst), last = Kurztexte der letzten 3. */
+@Serializable
+data class DetailFormRow(val team: String, val chips: List<String>, val last: List<String>)
+
 @Serializable
 data class DetailScorerRow(val rank: Int, val player: String, val team: String, val goals: Int, val assists: Int? = null)
 
@@ -130,6 +134,34 @@ class EventDetailRepository(private val dataSource: DataSource) {
                 result = "${it.getInt("home_score_ft")}:${it.getInt("away_score_ft")}"
             )
         }
+
+    fun bundesligaForm(teamId: Int, teamName: String, limit: Int = 5): DetailFormRow? {
+        data class FormMatch(val goalsFor: Int, val goalsAgainst: Int, val opponentText: String)
+        val rows = query(
+            """
+            SELECT m.home_team_id, ht.name AS home, at.name AS away, m.home_score_ft, m.away_score_ft
+            FROM matches m
+            LEFT JOIN teams ht ON ht.id = m.home_team_id
+            LEFT JOIN teams at ON at.id = m.away_team_id
+            WHERE m.is_finished = true AND (m.home_team_id = ? OR m.away_team_id = ?)
+            ORDER BY m.kickoff_at DESC LIMIT ?
+            """.trimIndent(),
+            { it.setInt(1, teamId); it.setInt(2, teamId); it.setInt(3, limit) }
+        ) {
+            val home = it.getInt("home_team_id") == teamId
+            FormMatch(
+                goalsFor = if (home) it.getInt("home_score_ft") else it.getInt("away_score_ft"),
+                goalsAgainst = if (home) it.getInt("away_score_ft") else it.getInt("home_score_ft"),
+                opponentText = (if (home) "gegen " + (it.getString("away") ?: "?") else "bei " + (it.getString("home") ?: "?"))
+            )
+        }
+        if (rows.isEmpty()) return null
+        return DetailFormRow(
+            team = teamName,
+            chips = rows.map { if (it.goalsFor > it.goalsAgainst) "S" else if (it.goalsFor == it.goalsAgainst) "U" else "N" },
+            last = rows.take(3).map { "${it.goalsFor}:${it.goalsAgainst} ${it.opponentText}" }
+        )
+    }
 
     // ── Handball ──────────────────────────────────────────────────────────────
 

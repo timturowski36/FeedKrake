@@ -158,14 +158,27 @@ function matchEventLine(m) {
   </div>`;
 }
 
+/** "FORM · LETZTE 5 SPIELE" (Prototyp): 5 S/U/N-Chips je Team + die letzten 3 Ergebnisse. */
+function formSectionHtml(det) {
+  if (!det.formGuide?.length) return "";
+  return `<div class="form-label">FORM · LETZTE 5 SPIELE</div>` + det.formGuide.map(f => `
+    <div class="form-row">
+      <div class="head">
+        <span class="team">${esc(f.team)}</span>
+        <span class="chips">${f.chips.map(c => `<span class="form-chip ${c === "S" ? "win" : c === "U" ? "draw" : "loss"}">${esc(c)}</span>`).join("")}</span>
+      </div>
+      <div class="last">${f.last.map(l => `<span>${esc(l)}</span>`).join("")}</div>
+    </div>`).join("");
+}
+
 function matchGameViewHtml(det, ev) {
   const upcoming = ev?.status === "SCHEDULED" && !(det.matchEvents || []).length;
   if (upcoming) {
     const time = ev?.startTime ? timeFmt.format(new Date(ev.startTime)) : null;
-    return `<div class="sheet-centered-hint">${time ? `Anpfiff um ${esc(time)} Uhr.` : "Noch keine Ereignisse."}</div>`;
+    return `<div class="sheet-centered-hint">${time ? `Anpfiff um ${esc(time)} Uhr.` : "Noch keine Ereignisse."}</div>` + formSectionHtml(det);
   }
   const events = withRunningScores(det.matchEvents || [], ev);
-  return events.map(matchEventLine).join("") || emptyHint("Noch keine Ereignisse.");
+  return (events.map(matchEventLine).join("") || emptyHint("Noch keine Ereignisse.")) + formSectionHtml(det);
 }
 
 function matchStatsCats(det, slug) {
@@ -229,8 +242,10 @@ const F1_SESSION_LABELS = { qualifying: "Qualifying", race: "Rennen", sprint: "S
 
 function f1SessionViewHtml(det, ev, sessionLabel) {
   const results = det.raceResults || det.qualifyingResults;
+  // Prototyp: "Rennergebnis · {circuit}" / "Ergebnis Qualifying · {circuit}", ohne Ergebnis nur die Strecke.
+  const prefix = det.raceResults ? "Rennergebnis · " : det.qualifyingResults ? `Ergebnis ${esc(sessionLabel)} · ` : "";
   const hint = det.circuitInfo
-    ? `<div class="sheet-hint">${esc(det.circuitInfo.circuitName)}, ${esc(det.circuitInfo.locality)} (${esc(det.circuitInfo.country)})</div>`
+    ? `<div class="sheet-hint">${prefix}${esc(det.circuitInfo.circuitName)}, ${esc(det.circuitInfo.locality)} (${esc(det.circuitInfo.country)})</div>`
     : "";
   if (!results?.length) {
     const time = ev?.startTime && ev.status === "SCHEDULED" ? timeFmt.format(new Date(ev.startTime)) : null;
@@ -248,10 +263,11 @@ function f1SessionViewHtml(det, ev, sessionLabel) {
   );
 }
 
-function f1StandingsViewHtml(det) {
+function f1StandingsViewHtml(det, ev) {
   if (!det.driverStandings?.length) return emptyHint("Noch kein WM-Stand verfügbar.");
   const fmtPts = p => Number.isInteger(p) ? String(p) : String(p);
-  return `<div class="sheet-hint">Fahrerwertung</div>` + rankGrid(
+  const season = ev?.startTime ? new Date(ev.startTime).getFullYear() : null;
+  return `<div class="sheet-hint">Fahrerwertung${season ? ` · Saison ${season}` : ""}</div>` + rankGrid(
     { name: "Fahrer", sub: "Team", val: "Punkte" },
     det.driverStandings.map(s => ({
       rank: s.position, name: esc(s.name), sub: s.team ?? "", val: fmtPts(s.points), top: s.position <= 3,
@@ -265,7 +281,7 @@ function renderF1Sheet(det, ev) {
   const sessionLabel = F1_SESSION_LABELS[ev?.metadata?.session] || "Session";
   const html = tabsHtml([
     { label: sessionLabel, html: f1SessionViewHtml(det, ev, sessionLabel) },
-    { label: "WM-Stand", html: f1StandingsViewHtml(det) },
+    { label: "WM-Stand", html: f1StandingsViewHtml(det, ev) },
   ]) + exportButtonHtml(ev?.id || det.eventId);
   body.innerHTML = html;
   wireTabClicks(body);
@@ -374,6 +390,14 @@ export async function openSheet(id) {
   if (slug === "f1") {
     const session = F1_SESSION_LABELS[ev?.metadata?.session];
     if (session) badge = `FORMEL 1 · ${session.toUpperCase()}`;
+  } else if (slug === "bl1" || slug === "bl2") {
+    // Prototyp: "BUNDESLIGA · 1. Spieltag"
+    const matchday = ev?.metadata?.matchday;
+    if (matchday) badge = `${MOD_LABELS[slug]} · ${matchday}. Spieltag`; // textContent, kein esc nötig
+  } else if (slug === "wm") {
+    // Prototyp: "WM 2026 · Achtelfinale" — echte Daten liefern die Gruppe ("Group A")
+    const group = ev?.metadata?.group;
+    badge = group ? `WM 2026 · ${group.replace(/^Group\s+/, "Gruppe ")}` : "WM 2026";
   }
   setSheetHeader(badge, det.title, ev?.startTime ? fullDateFmt.format(new Date(ev.startTime)) : "", `var(${colorVar})`);
 

@@ -59,8 +59,12 @@ function iconTile(key, colorCss) {
 
 const LOCK_SVG = `<svg class="lock-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V7a5 5 0 0110 0v4M6 11h12a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1v-8a1 1 0 011-1z"/></svg>`;
 
+/** Katalog-Module, die (noch) nicht aktivierbar sind — erscheinen stattdessen als Platzhalter unten. */
+const IN_DEVELOPMENT_MODULES = new Set(["handball"]);
+
 /** Nicht aktivierbare Marketplace-Einträge (Reihenfolge/Design aus dem Prototyp). */
 const PLACEHOLDER_MODULES = [
+  { key: "handball", label: "Handball", desc: "Bundesliga-Spieltage und Tabelle", color: "#40c8e0", tag: "IN ENTWICKLUNG", dev: true },
   { key: "strava", label: "Strava", desc: "Läufe und Laufstatistiken im Kalender", color: "#fc4c02", tag: "IN ENTWICKLUNG", dev: true },
   { key: "ufc", label: "UFC", desc: "Events, Fight Cards und Ergebnisse", color: "#bf9b30", tag: "IN ENTWICKLUNG", dev: true },
   { key: "sheets", label: "Google Sheets", desc: "Termine aus einer Tabelle übernehmen", color: "#8e8e93", tag: "ACCOUNT", locked: true },
@@ -115,7 +119,7 @@ export function closeConfigScreen() {
 function render() {
   const modules = state.catalog.modules;
   const active = modules.filter(m => m.module in pending);
-  const inactive = modules.filter(m => !(m.module in pending));
+  const inactive = modules.filter(m => !(m.module in pending) && !IN_DEVELOPMENT_MODULES.has(m.module));
   const activeLocal = Object.keys(LOCAL_MOD_META).filter(k => localCfg.modules[k]);
   const inactiveLocal = Object.keys(LOCAL_MOD_META).filter(k => !localCfg.modules[k]);
 
