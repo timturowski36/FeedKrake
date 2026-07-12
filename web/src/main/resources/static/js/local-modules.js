@@ -83,7 +83,7 @@ export function localEntriesForDay(dateStr, todayStr) {
       minutes: 480,
       html: `<article class="event-card clickable" style="--mod-color:var(--mod-quiz)" data-quiz-key="${dateStr}">
         <div class="row-top"><span class="badge">QUIZ</span><span class="time tabular-nums">08:00</span></div>
-        <div class="title">Tagesquiz</div>
+        <div class="title">Allgemeinwissens-Quiz</div>
         ${rec ? `<div class="sub">${rec.s} von ${rec.n} richtig</div>` : ""}
         ${chip ? `<span class="chip" style="--chip-bg:${bg};--chip-fg:${fg}">${chip}</span>` : ""}
       </article>`,
@@ -139,8 +139,8 @@ export function searchLocalEntries(query, todayStr) {
         }
       }
     }
-    if (cfg.modules.quiz && cfg.quiz.days.includes(wd) && "tagesquiz".includes(q)) {
-      results.push({ dateStr, title: "Tagesquiz", badge: "QUIZ", colorVar: "var(--mod-quiz)", kind: "quiz" });
+    if (cfg.modules.quiz && cfg.quiz.days.includes(wd) && "allgemeinwissens-quiz".includes(q)) {
+      results.push({ dateStr, title: "Allgemeinwissens-Quiz", badge: "QUIZ", colorVar: "var(--mod-quiz)", kind: "quiz" });
     }
     if (cfg.modules.akt) {
       for (const a of cfg.akt.list) {

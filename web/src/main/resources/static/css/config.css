@@ -47,7 +47,7 @@
   font-size: 15px; font-weight: 700;
 }
 .module-row-text { flex: 1; }
-.module-row-text .name { font-size: 15px; font-weight: 600; }
+.module-row-text .name { display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 600; }
 .module-row-text .desc { font-size: 12px; color: var(--sec); margin-top: 1px; }
 .module-row-chevron { color: var(--sec); transition: transform .2s; flex-shrink: 0; }
 .module-row.open .module-row-chevron { transform: rotate(90deg); }
@@ -82,21 +82,17 @@
   background: var(--fill); color: var(--sec);
 }
 .marketplace-row .tag.dev-tag { background: rgba(94, 92, 230, .15); color: var(--mod-quiz); }
+.marketplace-row .lock-icon { color: var(--sec); flex-shrink: 0; }
 .add-btn {
   border: none; background: var(--fill); color: var(--acc);
   font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 20px;
 }
 
-/* Teilen */
-.share-code-display {
-  font-size: 22px; font-weight: 700; letter-spacing: .25em; color: var(--acc);
-  text-align: center; padding: 14px 0;
-}
-.share-row { display: flex; gap: 8px; padding: 12px 14px; }
+/* Text-Eingaben (Aktivitäten/Urlaub-Formulare) */
 .share-input {
-  flex: 1; border: 1.5px solid var(--sep); border-radius: 10px; padding: 10px 12px;
-  background: var(--bg); color: var(--fg); text-transform: uppercase; letter-spacing: .15em;
-  font-size: 14px;
+  flex: 1; border: none; border-radius: 10px; padding: 10px 12px;
+  background: var(--fill); color: var(--fg);
+  font-size: 15px;
 }
 .primary-btn {
   border: none; background: var(--acc); color: #fff; font-weight: 600;
@@ -105,18 +101,25 @@
 .cfg-hint { font-size: 12px; color: var(--sec); padding: 0 14px 12px; }
 
 /* Account-Screen */
+#screen-account { max-width: calc(420px + 2 * clamp(.75rem, 3vw, 2.5rem)); margin: 0 auto; }
 .account-avatar {
   width: 72px; height: 72px; border-radius: 50%; background: var(--fill);
-  display: grid; place-items: center; margin: 24px auto 12px;
+  color: var(--sec);
+  display: grid; place-items: center; margin: 18px auto 14px;
 }
 .account-header { text-align: center; }
-.account-header p { color: var(--sec); font-size: 14px; max-width: 320px; margin: 8px auto 20px; }
-.account-form { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.account-header p { color: var(--sec); font-size: 14px; max-width: 300px; margin: 8px auto 26px; line-height: 1.5; }
+.account-form { margin-bottom: 18px; }
 .account-form input {
-  border: 1.5px solid var(--sep); border-radius: 10px; padding: 12px 14px;
-  background: var(--bg); color: var(--fg); font-size: 14px;
+  width: 100%; border: none; background: none; padding: 14px 16px;
+  color: var(--fg); font-size: 15px;
 }
-.account-disclaimer { font-size: 12px; color: var(--sec); text-align: center; margin-top: 8px; }
-.benefit-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--sep); }
+.account-form input:not(:last-child) { border-bottom: 1px solid var(--sep); }
+.account-submit {
+  width: 100%; height: 48px; border: none; border-radius: 14px;
+  background: var(--acc); color: #fff; font-size: 16px; font-weight: 600;
+}
+.account-disclaimer { font-size: 12px; color: var(--sec); text-align: center; margin-top: 10px; }
+.benefit-row { display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-bottom: 1px solid var(--sep); }
 .benefit-row:last-child { border-bottom: none; }
-.benefit-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex-shrink: 0; }
+.benefit-icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: #fff; flex-shrink: 0; }

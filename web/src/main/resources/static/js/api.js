@@ -26,17 +26,11 @@ export const api = {
   eventDetails(id) {
     return getJson(`/api/events/${encodeURIComponent(id)}/details`);
   },
-  weatherDay(location, day) {
-    return getJson(`/api/weather/${encodeURIComponent(location)}/${encodeURIComponent(day)}`);
-  },
   weatherRange(from, to) {
     return getJson(`/api/weather?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
   },
   pubgPlayer(playerId, day) {
     return getJson(`/api/pubg/player/${encodeURIComponent(playerId)}?day=${encodeURIComponent(day)}`);
-  },
-  news(limit = 20) {
-    return getJson(`/api/news?limit=${limit}`);
   },
   search(q, code) {
     const params = new URLSearchParams({ q });

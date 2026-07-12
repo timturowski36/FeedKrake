@@ -16,7 +16,9 @@ data class DetailStandingRow(
 
 @Serializable
 data class DetailMatchEventRow(
-    val minute: String, val type: String, val player: String?, val team: String?, val detail: String?
+    val minute: String, val type: String, val player: String?, val team: String?, val detail: String?,
+    /** Zwischenstand nach dem Ereignis ("2:1"), sofern die Quelle ihn liefert. */
+    val score: String? = null
 )
 
 @Serializable
@@ -46,7 +48,8 @@ data class DetailF1CircuitInfoRow(val circuitName: String, val country: String, 
 @Serializable
 data class DetailPubgStatRow(
     val player: String, val playerId: String? = null, val placement: Int, val kills: Int,
-    val assists: Int, val damage: Int, val survivedMinutes: Int, val longestKill: Int
+    val assists: Int, val damage: Int, val survivedMinutes: Int, val longestKill: Int,
+    val matchesPlayed: Int? = null, val wins: Int? = null
 )
 
 @Serializable
@@ -100,11 +103,11 @@ class EventDetailRepository(private val dataSource: DataSource) {
             val detail = buildList {
                 if (it.getBoolean("is_penalty")) add("Elfmeter")
                 if (it.getBoolean("is_own_goal")) add("Eigentor")
-                add("${it.getInt("score_home")}:${it.getInt("score_away")}")
-            }.joinToString(", ")
+            }.joinToString(", ").ifEmpty { null }
             DetailMatchEventRow(
                 minute = "${it.getInt("minute")}'", type = "goal",
-                player = it.getString("scorer_name"), team = null, detail = detail
+                player = it.getString("scorer_name"), team = null, detail = detail,
+                score = "${it.getInt("score_home")}:${it.getInt("score_away")}"
             )
         }
 
@@ -152,10 +155,13 @@ class EventDetailRepository(private val dataSource: DataSource) {
             "SELECT game_minute, event_type, description, home_score, away_score FROM handball_ticker_events WHERE match_id = ? ORDER BY game_minute",
             { it.setLong(1, matchId) }
         ) {
+            val home = it.getObject("home_score") as? Int
+            val away = it.getObject("away_score") as? Int
             DetailMatchEventRow(
                 minute = it.getString("game_minute"), type = it.getString("event_type"),
                 player = null, team = null,
-                detail = it.getString("description")
+                detail = it.getString("description"),
+                score = if (home != null && away != null) "$home:$away" else null
             )
         }
 
@@ -319,13 +325,15 @@ class EventDetailRepository(private val dataSource: DataSource) {
             """.trimIndent(),
             { it.setString(1, matchId) }
         ) {
+            val placement = it.getInt("win_place")
             DetailPubgStatRow(
                 player = it.getString("player_name") ?: "?",
                 playerId = it.getString("account_id"),
-                placement = it.getInt("win_place"), kills = it.getInt("kills"),
+                placement = placement, kills = it.getInt("kills"),
                 assists = it.getInt("assists"), damage = it.getDouble("damage_dealt").toInt(),
                 survivedMinutes = (it.getDouble("time_survived") / 60).toInt(),
-                longestKill = it.getDouble("longest_kill").toInt()
+                longestKill = it.getDouble("longest_kill").toInt(),
+                matchesPlayed = 1, wins = if (placement == 1) 1 else 0
             )
         }
 
@@ -334,7 +342,7 @@ class EventDetailRepository(private val dataSource: DataSource) {
         query(
             """
             SELECT player_name, player_id, best_placement, total_kills, total_assists,
-                   total_damage, time_played_seconds, longest_kill_day
+                   total_damage, time_played_seconds, longest_kill_day, matches_played, wins
             FROM pubg_player_day_stats
             WHERE day = ?
             ORDER BY best_placement, total_kills DESC
@@ -347,7 +355,8 @@ class EventDetailRepository(private val dataSource: DataSource) {
                 placement = it.getInt("best_placement"), kills = it.getInt("total_kills"),
                 assists = it.getInt("total_assists"), damage = it.getDouble("total_damage").toInt(),
                 survivedMinutes = (it.getInt("time_played_seconds") / 60),
-                longestKill = it.getDouble("longest_kill_day").toInt()
+                longestKill = it.getDouble("longest_kill_day").toInt(),
+                matchesPlayed = it.getInt("matches_played"), wins = it.getInt("wins")
             )
         }
 
