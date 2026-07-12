@@ -5,6 +5,7 @@ import de.noonoo.core.domain.model.EventPhase
 import de.noonoo.core.domain.model.EventStatus
 import de.noonoo.core.domain.model.IsoWeek
 import de.noonoo.core.domain.model.ModuleType
+import de.noonoo.core.domain.model.Participant
 import de.noonoo.core.domain.model.SeasonStatus
 import de.noonoo.core.domain.model.WeatherCategory
 import de.noonoo.core.domain.model.WeatherLocation
@@ -146,7 +147,9 @@ class CalendarService(
         val from = week.start(BERLIN)
         val to = week.end(BERLIN)
         val modules = config?.let { selectedModules(it) }
+        val refs = pubgRefs(config)
         val events = repo.findEvents(from, to, modules)
+            .map { withPubgPersonStats(it, refs) }
             .filter { config == null || matchesSelections(it, config.selections) }
 
         val weatherLocation = config?.selections
@@ -203,10 +206,14 @@ class CalendarService(
     }
 
     /** Alle Events für den abonnierbaren ICS-Feed (14 Tage zurück bis Saisonende). */
-    fun feedEvents(config: StoredConfig?): List<Event> =
-        repo.findAllUpcomingAndRecent(config?.let { selectedModules(it) })
+    fun feedEvents(config: StoredConfig?): List<Event> {
+        val refs = pubgRefs(config)
+        return repo.findAllUpcomingAndRecent(config?.let { selectedModules(it) })
             .filter { it.moduleType != ModuleType.NEWS }
+            // ICS behält den beschreibenden Original-Titel; der Personen-Filter greift trotzdem
+            .map { if (refs == null) it else withPubgPersonStats(it, refs, rewriteTitle = false) }
             .filter { config == null || matchesSelections(it, config.selections) }
+    }
 
     fun findEvent(id: String): Event? = repo.findEventById(id)
 
@@ -217,6 +224,7 @@ class CalendarService(
         val to = now.plus(28, java.time.temporal.ChronoUnit.DAYS)
         val modules = config?.let { selectedModules(it) }
         val events = repo.findEvents(from, to, modules)
+            .map { withPubgPersonStats(it, pubgRefs(config)) }
             .filter { config == null || matchesSelections(it, config.selections) }
         return SearchService.searchEvents(events, query)
     }
@@ -237,6 +245,33 @@ class CalendarService(
             ModuleType.fromSlug(sel.module) == event.moduleType &&
                 (sel.refs.isEmpty() || event.participants.any { it.externalRef in sel.refs })
         }
+
+    /** Refs der PUBG-Auswahl (account_ids); null = kein Personen-Filter aktiv. */
+    private fun pubgRefs(config: StoredConfig?): Set<String>? =
+        config?.selections
+            ?.firstOrNull { ModuleType.fromSlug(it.module) == ModuleType.PUBG }
+            ?.refs?.takeIf { it.isNotEmpty() }?.toSet()
+
+    /**
+     * PUBG-Tages-Events auf die Personen-Sicht des Prototyps bringen: Participants =
+     * Tagesrangliste (Kills absteigend, playerId als externalRef, Kills als score),
+     * optional auf die im Modul konfigurierten Personen reduziert. Der externalRef ist
+     * nötig, damit [matchesSelections] gebündelte Tages-Events überhaupt einer
+     * Personen-Auswahl zuordnen kann (der Aggregator speichert nur Namen).
+     */
+    private fun withPubgPersonStats(event: Event, refs: Set<String>?, rewriteTitle: Boolean = true): Event {
+        if (event.moduleType != ModuleType.PUBG || !event.externalId.startsWith("pubg:day:")) return event
+        val day = runCatching { LocalDate.parse(event.externalId.removePrefix("pubg:day:")) }.getOrNull() ?: return event
+        val rows = details.pubgDayStats(day)
+            .let { all -> if (refs == null) all else all.filter { it.playerId in refs } }
+            .sortedByDescending { it.kills }
+        if (rows.isEmpty() && refs == null) return event
+        val title = if (rows.size == 1) "1 Spieler war aktiv" else "${rows.size} Spieler waren aktiv"
+        return event.copy(
+            participants = rows.map { Participant(name = it.player, externalRef = it.playerId, score = it.kills.toString()) },
+            title = if (rewriteTitle) title else event.title
+        )
+    }
 
     // ── Saison-Status ─────────────────────────────────────────────────────────
 
@@ -310,7 +345,7 @@ class CalendarService(
 
     // ── Event-Details (nur, was die Quelle wirklich hergibt) ──────────────────
 
-    fun eventDetails(event: Event): EventDetailsResponse {
+    fun eventDetails(event: Event, config: StoredConfig? = null): EventDetailsResponse {
         val base = EventDetailsResponse(
             eventId = event.id, module = event.moduleType.slug,
             title = event.title, capabilities = emptyList(),
@@ -407,9 +442,12 @@ class CalendarService(
                 } else {
                     details.pubgMatchStats(rest)
                 }
+                // Nur die Statistiken der im Modul konfigurierten Personen anzeigen
+                val refs = pubgRefs(config)
+                val visible = if (refs == null) stats else stats.filter { it.playerId in refs }
                 base.copy(
                     capabilities = listOf("MATCH_STATS"),
-                    pubgStats = stats.ifEmpty { null }
+                    pubgStats = visible.ifEmpty { null }
                 )
             }
             ModuleType.NEWS, ModuleType.WEATHER -> base

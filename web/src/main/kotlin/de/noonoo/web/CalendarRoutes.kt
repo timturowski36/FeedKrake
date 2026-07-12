@@ -130,7 +130,7 @@ fun Route.calendarRoutes(service: CalendarService, icsHost: String) {
         val id = call.parameters["id"] ?: return@get call.respond(HttpStatusCode.BadRequest)
         val event = service.findEvent(id)
             ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Event nicht gefunden"))
-        call.respond(service.eventDetails(event))
+        call.respond(service.eventDetails(event, call.requestedConfig()))
     }
 
     // ── ICS-Export ────────────────────────────────────────────────────────────

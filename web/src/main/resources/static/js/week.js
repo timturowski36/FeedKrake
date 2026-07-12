@@ -196,7 +196,11 @@ function cardHtml(e) {
   let chipKind = "sec";
 
   if (slug === "pubg") {
-    sub = (e.participants || []).map(p => `${esc(p.name)}${p.score ? " · " + esc(p.score) : ""}`).join(", ");
+    // Prototyp 2747: Titel "N Spieler waren aktiv" kommt vom Server, Sub = Führender
+    const lead = (e.participants || [])[0];
+    sub = lead?.score != null
+      ? `${esc(lead.name)} führt mit ${esc(lead.score)} Kills`
+      : (e.participants || []).map(p => esc(p.name)).join(", ");
   } else if (e.status !== "SCHEDULED" && scores.length === 2) {
     title += ` <strong>${esc(scores[0])}:${esc(scores[1])}</strong>`;
   }
