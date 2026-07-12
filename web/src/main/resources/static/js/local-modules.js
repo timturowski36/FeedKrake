@@ -62,8 +62,11 @@ export function localEntriesForDay(dateStr, todayStr) {
         specs.push({
           minutes: -1,
           html: `<article class="event-card" style="--mod-color:var(--mod-urlaub)">
-            <div class="row-top"><span class="badge">URLAUB</span></div>
-            <div class="title">Urlaub in ${esc(v.ort)}</div>
+            <div class="bar"></div>
+            <div class="main">
+              <div class="row-top"><span class="badge">URLAUB</span></div>
+              <div class="title">Urlaub in ${esc(v.ort)}</div>
+            </div>
           </article>`,
         });
       }
@@ -82,9 +85,12 @@ export function localEntriesForDay(dateStr, todayStr) {
     specs.push({
       minutes: 480,
       html: `<article class="event-card clickable" style="--mod-color:var(--mod-quiz)" data-quiz-key="${dateStr}">
-        <div class="row-top"><span class="badge">QUIZ</span><span class="time tabular-nums">08:00</span></div>
-        <div class="title">Allgemeinwissens-Quiz</div>
-        ${rec ? `<div class="sub">${rec.s} von ${rec.n} richtig</div>` : ""}
+        <div class="bar"></div>
+        <div class="main">
+          <div class="row-top"><span class="badge">QUIZ</span><span class="time tabular-nums">08:00</span></div>
+          <div class="title">Allgemeinwissens-Quiz</div>
+          ${rec ? `<div class="sub">${rec.s} von ${rec.n} richtig</div>` : ""}
+        </div>
         ${chip ? `<span class="chip" style="--chip-bg:${bg};--chip-fg:${fg}">${chip}</span>` : ""}
       </article>`,
     });
@@ -98,9 +104,15 @@ export function localEntriesForDay(dateStr, todayStr) {
       specs.push({
         minutes: 1080,
         html: `<article class="event-card" style="--mod-color:var(--mod-akt)">
-          <div class="row-top"><span class="badge">AKTIVITÄT</span><span class="time tabular-nums">18:00</span></div>
-          <div class="title">${esc(a.name)}</div>
-          <button class="check-btn" data-akt-id="${a.id}" data-akt-date="${dateStr}" style="--ck-border:${isDone ? "var(--good)" : "var(--sep)"};--ck-bg:${isDone ? "var(--good)" : "transparent"};--ck-fg:${isDone ? "#fff" : "var(--sec)"}">${isDone ? "✓ Erledigt" : "Abhaken"}</button>
+          <div class="bar"></div>
+          <div class="main">
+            <div class="row-top"><span class="badge">AKTIVITÄT</span><span class="time tabular-nums">18:00</span></div>
+            <div class="title">${esc(a.name)}</div>
+          </div>
+          <button class="check-btn" data-akt-id="${a.id}" data-akt-date="${dateStr}" style="--ck-border:${isDone ? "var(--good)" : "var(--sep)"};--ck-bg:${isDone ? "var(--good)" : "transparent"};--ck-fg:${isDone ? "#fff" : "var(--sec)"}" aria-label="${isDone ? "Erledigt" : "Abhaken"}">
+            <span class="ck-label">${isDone ? "✓ Erledigt" : "Abhaken"}</span>
+            <svg class="ck-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </button>
         </article>`,
       });
     }

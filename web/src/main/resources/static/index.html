@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2f2f7">
   <title>NooNoo Kalender</title>
+  <!-- Theme VOR dem ersten Paint setzen (kein Hell-Aufblitz für Dark-Nutzer); Default folgt dem OS. -->
+  <script>try{var t=localStorage.getItem('kal.theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dunkel':'hell');document.documentElement.setAttribute('data-theme',t);document.querySelector('meta[name="theme-color"]').setAttribute('content',t==='dunkel'?'#000000':'#f2f2f7')}catch(e){}</script>
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/sheet.css">
@@ -47,6 +50,7 @@
       <div class="empty-week-title">Keine Einträge</div>
       <div class="empty-week-sub">Füge Module in der <a href="#" id="empty-week-config-link">Konfiguration</a> hinzu.</div>
     </div>
+    <div class="swipe-hint">← Wischen zum Tageswechsel →</div>
   </div>
 
   <div id="screen-config" hidden></div>

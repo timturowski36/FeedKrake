@@ -2,16 +2,17 @@
 
 #app {
   min-height: 100vh;
-  background: var(--bg);
+  max-width: 1180px;
+  margin: 0 auto;
   color: var(--fg);
-  transition: background .25s, color .25s;
-  padding: 0 clamp(.75rem, 3vw, 2.5rem) calc(24px + env(safe-area-inset-bottom));
+  transition: color .25s;
+  padding: 0 16px calc(24px + env(safe-area-inset-bottom));
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
 #header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   padding: 20px 0 14px;
   flex-wrap: wrap;
@@ -55,7 +56,7 @@
 /* ── 7-Tage-Pillenleiste ────────────────────────────────────────────────────── */
 .pill-bar {
   display: flex; gap: 6px; overflow-x: auto;
-  padding-bottom: 14px;
+  padding: 2px 0 14px;
 }
 .day-pill {
   flex: 1 0 74px; min-width: 74px;
@@ -81,7 +82,7 @@
 .day-pill.is-today .date-circle { background: var(--acc); color: #fff; }
 .day-pill .weather-row {
   height: 16px; font-size: 11px; color: var(--sec);
-  display: flex; align-items: center; gap: 2px;
+  display: flex; align-items: center; gap: 3px;
 }
 .day-pill .weather-row svg { width: 14px; height: 14px; }
 .day-pill .dot-row { height: 5px; display: flex; gap: 3px; }
@@ -90,9 +91,9 @@
 /* ── Mobile Tagestitel ("Heute · Freitag, 11. Juli" + Wetter) ───────────────── */
 .mobile-day-title {
   display: none;
-  align-items: center; justify-content: space-between;
-  padding-bottom: 10px;
-  font-size: 15px; font-weight: 600;
+  align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 6px 2px 12px;
+  font-size: 19px; font-weight: 700; letter-spacing: -.01em;
 }
 .mobile-day-title .weather { font-size: 13px; font-weight: 400; color: var(--sec); display: flex; align-items: center; gap: 4px; }
 .mobile-day-title .weather svg { width: 15px; height: 15px; }
@@ -103,7 +104,8 @@
 #week-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
+  gap: 10px;
+  align-items: start;
 }
 .day-col {
   display: flex; flex-direction: column; gap: 8px;
@@ -114,6 +116,9 @@
 }
 .day-col.is-today { background: var(--fill); }
 
+/* Karten: Desktop = kompakte Karte mit border-left (Prototyp 1832), Mobile =
+   Flex-Zeile mit eigenem 4px-Farbbalken (Prototyp 1797). Gemeinsames Markup:
+   <article><div class="bar"></div><div class="main">…</div>(chip|check-btn)</article> */
 .event-card {
   background: var(--card);
   border-radius: 12px;
@@ -123,8 +128,10 @@
   cursor: default;
 }
 .event-card.clickable { cursor: pointer; }
+.event-card .bar { display: none; }
+.event-card .main { min-width: 0; }
 .event-card .row-top {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
 }
 .event-card .badge { font-size: 10px; font-weight: 700; letter-spacing: .05em; color: var(--mod-color, var(--sec)); }
 .event-card .time { font-size: 11px; color: var(--sec); }
@@ -137,8 +144,9 @@
 }
 .event-card .chip {
   display: inline-block; margin-top: 6px;
-  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 12px;
   background: var(--chip-bg); color: var(--chip-fg);
+  white-space: nowrap;
 }
 .event-card .check-btn {
   margin-top: 6px; height: 26px; border-radius: 13px;
@@ -148,6 +156,7 @@
   font-size: 11px; font-weight: 600;
   padding: 0 10px;
 }
+.event-card .check-btn .ck-icon { display: none; }
 
 .empty-week {
   grid-column: 1 / -1;
@@ -158,28 +167,53 @@
 .empty-week-title { font-size: 15px; font-weight: 600; }
 .empty-week-sub { font-size: 13px; margin-top: 4px; }
 
+/* Wisch-Hinweis (Prototyp 1822) — nur mobil sichtbar */
+.swipe-hint {
+  display: none;
+  text-align: center; padding: 22px 0 4px;
+  color: var(--sec); font-size: 12px;
+}
+
 /* ── Breakpoint 900px ───────────────────────────────────────────────────────── */
 @media (max-width: 899.98px) {
   .mobile-day-title { display: flex; }
+  .swipe-hint { display: block; }
   .day-pill:not(.selected-mobile-only) .date-circle { background: transparent; }
+  .day-pill.is-today .date-circle { background: var(--acc); }
   .day-pill.selected-mobile-only { background: var(--card); }
 
   #week-grid { display: block; }
   .day-col { display: none; min-height: 0; background: none; padding: 0; }
-  .day-col.selected-mobile-day { display: flex; }
+  .day-col.selected-mobile-day { display: flex; gap: 10px; min-height: 52vh; }
 
-  .event-card { border-left: none; padding: 13px 15px; border-radius: 16px; position: relative; }
-  .event-card::before {
-    content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 4px;
-    border-radius: 2px; background: var(--mod-color, var(--sec));
+  /* Mobile Karte (Prototyp 1797-1812): Flex-Zeile mit 4px-Farbbalken links */
+  .event-card {
+    border-left: none; padding: 13px 15px; border-radius: 16px;
+    display: flex; gap: 12px; align-items: center;
   }
-  .event-card { padding-left: 19px; }
-  .event-card .title { font-size: 15px; }
-  .event-card .sub { font-size: 13px; white-space: normal; }
-  .event-card .chip { font-size: 11px; padding: 4px 9px; }
-  .event-card .check-btn { width: 28px; height: 28px; border-radius: 50%; padding: 0; }
+  .event-card .bar {
+    display: block; flex: none;
+    width: 4px; align-self: stretch; border-radius: 2px;
+    background: var(--mod-color, var(--sec));
+  }
+  .event-card .main { flex: 1; }
+  .event-card .row-top { justify-content: flex-start; gap: 8px; }
+  .event-card .badge { font-size: 11px; letter-spacing: .06em; }
+  .event-card .time { font-size: 12px; }
+  .event-card .title { font-size: 15px; margin-top: 2px; }
+  .event-card .sub { font-size: 13px; margin-top: 1px; }
+  .event-card .chip { margin-top: 0; flex: none; font-size: 11px; padding: 4px 9px; border-radius: 20px; }
+  .event-card .check-btn {
+    margin-top: 0; flex: none;
+    width: 28px; height: 28px; border-radius: 50%; padding: 0;
+    border-width: 2px;
+    display: grid; place-items: center;
+  }
+  .event-card .check-btn .ck-label { display: none; }
+  .event-card .check-btn .ck-icon { display: block; }
 }
 
 @media (min-width: 900px) {
   .day-pill.selected-mobile-only { background: transparent; }
+  .event-card .sub { display: none; }
 }

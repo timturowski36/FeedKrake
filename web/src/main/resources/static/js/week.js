@@ -2,12 +2,11 @@
 import { state } from "./state.js";
 import { api } from "./api.js";
 import { openSheet, openQuizSheet } from "./sheet.js";
-import { esc, timeFmt, dateFmt, longDateFmt, todayKeyFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
+import { esc, timeFmt, dateFmt, longDateFmt, weekdayDateFmt, todayKeyFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
 import { localEntriesForDay, toggleActivity, applyVacationWeatherOverrides, localModuleColorsForDay } from "./local-modules.js";
 import { openConfigScreen } from "./config-screen.js";
 
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const DAY_NAMES_LONG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 
 // Wetter-SVG-Icons 1:1 aus docs/frontend/Kalender.dc.html (Sonnig/Teils sonnig/Bewölkt/Regen).
 const WEATHER_ICONS = {
@@ -128,11 +127,15 @@ function renderPillBar(d, today) {
 
 function renderMobileDayTitle(d, today) {
   const day = d.days[state.selDay];
-  const isToday = day === today;
+  // Prototyp: "Heute · "/"Morgen · "/"Gestern · " vor dem langen Datum mit Wochentag.
+  const offset = Math.round((new Date(day + "T12:00:00") - new Date(today + "T12:00:00")) / 86400000);
+  const prefix = offset === 0 ? "Heute · " : offset === 1 ? "Morgen · " : offset === -1 ? "Gestern · " : "";
+  const label = `${prefix}${weekdayDateFmt.format(new Date(day + "T12:00:00"))}`;
   const ort = d.weatherOrtByDay?.[day];
-  const label = `${ort ? esc(ort) + " · " : ""}${isToday ? "Heute" : DAY_NAMES_LONG[state.selDay]} · ${longDateFmt.format(new Date(day + "T12:00:00"))}`;
   const wd = d.weather?.[day];
-  const weatherHtml = wd ? `<span class="weather">${weatherIconSvg(wd.label, 15)} ${wd.label}, ${day === today && wd.currentTemp != null ? wd.currentTemp : wd.tempMax}°</span>` : "";
+  const weatherHtml = wd
+    ? `<span class="weather">${weatherIconSvg(wd.label, 15)} ${ort ? esc(ort) + " · " : ""}${wd.label}, ${day === today && wd.currentTemp != null ? wd.currentTemp : wd.tempMax}°</span>`
+    : "";
   document.getElementById("mobile-day-title").innerHTML = `<span>${label}</span>${weatherHtml}`;
 }
 
@@ -206,9 +209,12 @@ function cardHtml(e) {
     : "";
 
   return `<article class="event-card clickable" style="--mod-color:var(${colorVar})" data-id="${e.id}">
-    <div class="row-top"><span class="badge">${esc(MOD_LABELS[slug] || slug.toUpperCase())}</span><span class="time tabular-nums">${time}</span></div>
-    <div class="title">${title}</div>
-    ${sub ? `<div class="sub">${sub}</div>` : ""}
+    <div class="bar"></div>
+    <div class="main">
+      <div class="row-top"><span class="badge">${esc(MOD_LABELS[slug] || slug.toUpperCase())}</span><span class="time tabular-nums">${time}</span></div>
+      <div class="title">${title}</div>
+      ${sub ? `<div class="sub">${sub}</div>` : ""}
+    </div>
     ${chipHtml}
   </article>`;
 }
