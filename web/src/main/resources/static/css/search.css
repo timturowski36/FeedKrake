@@ -3,7 +3,7 @@
 #search-overlay {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(0, 0, 0, .42);
-  display: flex; justify-content: center;
+  display: flex; justify-content: center; align-items: flex-start;
   padding: 8vh 16px 0;
   animation: fadeIn .15s;
 }
@@ -31,10 +31,11 @@
   background: var(--fill); border: none; color: var(--sec);
   display: grid; place-items: center; flex-shrink: 0;
 }
-.search-empty { padding: 24px 16px; text-align: center; color: var(--sec); font-size: 13px; }
+#search-results { padding: 6px 8px 10px; }
+.search-empty { padding: 30px 20px; text-align: center; color: var(--sec); font-size: 13px; }
 .search-result {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 16px; cursor: pointer;
+  padding: 10px; border-radius: 12px; cursor: pointer;
 }
 .search-result:hover { background: var(--fill); }
 .search-result .bar { width: 4px; align-self: stretch; border-radius: 2px; background: var(--res-color, var(--sec)); }

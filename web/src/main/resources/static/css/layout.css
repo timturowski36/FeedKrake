@@ -15,8 +15,6 @@
   align-items: flex-end;
   justify-content: space-between;
   padding: 20px 0 14px;
-  flex-wrap: wrap;
-  gap: 10px;
 }
 .kw-label {
   font-size: 13px;
@@ -183,7 +181,9 @@
   .day-pill.selected-mobile-only { background: var(--card); }
 
   #week-grid { display: block; }
-  .day-col { display: none; min-height: 0; background: none; padding: 0; }
+  .day-col { display: none; min-height: 0; padding: 0; }
+  /* Prototyp 1790: mobiler Tages-Wrapper ohne Panel-Hintergrund, auch heute */
+  .day-col, .day-col.is-today { background: none; }
   .day-col.selected-mobile-day { display: flex; gap: 10px; min-height: 52vh; }
 
   /* Mobile Karte (Prototyp 1797-1812): Flex-Zeile mit 4px-Farbbalken links */
