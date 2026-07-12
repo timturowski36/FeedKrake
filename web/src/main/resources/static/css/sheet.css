@@ -85,6 +85,22 @@
 .evt-line .text .sub { color: var(--sec); }
 .evt-line .evt-score { font-size: 14px; font-weight: 700; flex-shrink: 0; }
 
+/* ── Formkurve (FORM · LETZTE 5 SPIELE, Prototyp) ──────────────────────────── */
+.form-label { font-size: 13px; font-weight: 600; color: var(--sec); letter-spacing: .05em; margin: 20px 0 8px; }
+.form-row { padding: 10px 0; border-bottom: 1px solid var(--sep); }
+.form-row .head { display: flex; align-items: center; justify-content: space-between; }
+.form-row .team { font-size: 14px; font-weight: 600; }
+.form-row .chips { display: flex; gap: 4px; }
+.form-chip {
+  width: 22px; height: 22px; border-radius: 50%; color: #fff;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+}
+.form-chip.win { background: var(--good); }
+.form-chip.draw { background: #8e8e93; }
+.form-chip.loss { background: var(--bad); }
+.form-row .last { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.form-row .last span { font-size: 12px; color: var(--sec); }
+
 /* ── Kategorie-Chips (Turnier/Liga-Tab) ────────────────────────────────────── */
 .cat-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 12px; }
 .cat-chip {

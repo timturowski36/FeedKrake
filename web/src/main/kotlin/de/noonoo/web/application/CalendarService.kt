@@ -121,6 +121,8 @@ data class EventDetailsResponse(
     val standings: List<de.noonoo.web.adapter.db.DetailStandingRow>? = null,
     val matchEvents: List<de.noonoo.web.adapter.db.DetailMatchEventRow>? = null,
     val headToHead: List<de.noonoo.web.adapter.db.DetailH2hRow>? = null,
+    /** Formkurve beider Teams (letzte 5 Spiele) — aktuell nur Bundesliga. */
+    val formGuide: List<de.noonoo.web.adapter.db.DetailFormRow>? = null,
     val topScorers: List<de.noonoo.web.adapter.db.DetailScorerRow>? = null,
     val nationGoals: List<de.noonoo.web.adapter.db.DetailNationGoalsRow>? = null,
     val driverStandings: List<de.noonoo.web.adapter.db.DetailF1StandingRow>? = null,
@@ -322,15 +324,20 @@ class CalendarService(
                 val matchId = event.externalId.substringAfterLast(":").toIntOrNull()
                 val goals = matchId?.let { details.bundesligaGoals(it) }.orEmpty()
                 val h2h = if (teamIds.size == 2) details.bundesligaH2h(teamIds[0], teamIds[1]) else emptyList()
+                val formGuide = event.participants.mapNotNull { p ->
+                    p.externalRef?.toIntOrNull()?.let { details.bundesligaForm(it, p.name) }
+                }
                 base.copy(
                     capabilities = listOfNotNull(
                         "TABLE",
                         "GOALS".takeIf { goals.isNotEmpty() },
-                        "H2H".takeIf { h2h.isNotEmpty() }
+                        "H2H".takeIf { h2h.isNotEmpty() },
+                        "FORM".takeIf { formGuide.isNotEmpty() }
                     ),
                     standings = details.bundesligaStandings(league, season, teamIds.toSet()),
                     matchEvents = goals.ifEmpty { null },
-                    headToHead = h2h.ifEmpty { null }
+                    headToHead = h2h.ifEmpty { null },
+                    formGuide = formGuide.ifEmpty { null }
                 )
             }
             ModuleType.HANDBALL -> {
@@ -376,7 +383,8 @@ class CalendarService(
                 val previousWinner = if (showPreInfo) {
                     event.metadata["circuitId"]?.let { details.f1PreviousWinner(it, season - 1) }
                 } else null
-                val circuitInfo = if (showPreInfo) details.f1CircuitInfo(season, round) else null
+                // Streckeninfo auch nach der Session anzeigen (Prototyp: "Rennergebnis · {circuit}")
+                val circuitInfo = if (season != null && round != null) details.f1CircuitInfo(season, round) else null
                 base.copy(
                     capabilities = listOfNotNull(
                         "RACE_RESULT".takeIf { raceResults != null },
