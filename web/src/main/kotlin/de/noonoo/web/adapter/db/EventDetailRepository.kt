@@ -369,15 +369,21 @@ class EventDetailRepository(private val dataSource: DataSource) {
             )
         }
 
-    /** Tagesstatistik-Panel aus dem Aggregationsmodell (Tagesdetail-Ebene des PUBG-Drawers). */
+    /**
+     * Tagesstatistik-Panel aus dem Aggregationsmodell (Tagesdetail-Ebene des PUBG-Drawers).
+     * Der JOIN auf pubg_players beschränkt auf die konfigurierten Personen — die
+     * Tagesstatistiken enthalten sonst auch zufällige Squad-Mitspieler (wie in
+     * [pubgMatchStats]).
+     */
     fun pubgDayStats(day: java.time.LocalDate): List<DetailPubgStatRow> =
         query(
             """
-            SELECT player_name, player_id, best_placement, total_kills, total_assists,
-                   total_damage, time_played_seconds, longest_kill_day, matches_played, wins
-            FROM pubg_player_day_stats
-            WHERE day = ?
-            ORDER BY total_kills DESC, best_placement
+            SELECT s.player_name, s.player_id, s.best_placement, s.total_kills, s.total_assists,
+                   s.total_damage, s.time_played_seconds, s.longest_kill_day, s.matches_played, s.wins
+            FROM pubg_player_day_stats s
+            JOIN pubg_players pl ON pl.account_id = s.player_id
+            WHERE s.day = ?
+            ORDER BY s.total_kills DESC, s.best_placement
             """.trimIndent(),
             { it.setObject(1, day) }
         ) {

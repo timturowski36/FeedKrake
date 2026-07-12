@@ -212,6 +212,12 @@ Pillenleiste/der Tagestitel das Wetter des Urlaubsorts zeigt.
 - 2026-07-11: Datei-Struktur gegenüber Plan vereinfacht: keine separaten
   `js/modules/*.js` — Panel-Logik konsolidiert in `sheet.js` (siehe oben).
   Breakpoint 900px per CSS statt JS-resize-Listener.
+- 2026-07-12 (Nachfix): `pubgDayStats` joint jetzt auf `pubg_players` — die
+  Tagesstatistiken (`pubg_player_day_stats`) enthalten auch zufällige
+  Squad-Mitspieler (3159 Zeilen, davon nur 85 von konfigurierten Personen);
+  ohne den JOIN zeigte die Tagesrangliste Fremde. `pubgMatchStats` hatte den
+  JOIN bereits. Damit sind Karte/Rangliste/Details exklusiv auf die Personen
+  aus der Config beschränkt.
 - 2026-07-12: PUBG-Modul auf Personen-Sicht des Prototyps umgestellt (Nutzer-Wunsch:
   "nur die Statistiken der Personen"): `CalendarService.withPubgPersonStats` reichert
   gebündelte Tages-Events serverseitig mit der Tagesrangliste an (Participants mit
