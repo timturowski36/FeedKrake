@@ -45,6 +45,8 @@ interface PubgRepository {
     fun findDaySummary(day: LocalDate): PubgDaySummary?
     fun findPlayerDayStats(day: LocalDate): List<PubgPlayerDayStats>
     fun findPlayerRecords(playerId: String): PubgPlayerRecords?
+    /** Anzahl aller Siege (win_place = 1) eines Spielers über die gesamte Participation-Historie. */
+    fun countChickenDinners(playerId: String): Int
     fun findParticipationsForPlayerAndDay(playerId: String, day: LocalDate): List<PubgParticipation>
     /** Wochenstatistik: alle Teilnahmen eines Spielers zwischen from (inkl.) und to (exkl.). */
     fun findParticipationsForPlayerInRange(playerId: String, from: LocalDate, to: LocalDate): List<PubgParticipation>

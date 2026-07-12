@@ -235,3 +235,19 @@ Pillenleiste/der Tagestitel das Wetter des Urlaubsorts zeigt.
   (grep-Abgleich aller `getElementById`/`el()`-Aufrufe gegen die IDs im HTML).
   Echtes Browser-Testen sollte nachgeholt werden, sobald eine Umgebung mit
   laufender Postgres verfügbar ist.
+- 2026-07-12 (Nachfix 2, Aggregator): Zwei Datenfehler an der Wurzel behoben.
+  (1) Doppelzählung: `total_chicken_dinners` wurde im Records-Upsert additiv
+  gepflegt (`+ EXCLUDED...`), der Legacy-Backfill läuft aber bei JEDEM
+  Aggregator-Start über die komplette Match-Historie — die Dinner-Zähler
+  standen in Prod bei exakt 39× dem echten Wert (z. B. 195 statt 5).
+  `updateRecords` übergibt jetzt den aus `pubg_participation` gezählten
+  Gesamtstand (neue Port-Methode `countChickenDinners`), der Upsert setzt statt
+  zu addieren. (2) Fremde Spieler: Die Live-Ingestion aggregierte die komplette
+  Match-Lobby ins Aggregationsmodell (3677 Tages-Zeilen, nur 86 von
+  Config-Spielern) — `PubgIngestionService` filtert die Participants vor
+  `aggregationService.ingest` jetzt auf die getrackten Account-IDs (Rohdaten in
+  `pubg_match_participants` bleiben vollständig). Migration
+  `V15__pubg_config_players_only.sql` bereinigt Bestand: löscht Fremd-Zeilen aus
+  participation/day_stats/records und korrigiert die Dinner-Zähler. Verifiziert
+  gegen Wegwerf-Postgres mit Prod-Datenkopie (Ergebnis: 6 Records, Dinners
+  2/3/2/5/1/2 = echte Siege) + neuer Unit-Test für Backfill-Idempotenz.

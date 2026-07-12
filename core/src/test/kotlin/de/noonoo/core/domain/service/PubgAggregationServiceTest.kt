@@ -49,7 +49,7 @@ private class FakePubgRepository : PubgRepository {
             longestKillEver = maxOf(existing.longestKillEver, records.longestKillEver),
             longestSurvivalEver = maxOf(existing.longestSurvivalEver, records.longestSurvivalEver),
             mostDamageInMatch = maxOf(existing.mostDamageInMatch, records.mostDamageInMatch),
-            totalChickenDinners = existing.totalChickenDinners + records.totalChickenDinners,
+            totalChickenDinners = records.totalChickenDinners,
             mostAssistsInMatch = maxOf(existing.mostAssistsInMatch, records.mostAssistsInMatch),
             bestKillStreak = maxOf(existing.bestKillStreak, records.bestKillStreak),
             highestDbnosInMatch = maxOf(existing.highestDbnosInMatch, records.highestDbnosInMatch)
@@ -70,6 +70,8 @@ private class FakePubgRepository : PubgRepository {
     override fun findPlayerDayStats(day: LocalDate): List<PubgPlayerDayStats> =
         dayStats.values.filter { it.day == day }
     override fun findPlayerRecords(playerId: String): PubgPlayerRecords? = records[playerId]
+    override fun countChickenDinners(playerId: String): Int =
+        participations.count { it.playerId == playerId && it.winPlace == 1 }
     override fun findParticipationsForPlayerAndDay(playerId: String, day: LocalDate): List<PubgParticipation> =
         participations.filter { it.playerId == playerId && it.day == day }
     override fun findParticipationsForPlayerInRange(playerId: String, from: LocalDate, to: LocalDate): List<PubgParticipation> =
@@ -136,6 +138,20 @@ class PubgAggregationServiceTest {
         assertEquals(8, records?.mostKillsInMatch)
         assertEquals(300.0, records?.longestKillEver)
         assertEquals(1, records?.totalChickenDinners)
+    }
+
+    @Test
+    fun `erneutes Einspielen desselben Matches zaehlt Chicken Dinners nicht doppelt`() {
+        val repo = FakePubgRepository()
+        val service = PubgAggregationService(repo)
+        val day = LocalDateTime.parse("2026-07-05T14:00:00")
+        val pair = match("m1", day) to listOf(participant("m1", kills = 5, winPlace = 1))
+
+        service.backfillFromLegacy(listOf(pair))
+        service.backfillFromLegacy(listOf(pair))
+
+        assertEquals(1, repo.findPlayerRecords("acc.1")?.totalChickenDinners)
+        assertEquals(1, repo.dayStats[LocalDate.of(2026, 7, 5) to "acc.1"]?.wins)
     }
 
     @Test
