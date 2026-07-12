@@ -176,6 +176,8 @@
 @media (max-width: 899.98px) {
   .mobile-day-title { display: flex; }
   .swipe-hint { display: block; }
+  /* Flex-gap der Tagesspalte kompensieren: Abstand letzte Karte → Hinweis = 22px wie im Prototyp */
+  .event-card + .swipe-hint { margin-top: -10px; }
   .day-pill:not(.selected-mobile-only) .date-circle { background: transparent; }
   .day-pill.is-today .date-circle { background: var(--acc); }
   .day-pill.selected-mobile-only { background: var(--card); }

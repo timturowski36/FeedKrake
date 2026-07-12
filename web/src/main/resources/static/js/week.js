@@ -156,7 +156,10 @@ function renderGrid(d, today) {
     const cards = specs.sort((a, b) => a.minutes - b.minutes).map(s => s.html).join("");
     const isToday = day === today;
     const isSelected = i === state.selDay;
-    return `<div class="day-col ${isToday ? "is-today" : ""} ${isSelected ? "selected-mobile-day" : ""}" data-day-idx="${i}">${cards}</div>`;
+    // Wisch-Hinweis innerhalb der Tagesspalte (Prototyp 1822): Leerraum der
+    // 52vh-Mindesthöhe fällt unter den Hinweis, nicht zwischen Karten und Hinweis.
+    const hint = isSelected ? `<div class="swipe-hint">← Wischen zum Tageswechsel →</div>` : "";
+    return `<div class="day-col ${isToday ? "is-today" : ""} ${isSelected ? "selected-mobile-day" : ""}" data-day-idx="${i}">${cards}${hint}</div>`;
   }).join("");
   const empty = document.getElementById("empty-week");
   empty.hidden = anyEntries;

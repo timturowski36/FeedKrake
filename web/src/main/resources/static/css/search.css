@@ -22,15 +22,16 @@
   padding: 14px 16px; border-bottom: 1px solid var(--sep);
   position: sticky; top: 0; background: var(--card);
 }
-.search-input-row svg { width: 18px; height: 18px; color: var(--sec); flex-shrink: 0; }
+.search-input-row > svg { width: 17px; height: 17px; color: var(--sec); flex-shrink: 0; }
 .search-input-row input {
   flex: 1; border: none; background: transparent; font-size: 16px; color: var(--fg);
 }
 .search-close {
   width: 26px; height: 26px; border-radius: 50%;
   background: var(--fill); border: none; color: var(--sec);
-  display: grid; place-items: center; flex-shrink: 0;
+  display: grid; place-items: center; flex-shrink: 0; cursor: pointer;
 }
+.search-close svg { width: 11px; height: 11px; }
 #search-results { padding: 6px 8px 10px; }
 .search-empty { padding: 30px 20px; text-align: center; color: var(--sec); font-size: 13px; }
 .search-result {
