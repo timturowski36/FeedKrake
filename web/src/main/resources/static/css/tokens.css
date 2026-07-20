@@ -27,6 +27,17 @@
   --mod-urlaub: #64d2ff;
 
   --breakpoint-desktop: 900px;
+
+  /* Material: schwebende Chrome-Schichten, unter denen Inhalt durchläuft.
+     Größere Flächen lesen sich dicker — stärkere Unschärfe, tieferer Schatten. */
+  --chrome-bg: rgba(242, 242, 247, .72);
+  --chrome-blur: blur(20px) saturate(180%);
+  --overlay-bg: rgba(255, 255, 255, .78);
+  --overlay-blur: blur(30px) saturate(180%);
+
+  /* Druckfeedback: rein, solange der Finger liegt; etwas ruhiger zurück. */
+  --press-in: 110ms cubic-bezier(.32, .72, .35, 1);
+  --press-out: 220ms cubic-bezier(.32, .72, .35, 1);
 }
 
 [data-theme="dunkel"] {
@@ -38,6 +49,8 @@
   --sep: rgba(84, 84, 88, .5);
   --fill: rgba(120, 120, 128, .22);
   --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  --chrome-bg: rgba(0, 0, 0, .72);
+  --overlay-bg: rgba(28, 28, 30, .8);
 }
 
 html, body { margin: 0; padding: 0; background: var(--bg); }
@@ -53,15 +66,33 @@ a:hover { text-decoration: underline; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Die Systemschrift bringt optische Größen und Legibility-Tuning bereits mit. */
+  font-optical-sizing: auto;
   color: var(--fg);
 }
 
 .tabular-nums { font-variant-numeric: tabular-nums; }
 
-@keyframes sheetUp {
-  from { transform: translateY(48px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+/* ── Reaktion: Feedback im Moment des Drückens ───────────────────────────────
+   :active feuert nativ auf Pointer-Down — kein Warten auf click. touch-action
+   räumt zusätzlich die ~300ms Tap-Verzögerung weg. Rein schneller als raus,
+   damit der Druck sofort quittiert wird und sich ruhig löst. */
+button, .event-card.clickable, .search-result, .pubg-grid-row {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform var(--press-out), opacity var(--press-out), background-color var(--press-out);
 }
+button:active, .event-card.clickable:active, .search-result:active, .pubg-grid-row:active {
+  transition: transform var(--press-in), opacity var(--press-in), background-color var(--press-in);
+}
+button:active { transform: scale(.94); }
+.event-card.clickable:active, .search-result:active, .pubg-grid-row:active {
+  transform: scale(.985);
+  background-color: var(--fill);
+}
+
+/* Weiterhin vom Konfig-/Account-Screen genutzt (Vollbild-Wechsel, noch ohne
+   Feder — deren Rückweg ist bislang unsymmetrisch). */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -73,7 +104,31 @@ body {
 
 .live-pulse { animation: livePulse 1.6s infinite; }
 
+/* ── Barrierefreiheit: drei unabhängige Signale ──────────────────────────────
+   Reduzierte Bewegung heißt nicht "kein Feedback", sondern ein sanfterer,
+   nicht-vestibulärer Weg: Opazität bleibt, Strecke und Überschwingen entfallen.
+   Die Federn in motion.js springen dafür direkt ans Ziel. */
 @media (prefers-reduced-motion: reduce) {
   .live-pulse { animation: none; }
-  #sheet-backdrop .sheet-panel, #sheet-backdrop, #search-overlay { animation: none !important; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  button:active, .event-card.clickable:active, .search-result:active, .pubg-grid-row:active {
+    transform: none;
+  }
+}
+
+/* Durchsichtige Flächen werden matt statt unscharf — Text bleibt lesbar. */
+@media (prefers-reduced-transparency: reduce) {
+  .app-chrome { background: var(--bg); backdrop-filter: none; }
+  .search-panel { background: var(--card); backdrop-filter: none; }
+}
+
+/* Höherer Kontrast: nahezu deckende Flächen mit definierter Kante. */
+@media (prefers-contrast: more) {
+  .app-chrome { background: var(--bg); backdrop-filter: none; border-bottom: 1px solid var(--fg); }
+  .search-panel, .sheet-panel { background: var(--card); backdrop-filter: none; border: 1px solid var(--fg); }
+  .day-pill.selected-mobile-only { outline: 2px solid var(--acc); }
 }

@@ -5,6 +5,7 @@ import { openSheet, openQuizSheet } from "./sheet.js";
 import { esc, timeFmt, dateFmt, longDateFmt, weekdayDateFmt, todayKeyFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
 import { localEntriesForDay, toggleActivity, applyVacationWeatherOverrides, localModuleColorsForDay } from "./local-modules.js";
 import { openConfigScreen } from "./config-screen.js";
+import { Spring, SPRING, project, rubberband, createVelocityTracker, haptic } from "./motion.js";
 
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
@@ -254,6 +255,86 @@ export function shiftDay(dir) {
   selectDay(idx);
 }
 
+// ── Tageswechsel-Geste (nur mobil — Desktop zeigt alle sieben Tage) ──────────
+// Die Tagesspalte hängt am Finger statt auf ein fertiges Wischereignis zu warten.
+// Beim Loslassen entscheidet nicht der zurückgelegte Weg, sondern wohin der
+// Schwung trägt; der Wechsel läuft dann in Gestenrichtung hinaus und die neue
+// Spalte kommt von der Gegenseite herein.
+
+const mobileQuery = matchMedia("(max-width: 899.98px)");
+let daySpring = null;
+
+function paintDayOffset(x) {
+  // Nach jedem render() ist die Spalte ein neuer Knoten — deshalb pro Frame suchen.
+  const col = document.querySelector(".day-col.selected-mobile-day");
+  if (col) col.style.transform = x ? `translate3d(${x}px, 0, 0)` : "";
+}
+
+function commitDayChange(dir, velocity) {
+  const width = window.innerWidth;
+  haptic();
+  daySpring.to(-dir * width, {
+    velocity,
+    preset: SPRING.snap,
+    onRest: () => {
+      // Am Wochenrand lädt shiftDay nach und rendert asynchron — dann gibt es
+      // keine Spalte, die hereinkommen könnte.
+      const crossesWeek = state.selDay + dir < 0 || state.selDay + dir > 6;
+      shiftDay(dir);
+      if (crossesWeek) { daySpring.set(0); return; }
+      daySpring.set(dir * width);
+      daySpring.to(0, { preset: SPRING.calm });
+    },
+  });
+}
+
+function setupDayGesture(grid) {
+  daySpring = new Spring(0, paintDayOffset, SPRING.snap);
+  const track = createVelocityTracker();
+  let pointerId = null, startX = 0, startY = 0, axis = null;
+
+  grid.addEventListener("pointerdown", e => {
+    if (!mobileQuery.matches || e.button > 0) return;
+    pointerId = e.pointerId;
+    startX = e.clientX;
+    startY = e.clientY;
+    axis = null;
+    daySpring.stop(); // laufenden Wechsel mitten im Flug greifen
+    track.reset();
+    track.add(e.clientX, e.timeStamp);
+  });
+
+  grid.addEventListener("pointermove", e => {
+    if (e.pointerId !== pointerId) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    // Beide Richtungen parallel beobachten und erst ab ~10px festlegen, welche
+    // gewinnt — vorher könnte daraus noch ein vertikales Scrollen werden.
+    if (!axis) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (axis === "x") grid.setPointerCapture(e.pointerId);
+    }
+    if (axis !== "x") return;
+    track.add(e.clientX, e.timeStamp);
+    const width = window.innerWidth;
+    const over = Math.abs(dx) - width;
+    daySpring.set(over > 0 ? Math.sign(dx) * (width + rubberband(over, width)) : dx);
+  });
+
+  const release = e => {
+    if (e.pointerId !== pointerId) return;
+    pointerId = null;
+    if (axis !== "x") return;
+    const velocity = track.get(e.timeStamp);
+    const projected = daySpring.value + project(velocity);
+    // Ein Viertel der Breite genügt, wenn der Schwung dorthin trägt.
+    if (Math.abs(projected) > window.innerWidth * 0.25) commitDayChange(projected < 0 ? 1 : -1, velocity);
+    else daySpring.to(0, { velocity, preset: SPRING.snap });
+  };
+  grid.addEventListener("pointerup", release);
+  grid.addEventListener("pointercancel", release);
+}
+
 export function setupWeekNavigation() {
   document.getElementById("btn-prev").onclick = goPrevWeek;
   document.getElementById("btn-next").onclick = goNextWeek;
@@ -263,17 +344,7 @@ export function setupWeekNavigation() {
     openConfigScreen();
   });
 
-  // Swipe (dx>55px und |dx|>1.5·|dy|), nur auf Mobile relevant (Desktop zeigt alle Tage).
-  const grid = document.getElementById("week-grid");
-  let sx = 0, sy = 0;
-  grid.addEventListener("touchstart", e => {
-    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
-  }, { passive: true });
-  grid.addEventListener("touchend", e => {
-    const dx = e.changedTouches[0].clientX - sx;
-    const dy = e.changedTouches[0].clientY - sy;
-    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5) shiftDay(dx < 0 ? 1 : -1);
-  }, { passive: true });
+  setupDayGesture(document.getElementById("week-grid"));
 
   document.addEventListener("keydown", e => {
     if (!document.getElementById("sheet-backdrop").hidden) return;
