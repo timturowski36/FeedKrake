@@ -1,0 +1,5 @@
+services:
+  noonoo-web:
+    image: noonoo-web:local
+  noonoo-aggregator:
+    image: noonoo-aggregator:local
