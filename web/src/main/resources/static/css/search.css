@@ -1,11 +1,13 @@
 /* Such-Overlay (NOO-152) */
 
+/* Fortschritt 0→1 kommt aus search.js (Feder) — Verdunkler, Maßstab und
+   Unschärfe hängen am selben Wert, damit die Fläche als Material ankommt statt
+   nur einzublenden. Ein-- und Ausgang laufen denselben Weg. */
 #search-overlay {
   position: fixed; inset: 0; z-index: 60;
-  background: rgba(0, 0, 0, .42);
+  background: rgb(0 0 0 / calc(.42 * var(--search-progress, 1)));
   display: flex; justify-content: center; align-items: flex-start;
   padding: 8vh 16px 0;
-  animation: fadeIn .15s;
 }
 #search-overlay[hidden] { display: none; }
 
@@ -13,14 +15,28 @@
   width: min(560px, 100%);
   max-height: 70vh;
   overflow-y: auto;
-  background: var(--card);
+  overscroll-behavior: contain;
+  background: var(--overlay-bg);
+  backdrop-filter: var(--overlay-blur);
   border-radius: 18px;
+  /* Helle Oberkante: das Material fängt Licht. */
+  border-top: 1px solid rgba(255, 255, 255, .28);
   box-shadow: 0 18px 50px rgba(0, 0, 0, .3);
+  /* Verankert am Auslöser oben rechts (Lupe), nicht an der eigenen Mitte —
+     der räumliche Bezug zwischen Knopf und Inhalt bleibt sichtbar. */
+  transform-origin: 88% 0;
+  transform: scale(calc(.94 + .06 * var(--search-progress, 1)));
+  opacity: var(--search-progress, 1);
+  will-change: transform, opacity;
 }
 .search-input-row {
   display: flex; align-items: center; gap: 10px;
   padding: 14px 16px; border-bottom: 1px solid var(--sep);
-  position: sticky; top: 0; background: var(--card);
+  position: sticky; top: 0;
+  /* Keine zweite durchsichtige Schicht auf der ersten — die Kopfzeile trägt
+     eine deckende Fläche, das Panel darunter bleibt Material. */
+  background: var(--card);
+  border-radius: 18px 18px 0 0;
 }
 .search-input-row > svg { width: 17px; height: 17px; color: var(--sec); flex-shrink: 0; }
 .search-input-row input {

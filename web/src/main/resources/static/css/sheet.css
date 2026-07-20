@@ -1,11 +1,13 @@
 /* Bottom-Sheet (Detail-Drawer, NOO-121 ff.) — Maße/Radien aus dem Design-Prototyp */
 
+/* Verdunkler und Panel hängen an derselben Feder (sheet.js): --scrim wird pro
+   Frame gesetzt, damit die Verdunklung dem Finger 1:1 folgt statt erst beim
+   Loslassen zu schalten. Deshalb hier bewusst keine transition/animation. */
 #sheet-backdrop {
   position: fixed; inset: 0;
-  background: rgba(0, 0, 0, .42);
+  background: rgb(0 0 0 / calc(.42 * var(--scrim, 1)));
   z-index: 50;
   display: flex; align-items: flex-end; justify-content: center;
-  animation: fadeIn .2s;
 }
 #sheet-backdrop[hidden] { display: none; }
 
@@ -14,16 +16,23 @@
   width: min(560px, 100%);
   max-height: 88vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 20px 20px 0 0;
-  animation: sheetUp .3s cubic-bezier(.32, .72, .35, 1);
   padding: 0 18px calc(26px + env(safe-area-inset-bottom));
+  will-change: transform;
 }
+
+/* Garantierte Ziehflächen: hier gewinnt die Geste immer gegen das Scrollen.
+   Im Inhalt übernimmt sie erst, wenn oben angekommen ist (siehe sheet.js). */
+.sheet-grabber, .sheet-header { touch-action: none; }
 
 .sheet-grabber {
   width: 36px; height: 5px; border-radius: 3px;
   background: var(--sep);
   margin: 10px auto 12px;
+  cursor: grab;
 }
+.sheet-panel:active .sheet-grabber { cursor: grabbing; }
 .sheet-header {
   position: sticky; top: 0; background: var(--card);
   padding: 0 0 10px; z-index: 2;
@@ -70,7 +79,7 @@
 .score-header .team { flex: 1; font-size: 16px; font-weight: 600; }
 .score-header .team-a { text-align: right; }
 .score-header .center { text-align: center; }
-.score-header .score { font-size: 34px; font-weight: 800; letter-spacing: -.02em; }
+.score-header .score { font-size: 34px; font-weight: 800; letter-spacing: -.024em; line-height: 1.08; }
 .score-header .status { font-size: 11px; font-weight: 700; color: var(--sec); }
 .score-header .status.live { color: var(--bad); }
 
@@ -190,7 +199,9 @@
   display: block; width: 100%; text-align: left;
   border: 1.5px solid var(--sep); border-radius: 12px; padding: 12px 14px;
   background: transparent; color: var(--fg); font-size: 15px; font-weight: 500;
-  transition: background .15s;
+  /* Farbwechsel (richtig/falsch) darf ruhig laufen, das Druckfeedback muss
+     sofort kommen — deshalb beide Eigenschaften getrennt getaktet. */
+  transition: transform var(--press-out), background-color var(--press-out), border-color 150ms ease-out;
 }
 .quiz-answer.correct { border-color: var(--good); background: rgba(48, 209, 88, .12); color: var(--good); }
 .quiz-answer.wrong { border-color: var(--bad); background: rgba(255, 69, 58, .10); color: var(--bad); }

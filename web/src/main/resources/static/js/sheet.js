@@ -7,6 +7,7 @@ import { state } from "./state.js";
 import { api } from "./api.js";
 import { esc, timeFmt, fullDateFmt, longDateFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
 import { quizStateFor, submitQuizResult } from "./local-modules.js";
+import { Spring, SPRING, project, rubberband, createVelocityTracker, haptic } from "./motion.js";
 
 function el(id) { return document.getElementById(id); }
 
@@ -101,6 +102,7 @@ function wireExportButton(id) {
     if (localStorage.getItem("kal.exported." + id)) return;
     window.location.href = `/api/events/${encodeURIComponent(id)}.ics`;
     localStorage.setItem("kal.exported." + id, "1");
+    haptic(); // Commit: der Termin liegt jetzt im Kalender
     const footer = btn.closest(".sheet-footer");
     if (footer) footer.outerHTML = exportButtonHtml(id);
     wireExportButton(id);
@@ -413,14 +415,103 @@ export async function openSheet(id) {
   showSheetChrome();
 }
 
-function showSheetChrome() {
-  el("sheet-backdrop").hidden = false;
-  document.body.style.overflow = "hidden";
+// ── Sheet-Bewegung: eine Feder trägt Panel, Verdunkler und Hintergrund ───────
+// Position in px: 0 = ganz offen, panelHeight() = ganz unten (verworfen). Der
+// Weg hinein ist derselbe wie hinaus — was von unten kommt, geht nach unten.
+
+let sheetSpring = null;
+let sheetPanel = null;
+let sheetBackdrop = null;
+
+function panelHeight() {
+  return sheetPanel?.offsetHeight || window.innerHeight;
 }
 
-export function closeSheet() {
-  el("sheet-backdrop").hidden = true;
-  document.body.style.overflow = "";
+/** Ein Frame: Panel, Verdunkler und zurückgesetzter Hintergrund hängen am selben Wert. */
+function paintSheet(y) {
+  const progress = Math.max(0, Math.min(1, 1 - y / panelHeight()));
+  sheetPanel.style.transform = `translate3d(0, ${y}px, 0)`;
+  // Verdunkler und Hintergrund folgen der Geste 1:1, nicht erst beim Loslassen.
+  sheetBackdrop.style.setProperty("--scrim", String(progress));
+  document.body.style.setProperty("--sheet-progress", String(progress));
+}
+
+function showSheetChrome() {
+  sheetBackdrop.hidden = false;
+  document.body.classList.add("sheet-open");
+  document.body.style.overflow = "hidden";
+  sheetSpring.set(panelHeight());
+  // Tipp-Öffnung trägt keinen Schwung — also auch kein Überschwingen.
+  sheetSpring.to(0, { preset: SPRING.calm });
+}
+
+/**
+ * Schließen über dieselbe Feder wie das Öffnen. velocity übernimmt den Schwung
+ * der Wurfgeste, damit zwischen Ziehen und Animation keine Naht sichtbar wird.
+ */
+export function closeSheet(velocity = 0, preset = SPRING.calm) {
+  if (!sheetBackdrop || sheetBackdrop.hidden) return;
+  sheetSpring.to(panelHeight(), {
+    velocity,
+    preset,
+    onRest: () => {
+      sheetBackdrop.hidden = true;
+      document.body.classList.remove("sheet-open");
+      document.body.style.overflow = "";
+    },
+  });
+}
+
+/**
+ * Ziehen zum Schließen. Grabber und Kopfzeile ziehen immer; im Inhalt erst, wenn
+ * oben angekommen ist — sonst kämpft die Geste mit dem Scrollen.
+ */
+function setupSheetDrag() {
+  const track = createVelocityTracker();
+  let pointerId = null, startY = 0, startValue = 0;
+
+  const canDragFrom = target =>
+    target.closest(".sheet-grabber, .sheet-header") ? true : sheetPanel.scrollTop <= 0;
+
+  sheetPanel.addEventListener("pointerdown", e => {
+    if (e.button > 0) return;
+    if (e.target.closest("button, a, input")) return; // Bedienelemente behalten ihren Tap
+    if (!canDragFrom(e.target)) return;
+    pointerId = e.pointerId;
+    startY = e.clientY;
+    // Beim *aktuellen* Wert greifen, nicht beim Zielwert: ein schließendes Sheet
+    // lässt sich mitten im Flug zurückholen, ohne dass es springt.
+    sheetSpring.stop();
+    startValue = sheetSpring.value;
+    track.reset();
+    track.add(e.clientY, e.timeStamp);
+    sheetPanel.setPointerCapture(e.pointerId);
+  });
+
+  sheetPanel.addEventListener("pointermove", e => {
+    if (e.pointerId !== pointerId) return;
+    const raw = startValue + (e.clientY - startY);
+    // Nach oben gibt es nichts mehr: Widerstand statt harter Wand.
+    sheetSpring.set(raw < 0 ? -rubberband(-raw, panelHeight()) : raw);
+    track.add(e.clientY, e.timeStamp);
+  });
+
+  const release = e => {
+    if (e.pointerId !== pointerId) return;
+    pointerId = null;
+    const velocity = track.get(e.timeStamp);
+    // Nicht vom Loslasspunkt aus entscheiden, sondern von dort, wohin der Schwung
+    // trägt: ein kurzer Flick wirft das Sheet zu, auch aus der oberen Hälfte.
+    const projected = sheetSpring.value + project(velocity);
+    if (projected > panelHeight() * 0.4) {
+      haptic();
+      closeSheet(velocity, SPRING.sheet); // Überschwingen ist verdient — die Geste trug Schwung
+    } else {
+      sheetSpring.to(0, { velocity, preset: SPRING.sheet });
+    }
+  };
+  sheetPanel.addEventListener("pointerup", release);
+  sheetPanel.addEventListener("pointercancel", release);
 }
 
 // ── Quiz-Sheet (lokales Modul, NOO-144) ─────────────────────────────────────
@@ -457,6 +548,8 @@ function renderQuizQuestion(dateStr, questions, idx, score) {
       const i = parseInt(btn.dataset.idx, 10);
       const correct = i === q.c;
       if (correct) score++;
+      // Im selben Frame wie die Einfärbung — versetzt zerfällt der Zusammenhang.
+      haptic(correct ? 8 : 18);
       body.querySelectorAll(".quiz-answer").forEach((b, bi) => {
         if (bi === q.c) b.classList.add("correct");
         else if (bi === i) b.classList.add("wrong");
@@ -471,11 +564,16 @@ function renderQuizQuestion(dateStr, questions, idx, score) {
 }
 
 export function setupSheetChrome() {
-  el("sheet-close").addEventListener("click", closeSheet);
-  el("sheet-backdrop").addEventListener("click", e => {
+  sheetBackdrop = el("sheet-backdrop");
+  sheetPanel = sheetBackdrop.querySelector(".sheet-panel");
+  sheetSpring = new Spring(0, paintSheet, SPRING.calm);
+
+  el("sheet-close").addEventListener("click", () => closeSheet());
+  sheetBackdrop.addEventListener("click", e => {
     if (e.target === e.currentTarget) closeSheet();
   });
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && !el("sheet-backdrop").hidden) closeSheet();
+    if (e.key === "Escape" && !sheetBackdrop.hidden) closeSheet();
   });
+  setupSheetDrag();
 }

@@ -16,6 +16,9 @@ out/
 *.iws
 *.ipr
 
+# Claude Code: lokale Berechtigungen, maschinenspezifisch
+.claude/settings.local.json
+
 # OS
 .DS_Store
 Thumbs.db

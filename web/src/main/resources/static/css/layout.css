@@ -9,6 +9,35 @@
   padding: 0 16px calc(24px + env(safe-area-inset-bottom));
 }
 
+/* Bei geöffnetem Sheet tritt der Hintergrund zurück und wird zur Karte. Der
+   Wert kommt aus derselben Feder wie das Sheet (sheet.js), folgt also der
+   Ziehgeste 1:1 — daher hier bewusst keine transition. */
+body.sheet-open #app {
+  transform: scale(calc(1 - .055 * var(--sheet-progress, 0)));
+  transform-origin: 50% 0;
+  border-radius: calc(16px * var(--sheet-progress, 0));
+  overflow: hidden;
+}
+
+/* ── Chrome-Schicht (Header + Pillenleiste + Tagestitel) ─────────────────────
+   Durchsichtiges Material statt undurchsichtiger Leiste: der Inhalt bleibt beim
+   Scrollen sichtbar, die Schicht schwebt darüber. Die negativen Ränder heben
+   das Innenpolster von #app auf, damit die Fläche bis an die Kante läuft. */
+.app-chrome {
+  position: sticky; top: 0; z-index: 20;
+  margin: 0 -16px;
+  padding: 0 16px;
+  background: var(--chrome-bg);
+  backdrop-filter: var(--chrome-blur);
+}
+/* Scroll-Kante statt 1px-Trennlinie: das Material läuft aus, wo Inhalt beginnt. */
+.app-chrome::after {
+  content: "";
+  position: absolute; left: 0; right: 0; top: 100%; height: 12px;
+  background: linear-gradient(var(--chrome-bg), transparent);
+  pointer-events: none;
+}
+
 /* ── Header ──────────────────────────────────────────────────────────────── */
 #header {
   display: flex;
@@ -24,9 +53,15 @@
 }
 #month-label {
   margin: 2px 0 0;
-  font-size: 30px;
+  /* Ab 375px die 30px des Prototyps; darunter skaliert der Titel mit, statt
+     umzubrechen — das längste Label ("24. Dez – 30. Dezember") braucht sonst
+     mehr Breite, als ein 320px-Gerät hergibt. Über 375px ändert sich nichts. */
+  font-size: clamp(23px, 8vw, 30px);
   font-weight: 700;
-  letter-spacing: -.02em;
+  /* Große Schrift braucht negative Laufweite und enges Zeilenmaß, sonst stehen
+     die Buchstaben zu weit auseinander. */
+  letter-spacing: -.022em;
+  line-height: 1.05;
 }
 .hdr-actions { display: flex; align-items: center; gap: 6px; }
 .icon-btn {
@@ -63,8 +98,9 @@
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   background: transparent;
   border: none;
-  transition: background .2s;
 }
+/* Breite Fläche — dezenter zusammenziehen als ein runder Knopf. */
+.day-pill:active { transform: scale(.96); }
 .day-pill.selected-mobile-only { background: var(--card); }
 .day-pill .wd {
   font-size: 11px; font-weight: 600; letter-spacing: .04em;
@@ -176,6 +212,25 @@
 @media (max-width: 899.98px) {
   .mobile-day-title { display: flex; }
   .swipe-hint { display: block; }
+
+  /* Vertikales Scrollen bleibt nativ, das horizontale Ziehen übernimmt week.js. */
+  #week-grid { touch-action: pan-y; }
+  .day-col.selected-mobile-day { will-change: transform; }
+
+  /* Kopfzeile zweireihig: neben sechs Bedienelementen bleiben auf 390px rund
+     70px für den Titel — "Juli 2026" müsste auf ~16px schrumpfen und wäre als
+     Seitentitel nicht mehr erkennbar. Also bekommt der Titel eine eigene Zeile
+     in voller Breite; die Bedienelemente rücken darunter nach rechts und
+     behalten ihre Reihenfolge und Gruppierung wie auf dem Desktop.
+     (Der Prototyp kennt für diese Breite keine Variante.) */
+  #header {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 10px;
+    padding: 16px 0 12px;
+  }
+  .hdr-left { flex: 1 0 100%; }
+  .hdr-actions { margin-left: auto; }
   /* Flex-gap der Tagesspalte kompensieren: Abstand letzte Karte → Hinweis = 22px wie im Prototyp */
   .event-card + .swipe-hint { margin-top: -10px; }
   .day-pill:not(.selected-mobile-only) .date-circle { background: transparent; }
