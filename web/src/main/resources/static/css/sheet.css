@@ -110,6 +110,15 @@
 .form-row .last { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
 .form-row .last span { font-size: 12px; color: var(--sec); }
 
+/* ── Head-to-Head (LETZTE 5 BEGEGNUNGEN) ───────────────────────────────────── */
+.h2h-label { font-size: 13px; font-weight: 600; color: var(--sec); letter-spacing: .05em; margin: 20px 0 8px; }
+.h2h-row { padding: 8px 0; border-bottom: 1px solid var(--sep); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.h2h-row .matchup { font-size: 14px; min-width: 0; }
+.h2h-row .matchup .result { font-weight: 700; }
+.h2h-row .meta { text-align: right; flex-shrink: 0; }
+.h2h-row .date { font-size: 12px; color: var(--sec); }
+.h2h-row .competition { font-size: 11px; color: var(--sec); }
+
 /* ── Kategorie-Chips (Turnier/Liga-Tab) ────────────────────────────────────── */
 .cat-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 12px; }
 .cat-chip {

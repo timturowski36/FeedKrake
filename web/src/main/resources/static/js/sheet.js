@@ -5,7 +5,7 @@
 // Quelle keine Daten liefert.
 import { state } from "./state.js";
 import { api } from "./api.js";
-import { esc, timeFmt, fullDateFmt, longDateFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
+import { esc, timeFmt, dateFmt, fullDateFmt, longDateFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
 import { quizStateFor, submitQuizResult } from "./local-modules.js";
 import { Spring, SPRING, project, rubberband, createVelocityTracker, haptic } from "./motion.js";
 
@@ -173,14 +173,24 @@ function formSectionHtml(det) {
     </div>`).join("");
 }
 
+/** "LETZTE 5 BEGEGNUNGEN" (Änderungsplan Punkt 1): Datum, Ergebnis, Wettbewerb. */
+function h2hSectionHtml(det) {
+  if (!det.headToHead?.length) return "";
+  return `<div class="h2h-label">LETZTE 5 BEGEGNUNGEN</div>` + det.headToHead.map(h => `
+    <div class="h2h-row">
+      <span class="matchup">${esc(h.home)} <span class="result">${esc(h.result)}</span> ${esc(h.away)}</span>
+      <span class="meta"><span class="date">${esc(dateFmt.format(new Date(h.date + "T12:00:00")))}</span><br><span class="competition">${esc(h.competition)}</span></span>
+    </div>`).join("");
+}
+
 function matchGameViewHtml(det, ev) {
   const upcoming = ev?.status === "SCHEDULED" && !(det.matchEvents || []).length;
   if (upcoming) {
     const time = ev?.startTime ? timeFmt.format(new Date(ev.startTime)) : null;
-    return `<div class="sheet-centered-hint">${time ? `Anpfiff um ${esc(time)} Uhr.` : "Noch keine Ereignisse."}</div>` + formSectionHtml(det);
+    return `<div class="sheet-centered-hint">${time ? `Anpfiff um ${esc(time)} Uhr.` : "Noch keine Ereignisse."}</div>` + formSectionHtml(det) + h2hSectionHtml(det);
   }
   const events = withRunningScores(det.matchEvents || [], ev);
-  return (events.map(matchEventLine).join("") || emptyHint("Noch keine Ereignisse.")) + formSectionHtml(det);
+  return (events.map(matchEventLine).join("") || emptyHint("Noch keine Ereignisse.")) + formSectionHtml(det) + h2hSectionHtml(det);
 }
 
 function matchStatsCats(det, slug) {
@@ -378,6 +388,13 @@ function renderPubgSheet(det, ev) {
     if (!row.dataset.playerId) return;
     row.addEventListener("click", () => openPubgPlayerDetail(det, ev, row.dataset.playerId, row.dataset.playerName, day));
   });
+}
+
+/** Minimaler Sheet-Aufruf für rein clientseitige Daten (z. B. "Eigene Termine") — kein Server-Roundtrip. */
+export function openSimpleSheet(badge, title, date, colorVar, bodyHtml) {
+  setSheetHeader(badge, title, date, colorVar);
+  el("sheet-body").innerHTML = bodyHtml;
+  showSheetChrome();
 }
 
 // ── Haupt-Sheet: Dispatch nach Modultyp ──────────────────────────────────────

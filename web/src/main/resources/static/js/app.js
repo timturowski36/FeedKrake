@@ -28,6 +28,31 @@ async function ensureDefaultConfig() {
   }
 }
 
+async function loadUser() {
+  const res = await api.me();
+  state.user = res.ok ? res.data : null;
+}
+
+/**
+ * Fortsetzung der Google-Sheets-Verbindung (Änderungsplan Punkt 4) nach dem
+ * OAuth-Redirect: Backend hängt `?sheets=connect` an, sobald der Refresh-Token
+ * gespeichert ist — hier direkt den Picker zur Sheet-Auswahl öffnen. Dynamischer
+ * Import, damit der Google-Picker-Code nur bei Bedarf geladen wird.
+ */
+async function handleGoogleSheetsRedirect() {
+  const params = new URLSearchParams(location.search);
+  const sheetsParam = params.get("sheets");
+  if (!sheetsParam) return;
+  params.delete("sheets");
+  const url = new URL(location.href);
+  url.search = params.toString();
+  history.replaceState({}, "", url);
+  if (sheetsParam === "connect") {
+    const { connectGoogleSheet } = await import("./sheets-picker.js");
+    connectGoogleSheet(() => loadWeek(false));
+  }
+}
+
 applyTheme(state.theme);
 
 setupWeekNavigation();
@@ -35,4 +60,6 @@ setupSheetChrome();
 setupConfigScreenTrigger();
 setupSearch();
 
+loadUser();
+handleGoogleSheetsRedirect();
 ensureDefaultConfig().then(() => loadWeek(false));

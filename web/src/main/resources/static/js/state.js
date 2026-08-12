@@ -7,6 +7,7 @@ export const state = {
   data: null,
   sse: null,
   catalog: null,
+  user: null, // { id, username } | null — via GET /api/account/me befüllt
   selDay: null, // 0–6, nur für Mobile-Ansicht relevant
   theme: localStorage.getItem("kal.theme")
     || (matchMedia("(prefers-color-scheme: dark)").matches ? "dunkel" : "hell"),

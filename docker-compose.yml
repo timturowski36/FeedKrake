@@ -22,6 +22,17 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PORT: "8080"
+      DOMAIN: ${DOMAIN}
+      # Je einmalig per `openssl rand -hex 32` erzeugen und dauerhaft in .env halten —
+      # ein Wechsel invalidiert alle bestehenden Sessions.
+      SESSION_ENCRYPT_KEY: ${SESSION_ENCRYPT_KEY}
+      SESSION_SIGN_KEY: ${SESSION_SIGN_KEY}
+      # Google-Cloud-Projekt (Consent-Screen, Scope drive.file) + `openssl rand -hex 32`
+      # fuer TOKEN_ENC_KEY — siehe docs/noonoo-aenderungsplan-2.md Punkt 4.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_PICKER_API_KEY: ${GOOGLE_PICKER_API_KEY}
+      TOKEN_ENC_KEY: ${TOKEN_ENC_KEY}
     networks: [public, internal]
     depends_on:
       postgres:

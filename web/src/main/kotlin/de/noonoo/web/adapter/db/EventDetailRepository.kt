@@ -22,7 +22,7 @@ data class DetailMatchEventRow(
 )
 
 @Serializable
-data class DetailH2hRow(val date: String, val home: String, val away: String, val result: String)
+data class DetailH2hRow(val date: String, val home: String, val away: String, val result: String, val competition: String)
 
 /** Formkurve eines Teams: chips = "S"/"U"/"N" der letzten Spiele (neueste zuerst), last = Kurztexte der letzten 3. */
 @Serializable
@@ -118,7 +118,7 @@ class EventDetailRepository(private val dataSource: DataSource) {
     fun bundesligaH2h(homeTeamId: Int, awayTeamId: Int, limit: Int = 8): List<DetailH2hRow> =
         query(
             """
-            SELECT m.kickoff_at, ht.name AS home, at.name AS away, m.home_score_ft, m.away_score_ft
+            SELECT m.kickoff_at, m.league, ht.name AS home, at.name AS away, m.home_score_ft, m.away_score_ft
             FROM matches m
             LEFT JOIN teams ht ON ht.id = m.home_team_id
             LEFT JOIN teams at ON at.id = m.away_team_id
@@ -131,9 +131,16 @@ class EventDetailRepository(private val dataSource: DataSource) {
             DetailH2hRow(
                 date = it.getTimestamp("kickoff_at").toLocalDateTime().toLocalDate().toString(),
                 home = it.getString("home") ?: "?", away = it.getString("away") ?: "?",
-                result = "${it.getInt("home_score_ft")}:${it.getInt("away_score_ft")}"
+                result = "${it.getInt("home_score_ft")}:${it.getInt("away_score_ft")}",
+                competition = leagueLabel(it.getString("league"))
             )
         }
+
+    private fun leagueLabel(league: String?): String = when (league) {
+        "bl1" -> "1. Bundesliga"
+        "bl2" -> "2. Bundesliga"
+        else -> league ?: "?"
+    }
 
     fun bundesligaForm(teamId: Int, teamName: String, limit: Int = 5): DetailFormRow? {
         data class FormMatch(val goalsFor: Int, val goalsAgainst: Int, val opponentText: String)
