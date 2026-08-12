@@ -6,6 +6,7 @@ import { esc, timeFmt, dateFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf, isoWeekLabel
 import { searchLocalEntries } from "./local-modules.js";
 import { loadWeek } from "./week.js";
 import { openSheet, openQuizSheet } from "./sheet.js";
+import { Spring, SPRING } from "./motion.js";
 
 function el(id) { return document.getElementById(id); }
 
@@ -23,16 +24,27 @@ function dateLabel(dateStr, todayStr) {
 
 let debounceTimer = null;
 
+// Fortschritt 0 = zu, 1 = offen. Eine Feder statt zweier Keyframes: das Overlay
+// lässt sich mitten im Ein- oder Ausgang umlenken, ohne zu springen, und der
+// Rückweg ist derselbe wie der Hinweg.
+let searchSpring = null;
+
 export function openSearch() {
   el("search-overlay").hidden = false;
   const input = el("search-input");
   input.value = "";
   runSearch("");
-  setTimeout(() => input.focus(), 30);
+  // Sofort fokussieren: jede künstliche Verzögerung auf dem Eingabepfad ist eine
+  // spürbare Verzögerung, kein Detail.
+  input.focus();
+  searchSpring.to(1, { preset: SPRING.calm });
 }
 
 export function closeSearch() {
-  el("search-overlay").hidden = true;
+  searchSpring.to(0, {
+    preset: SPRING.calm,
+    onRest: () => { el("search-overlay").hidden = true; },
+  });
 }
 
 async function runSearch(q) {
@@ -81,6 +93,9 @@ async function selectResult(dateStr, kind, id) {
 }
 
 export function setupSearch() {
+  searchSpring = new Spring(0, p =>
+    el("search-overlay").style.setProperty("--search-progress", String(p)), SPRING.calm);
+
   document.getElementById("btn-search").addEventListener("click", openSearch);
   el("search-close").addEventListener("click", closeSearch);
   el("search-overlay").addEventListener("click", e => { if (e.target === e.currentTarget) closeSearch(); });

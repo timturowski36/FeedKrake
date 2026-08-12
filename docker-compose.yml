@@ -64,7 +64,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/.docker/config.json:/config.json:ro
     command: --interval 60 --cleanup --api-version 1.40
-    networks: [internal]
+    # public ist zwingend: Watchtower muss die Registry erreichen. Am reinen
+    # internal-Netz (internal: true) gibt es keinen Egress — dort scheitert
+    # jeder Pull an der Namensauflösung.
+    networks: [internal, public]
 
 volumes:
   pgdata:
