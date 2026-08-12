@@ -77,6 +77,13 @@ const PLACEHOLDER_MODULES = [
 let openModuleKey = null;
 /** { [module]: { refs: string[] } } — leere refs = "alle" (siehe Hinweistext). */
 let pending = {};
+
+// ── Account (NooNoo-Änderungsplan Punkt 3) ───────────────────────────────────
+let accountMode = "login"; // "login" | "register" | "recover"
+let accountError = "";
+let accountReturnTo = "config";
+/** Recovery-Code als String — nach Registrierung/Recovery einmalig gezeigt, bis bestätigt. */
+let pendingRecoveryCode = null;
 // Transiente Eingaben für die "neu hinzufügen"-Formulare (Aktivität/Urlaub), nicht persistiert.
 let newAktName = "";
 let newAktDays = new Set();
@@ -93,6 +100,19 @@ async function ensureCatalog() {
   }
 }
 
+async function ensureUser() {
+  const res = await api.me();
+  state.user = res.ok ? res.data : null;
+}
+
+let sheetStatus = null;
+
+async function ensureSheetStatus() {
+  if (!state.user) { sheetStatus = null; return; }
+  const res = await api.sheetStatus();
+  sheetStatus = res.ok ? res.data : null;
+}
+
 async function currentSelections() {
   const map = {};
   if (state.code) {
@@ -104,6 +124,8 @@ async function currentSelections() {
 
 export async function openConfigScreen() {
   await ensureCatalog();
+  await ensureUser();
+  await ensureSheetStatus();
   pending = await currentSelections();
   localCfg = loadCfg();
   openModuleKey = null;
@@ -156,7 +178,8 @@ function render() {
       <div class="cfg-card">
         ${inactive.map(marketplaceRowHtml).join("")}
         ${inactiveLocal.map(localMarketplaceRowHtml).join("")}
-        ${PLACEHOLDER_MODULES.map(placeholderRowHtml).join("")}
+        ${state.user ? sheetsConnectRowHtml() : ""}
+        ${PLACEHOLDER_MODULES.filter(m => m.key !== "sheets" || !state.user).map(placeholderRowHtml).join("")}
       </div>
       <p class="cfg-hint">Module mit Schloss benötigen einen <a href="#" id="cfg-account-link">Account</a>.</p>
     </div>
@@ -197,6 +220,20 @@ function marketplaceRowHtml(m) {
     ${iconTile(m.module, modColor(m.module))}
     <div class="module-row-text"><div class="name">${esc(meta.label)}</div><div class="desc">${esc(meta.desc)}</div></div>
     <button class="add-btn" data-add="${m.module}">Hinzufügen</button>
+  </div>`;
+}
+
+/** "sheets" nach dem Login: statt gesperrtem Platzhalter eine normale, verbindbare Zeile. */
+function sheetsConnectRowHtml() {
+  const meta = PLACEHOLDER_MODULES.find(m => m.key === "sheets");
+  const connected = sheetStatus?.connected;
+  const desc = connected ? `Verbunden: ${sheetStatus.sheetFileName || "Tabelle"}` : meta.desc;
+  return `<div class="marketplace-row">
+    ${iconTile("sheets", connected ? "var(--mod-sheets)" : meta.color)}
+    <div class="module-row-text"><div class="name">${esc(meta.label)}</div><div class="desc">${esc(desc)}</div></div>
+    ${connected
+      ? `<button class="link-btn danger" id="disconnect-sheets-btn">Trennen</button>`
+      : `<button class="add-btn" id="connect-sheets-btn">Verbinden</button>`}
   </div>`;
 }
 
@@ -348,49 +385,181 @@ function syncAddUrlaubButton() {
   if (btn) btn.disabled = !(newUrlaubOrt.trim() && newUrlaubVon && newUrlaubBis);
 }
 
-function accountScreenHtml(backLabel) {
+function accountAvatarSvg() {
+  return `<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg>`;
+}
+
+const ACCOUNT_BENEFITS_HTML = `
+  <div class="cfg-section-label" style="margin-top:28px">Das ermöglicht dir</div>
+  <div class="cfg-card">
+    <div class="benefit-row">
+      <span class="benefit-icon" style="background:#30d158"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 4h16v16H4zM4 10h16M10 4v16"/></svg></span>
+      <div class="module-row-text"><div class="name">Google Sheets</div><div class="desc">Termine aus einer Tabelle in den Kalender übernehmen</div></div>
+    </div>
+  </div>`;
+
+function accountRecoveryCodeHtml() {
   return `
-    <header class="screen-back-row">
-      <button class="screen-back" id="acc-back">${BACK_CHEVRON_SVG}${esc(backLabel)}</button>
-    </header>
     <div class="account-header">
-      <div class="account-avatar"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg></div>
-      <h1 class="screen-title" style="margin-bottom:4px">Account anlegen</h1>
-      <p>Verbinde externe Kalenderquellen und synchronisiere deine Konfiguration.</p>
+      <div class="account-avatar">${accountAvatarSvg()}</div>
+      <h1 class="screen-title" style="margin-bottom:4px">Recovery-Code sichern</h1>
+      <p>Es gibt keine Passwort-Wiederherstellung per E-Mail. Speichere diesen Code — nur damit kommst du bei Passwortverlust wieder in deinen Account.</p>
     </div>
-    <div class="cfg-card account-form">
-      <input type="email" placeholder="E-Mail">
-      <input type="password" placeholder="Passwort">
-    </div>
-    <button class="account-submit">Weiter</button>
-    <div class="account-disclaimer">Demo – Registrierung ist noch nicht aktiv.</div>
-    <div class="cfg-section-label" style="margin-top:28px">Das ermöglicht dir</div>
-    <div class="cfg-card">
-      <div class="benefit-row">
-        <span class="benefit-icon" style="background:#30d158"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 4h16v16H4zM4 10h16M10 4v16"/></svg></span>
-        <div class="module-row-text"><div class="name">Google Sheets</div><div class="desc">Termine aus einer Tabelle in den Kalender übernehmen</div></div>
-      </div>
-      <div class="benefit-row">
-        <span class="benefit-icon" style="background:#0a84ff"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 6h16v12H4zM4 7l8 6 8-6"/></svg></span>
-        <div class="module-row-text"><div class="name">Outlook Kalender</div><div class="desc">Deinen Outlook-Kalender einbinden</div></div>
-      </div>
-    </div>
+    <div class="recovery-code-box">${esc(pendingRecoveryCode)}</div>
+    <label class="recovery-confirm-label">
+      <input type="checkbox" id="acc-recovery-confirmed">
+      Ich habe den Code sicher gespeichert.
+    </label>
+    <button class="account-submit" id="acc-recovery-continue" disabled>Weiter</button>
   `;
+}
+
+function accountLoggedInHtml() {
+  return `
+    <div class="account-header">
+      <div class="account-avatar">${accountAvatarSvg()}</div>
+      <h1 class="screen-title" style="margin-bottom:4px">${esc(state.user.username)}</h1>
+      <p>Angemeldet.</p>
+    </div>
+    <button class="account-submit" id="acc-logout-btn" style="background:var(--fill);color:var(--fg)">Abmelden</button>
+    ${ACCOUNT_BENEFITS_HTML}
+  `;
+}
+
+function accountFormHtml() {
+  const isRecover = accountMode === "recover";
+  const title = isRecover ? "Zugang wiederherstellen" : "Account";
+  const desc = isRecover
+    ? "Setze mit deinem Recovery-Code ein neues Passwort."
+    : "Verbinde externe Kalenderquellen und synchronisiere deine Konfiguration.";
+  const tabs = !isRecover ? `
+    <div class="seg-control" id="acc-mode-seg" style="margin-bottom:16px">
+      <button data-mode="login" class="${accountMode === "login" ? "active" : ""}">Anmelden</button>
+      <button data-mode="register" class="${accountMode === "register" ? "active" : ""}">Registrieren</button>
+    </div>` : "";
+  const fields = isRecover
+    ? `<input id="acc-username" placeholder="Benutzername" autocomplete="username">
+       <input id="acc-recovery-code" placeholder="Recovery-Code" autocomplete="off" style="text-transform:uppercase">
+       <input type="password" id="acc-new-password" placeholder="Neues Passwort" autocomplete="new-password">`
+    : `<input id="acc-username" placeholder="Benutzername" autocomplete="username">
+       <input type="password" id="acc-password" placeholder="Passwort" autocomplete="${accountMode === "register" ? "new-password" : "current-password"}">`;
+  const errorHtml = accountError ? `<p class="account-error">${esc(accountError)}</p>` : "";
+  const submitLabel = isRecover ? "Neues Passwort setzen" : accountMode === "register" ? "Registrieren" : "Anmelden";
+  const footerLink = isRecover
+    ? `<button class="link-btn" id="acc-back-to-login" style="display:block;margin:12px auto 0">Zurück zur Anmeldung</button>`
+    : `<button class="link-btn" id="acc-forgot-link" style="display:block;margin:12px auto 0">Zugang verloren?</button>`;
+  return `
+    <div class="account-header">
+      <div class="account-avatar">${accountAvatarSvg()}</div>
+      <h1 class="screen-title" style="margin-bottom:4px">${esc(title)}</h1>
+      <p>${esc(desc)}</p>
+    </div>
+    ${tabs}
+    ${errorHtml}
+    <div class="cfg-card account-form">${fields}</div>
+    <button class="account-submit" id="acc-submit-btn">${esc(submitLabel)}</button>
+    ${footerLink}
+    ${!isRecover ? `<div class="account-disclaimer">Kein Passwort-Reset per E-Mail — bei Registrierung erhältst du einen Recovery-Code.</div>` : ""}
+    ${ACCOUNT_BENEFITS_HTML}
+  `;
+}
+
+function accountBodyHtml() {
+  if (pendingRecoveryCode) return accountRecoveryCodeHtml();
+  if (state.user) return accountLoggedInHtml();
+  return accountFormHtml();
 }
 
 /** returnTo: "config" (aus dem Marketplace) oder "week" (Header-Button). */
 export function openAccountScreen(returnTo = "config") {
-  el("screen-account").innerHTML = accountScreenHtml(returnTo === "week" ? "Kalender" : "Konfiguration");
+  accountReturnTo = returnTo;
+  accountMode = "login";
+  accountError = "";
+  pendingRecoveryCode = null;
+  renderAccountScreen();
   el("screen-account").hidden = false;
   if (returnTo === "week") document.getElementById("app").hidden = true;
   else el("screen-config").hidden = true;
-  el("acc-back").addEventListener("click", e => { e.preventDefault(); closeAccountScreen(returnTo); });
 }
 
-function closeAccountScreen(returnTo) {
+function closeAccountScreen() {
   el("screen-account").hidden = true;
-  if (returnTo === "week") document.getElementById("app").hidden = false;
+  if (accountReturnTo === "week") document.getElementById("app").hidden = false;
   else el("screen-config").hidden = false;
+  if (accountReturnTo === "config") render(); // Marketplace-Zeile ("sheets") ggf. neu je nach Login-Status
+}
+
+function renderAccountScreen() {
+  const backLabel = accountReturnTo === "week" ? "Kalender" : "Konfiguration";
+  el("screen-account").innerHTML = `
+    <header class="screen-back-row">
+      <button class="screen-back" id="acc-back">${BACK_CHEVRON_SVG}${esc(backLabel)}</button>
+    </header>
+    ${accountBodyHtml()}
+  `;
+  el("acc-back").addEventListener("click", e => { e.preventDefault(); closeAccountScreen(); });
+  wireAccountScreen();
+}
+
+function wireAccountScreen() {
+  if (pendingRecoveryCode) {
+    const checkbox = el("acc-recovery-confirmed");
+    const continueBtn = el("acc-recovery-continue");
+    checkbox.addEventListener("change", () => { continueBtn.disabled = !checkbox.checked; });
+    continueBtn.addEventListener("click", () => { pendingRecoveryCode = null; renderAccountScreen(); });
+    return;
+  }
+  if (state.user) {
+    el("acc-logout-btn").addEventListener("click", async () => {
+      await api.logout();
+      state.user = null;
+      renderAccountScreen();
+    });
+    return;
+  }
+  el("acc-mode-seg")?.querySelectorAll("button").forEach(btn =>
+    btn.addEventListener("click", () => { accountMode = btn.dataset.mode; accountError = ""; renderAccountScreen(); }));
+  el("acc-forgot-link")?.addEventListener("click", () => { accountMode = "recover"; accountError = ""; renderAccountScreen(); });
+  el("acc-back-to-login")?.addEventListener("click", () => { accountMode = "login"; accountError = ""; renderAccountScreen(); });
+  el("acc-submit-btn").addEventListener("click", submitAccountForm);
+}
+
+async function submitAccountForm() {
+  const btn = el("acc-submit-btn");
+  if (btn.disabled) return;
+  const username = el("acc-username").value.trim();
+  accountError = "";
+
+  if (accountMode === "recover") {
+    const recoveryCode = el("acc-recovery-code").value.trim();
+    const newPassword = el("acc-new-password").value;
+    btn.disabled = true; btn.textContent = "…";
+    const res = await api.recover(username, recoveryCode, newPassword);
+    if (res.ok) {
+      state.user = res.data.user;
+      pendingRecoveryCode = res.data.recoveryCode;
+      accountMode = "login";
+    } else {
+      accountError = res.data?.error || "Wiederherstellung fehlgeschlagen.";
+    }
+    renderAccountScreen();
+    return;
+  }
+
+  const password = el("acc-password").value;
+  btn.disabled = true; btn.textContent = "…";
+  const res = accountMode === "register" ? await api.register(username, password) : await api.login(username, password);
+  if (res.ok) {
+    if (accountMode === "register") {
+      state.user = res.data.user;
+      pendingRecoveryCode = res.data.recoveryCode;
+    } else {
+      state.user = res.data;
+    }
+  } else {
+    accountError = res.data?.error || "Fehlgeschlagen.";
+  }
+  renderAccountScreen();
 }
 
 function wireStatic() {
@@ -401,6 +570,15 @@ function wireStatic() {
   if (accountLink) accountLink.addEventListener("click", e => { e.preventDefault(); openAccountScreen(); });
   document.querySelectorAll("[data-open-account]").forEach(row =>
     row.addEventListener("click", () => openAccountScreen()));
+  el("connect-sheets-btn")?.addEventListener("click", () => {
+    window.location.href = "/oauth/google/login";
+  });
+  el("disconnect-sheets-btn")?.addEventListener("click", async () => {
+    await api.disconnectSheet();
+    sheetStatus = { connected: false };
+    render();
+    loadWeek(false); // eigene Termine sofort aus der Wochenansicht entfernen
+  });
   document.querySelectorAll("[data-toggle]").forEach(headEl =>
     headEl.addEventListener("click", () => {
       const key = headEl.dataset.toggle;

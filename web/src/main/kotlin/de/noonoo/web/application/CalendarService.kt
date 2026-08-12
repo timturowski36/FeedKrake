@@ -91,7 +91,9 @@ data class WeekResponse(
     val seasons: List<SeasonInfo>,
     val code: String? = null,
     val weather: Map<String, WeatherDayDto> = emptyMap(),
-    val weatherLocation: String? = null
+    val weatherLocation: String? = null,
+    /** "Eigene Termine" (Änderungsplan Punkt 4) — nur befüllt für eingeloggte Nutzer mit verbundenem Sheet. */
+    val ownAppointments: List<OwnAppointmentDto> = emptyList()
 )
 
 @Serializable
@@ -138,12 +140,13 @@ data class EventDetailsResponse(
 class CalendarService(
     private val repo: CalendarRepository,
     private val details: EventDetailRepository,
-    private val weatherRepo: WebWeatherRepository? = null
+    private val weatherRepo: WebWeatherRepository? = null,
+    private val sheetSync: SheetSyncService? = null
 ) {
 
     // ── Wochenansicht ─────────────────────────────────────────────────────────
 
-    fun weekResponse(week: IsoWeek, config: StoredConfig?): WeekResponse {
+    suspend fun weekResponse(week: IsoWeek, config: StoredConfig?, userId: Long? = null): WeekResponse {
         val from = week.start(BERLIN)
         val to = week.end(BERLIN)
         val modules = config?.let { selectedModules(it) }
@@ -158,6 +161,7 @@ class CalendarService(
             ?.let { WeatherLocation.fromName(it) }
         val monday = week.monday()
         val weatherMap = if (weatherLocation != null) weatherDayDtos(weatherLocation, monday, monday.plusDays(6)) else emptyMap()
+        val ownAppointments = if (userId != null && sheetSync != null) sheetSync.eventsForWeek(userId, from, to) else emptyList()
 
         return WeekResponse(
             week = week.label,
@@ -168,7 +172,8 @@ class CalendarService(
             seasons = seasonInfos(),
             code = config?.code,
             weather = weatherMap,
-            weatherLocation = weatherLocation?.name
+            weatherLocation = weatherLocation?.name,
+            ownAppointments = ownAppointments
         )
     }
 
@@ -358,7 +363,7 @@ class CalendarService(
                 val teamIds = event.participants.mapNotNull { it.externalRef?.toIntOrNull() }
                 val matchId = event.externalId.substringAfterLast(":").toIntOrNull()
                 val goals = matchId?.let { details.bundesligaGoals(it) }.orEmpty()
-                val h2h = if (teamIds.size == 2) details.bundesligaH2h(teamIds[0], teamIds[1]) else emptyList()
+                val h2h = if (teamIds.size == 2) details.bundesligaH2h(teamIds[0], teamIds[1], limit = 5) else emptyList()
                 val formGuide = event.participants.mapNotNull { p ->
                     p.externalRef?.toIntOrNull()?.let { details.bundesligaForm(it, p.name) }
                 }

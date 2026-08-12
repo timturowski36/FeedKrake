@@ -130,6 +130,16 @@
   background: var(--acc); color: #fff; font-size: 16px; font-weight: 600;
 }
 .account-disclaimer { font-size: 12px; color: var(--sec); text-align: center; margin-top: 10px; }
+.account-error { color: var(--bad); font-size: 13px; text-align: center; margin: -6px 0 12px; }
+.recovery-code-box {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 22px; font-weight: 600;
+  letter-spacing: .08em; text-align: center; background: var(--fill); color: var(--fg);
+  border-radius: 12px; padding: 18px; margin: 4px 0 16px;
+}
+.recovery-confirm-label {
+  display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sec);
+  margin-bottom: 16px;
+}
 .benefit-row { display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-bottom: 1px solid var(--sep); }
 .benefit-row:last-child { border-bottom: none; }
 .benefit-icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: #fff; flex-shrink: 0; }

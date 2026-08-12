@@ -1,8 +1,8 @@
 // Wochenübersicht: Header, Pillenleiste, Karten, Swipe/Tastatur (NOO-112/113/114).
 import { state } from "./state.js";
 import { api } from "./api.js";
-import { openSheet, openQuizSheet } from "./sheet.js";
-import { esc, timeFmt, dateFmt, longDateFmt, weekdayDateFmt, todayKeyFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
+import { openSheet, openQuizSheet, openSimpleSheet } from "./sheet.js";
+import { esc, timeFmt, dateFmt, fullDateFmt, longDateFmt, weekdayDateFmt, todayKeyFmt, MOD_LABELS, MOD_COLOR_VARS, slugOf } from "./util.js";
 import { localEntriesForDay, toggleActivity, applyVacationWeatherOverrides, localModuleColorsForDay } from "./local-modules.js";
 import { openConfigScreen } from "./config-screen.js";
 import { Spring, SPRING, project, rubberband, createVelocityTracker, haptic } from "./motion.js";
@@ -113,6 +113,7 @@ function renderPillBar(d, today) {
     const colors = [...new Set([
       ...(byDay[day] || []).map(e => `var(${MOD_COLOR_VARS[slugOf(e)] || "--sec"})`),
       ...localModuleColorsForDay(day),
+      ...(sheetEntriesForDay(day).length ? ["var(--mod-sheets)"] : []),
     ])].slice(0, 4);
     const dots = colors.map(c => `<span style="background:${c}"></span>`).join("");
     return `<button class="day-pill ${isToday ? "is-today" : ""} ${isSelected ? "selected-mobile-only" : ""}" data-day-idx="${i}">
@@ -146,13 +147,45 @@ function minutesOf(e) {
   return dt.getUTCHours() * 60 + dt.getUTCMinutes(); // grobe Sortierung reicht, echte Anzeige nutzt timeFmt
 }
 
+// ── "Eigene Termine" (Google Sheets, Änderungsplan Punkt 4) ─────────────────
+// Backend liefert sie separat auf WeekResponse.ownAppointments (wie das
+// Wetter), statt über die module-getriebene events-Pipeline — analog zu den
+// rein clientseitigen Modulen in local-modules.js, nur serverseitig befüllt.
+function sheetCardHtml(appt) {
+  const time = timeFmt.format(new Date(appt.startsAt));
+  return `<article class="event-card clickable" style="--mod-color:var(--mod-sheets)" data-sheet-id="${esc(appt.id)}">
+    <div class="bar"></div>
+    <div class="main">
+      <div class="row-top"><span class="badge">EIGENE TERMINE</span><span class="time tabular-nums">${time}</span></div>
+      <div class="title">${esc(appt.title)}</div>
+    </div>
+  </article>`;
+}
+
+function sheetEntriesForDay(day) {
+  return (state.data.ownAppointments || [])
+    .filter(a => todayKeyFmt.format(new Date(a.startsAt)) === day)
+    .map(a => ({ minutes: minutesOf({ startTime: a.startsAt }), html: sheetCardHtml(a) }));
+}
+
+function openSheetAppointmentDetail(appt) {
+  const start = new Date(appt.startsAt);
+  const end = new Date(appt.endsAt);
+  const body = `
+    <div class="sheet-hint">${timeFmt.format(start)} – ${timeFmt.format(end)} Uhr</div>
+    <p class="sheet-meta">Aus deinem verbundenen Google Sheet.</p>
+  `;
+  openSimpleSheet("EIGENE TERMINE", appt.title, fullDateFmt.format(start), "var(--mod-sheets)", body);
+}
+
 function renderGrid(d, today) {
   const byDay = groupByDay(d);
   const grid = document.getElementById("week-grid");
   let anyEntries = false;
   grid.innerHTML = d.days.map((day, i) => {
     const specs = (byDay[day] || []).map(e => ({ minutes: minutesOf(e), html: cardHtml(e) }))
-      .concat(localEntriesForDay(day, today));
+      .concat(localEntriesForDay(day, today))
+      .concat(sheetEntriesForDay(day));
     if (specs.length) anyEntries = true;
     const cards = specs.sort((a, b) => a.minutes - b.minutes).map(s => s.html).join("");
     const isToday = day === today;
@@ -168,6 +201,11 @@ function renderGrid(d, today) {
     el.addEventListener("click", () => openSheet(el.dataset.id)));
   grid.querySelectorAll(".event-card.clickable[data-quiz-key]").forEach(el =>
     el.addEventListener("click", () => openQuizSheet(el.dataset.quizKey)));
+  grid.querySelectorAll(".event-card.clickable[data-sheet-id]").forEach(el =>
+    el.addEventListener("click", () => {
+      const appt = (state.data.ownAppointments || []).find(a => a.id === el.dataset.sheetId);
+      if (appt) openSheetAppointmentDetail(appt);
+    }));
   grid.querySelectorAll(".check-btn[data-akt-id]").forEach(btn =>
     btn.addEventListener("click", e => {
       e.stopPropagation();

@@ -11,43 +11,20 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.server.sessions.*
 import io.ktor.server.sse.*
 import io.ktor.sse.*
 import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.ZoneId
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.seconds
 
 private val log = LoggerFactory.getLogger("de.noonoo.web.CalendarRoutes")
 private val BERLIN = ZoneId.of("Europe/Berlin")
 
-/**
- * Fixed-Window-Rate-Limit pro IP für die Config-Routen – Base36-Codes mit 4 Stellen
- * sind enumerierbar, dahinter liegen aber nur Liga-/Vereinsauswahlen.
- */
-private class RateLimiter(private val maxPerMinute: Int) {
-    private data class Window(val startedAt: Long, val count: AtomicInteger)
-    private val windows = ConcurrentHashMap<String, Window>()
-
-    fun allow(key: String): Boolean {
-        val now = System.currentTimeMillis()
-        val window = windows.compute(key) { _, w ->
-            if (w == null || now - w.startedAt > 60_000) Window(now, AtomicInteger(0)) else w
-        }!!
-        if (windows.size > 10_000) windows.entries.removeIf { now - it.value.startedAt > 60_000 }
-        return window.count.incrementAndGet() <= maxPerMinute
-    }
-}
-
 fun Route.calendarRoutes(service: CalendarService, icsHost: String) {
     val configRateLimiter = RateLimiter(maxPerMinute = 30)
-
-    fun ApplicationCall.clientIp(): String =
-        request.headers["X-Forwarded-For"]?.split(",")?.first()?.trim()
-            ?: request.local.remoteAddress
 
     fun ApplicationCall.requestedWeek(): IsoWeek =
         request.queryParameters["week"]?.let { IsoWeek.parse(it) } ?: IsoWeek.current(BERLIN)
@@ -64,7 +41,8 @@ fun Route.calendarRoutes(service: CalendarService, icsHost: String) {
         if (code != null && config == null) {
             return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "Unbekannter Code"))
         }
-        call.respond(service.weekResponse(week, config))
+        val userId = call.sessions.get<UserSession>()?.userId
+        call.respond(service.weekResponse(week, config, userId))
     }
 
     // SSE: pusht "refresh", sobald sich Events der sichtbaren Woche ändern
